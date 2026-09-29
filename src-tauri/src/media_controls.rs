@@ -125,7 +125,12 @@ mod imp {
         // Its own thread and COM apartment, so startup doesn't wait and the UI
         // thread's COM setup is left alone.
         std::thread::spawn(move || {
-            if write_shortcut(&lnk, &exe, &aumid).is_ok() {
+            let written = write_shortcut(&lnk, &exe, &aumid);
+            match &written {
+                Ok(()) => eprintln!("media controls: Start menu shortcut written: {}", lnk.display()),
+                Err(e) => eprintln!("media controls: couldn't write the Start menu shortcut {}: {e}", lnk.display()),
+            }
+            if written.is_ok() {
                 if let Ok(key) = windows_registry::CURRENT_USER.create(format!(r"Software\Classes\AppUserModelId\{aumid}")) {
                     let _ = key.set_string("Shortcut", &exe);
                 }
