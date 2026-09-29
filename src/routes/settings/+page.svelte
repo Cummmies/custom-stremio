@@ -213,13 +213,13 @@
                     </div>
                     <div class="row">
                         <div>
-                            <div class="title">Fall back to regular torrents</div>
+                            <div class="title">Fall back to non-debrid torrents</div>
                             <div class="sub">
-                                Used only when no debrid source works. Regular torrents connect your PC to other peers,
-                                so your IP address is visible to them.
+                                Only used as a backup, when none of the debrid sources work (e.g. Torrentio without
+                                debrid).
                             </div>
                         </div>
-                        <Toggle label="Fall back to regular torrents" checked={playerPrefs.allowTorrents} onchange={(v) => (playerPrefs.allowTorrents = v)} />
+                        <Toggle label="Fall back to non-debrid torrents" checked={playerPrefs.allowTorrents} onchange={(v) => (playerPrefs.allowTorrents = v)} />
                     </div>
                 {/if}
             </div>
