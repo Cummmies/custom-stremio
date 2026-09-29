@@ -1,8 +1,10 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { app } from '$lib/app.svelte';
-    import { profiles, PROFILE_COLORS, type SavedProfile } from '$lib/profiles.svelte';
+    import { profiles, type SavedProfile } from '$lib/profiles.svelte';
     import Icon from './Icon.svelte';
+    import Avatar from './Avatar.svelte';
+    import PhotoControls from './PhotoControls.svelte';
     import Toggle from './Toggle.svelte';
 
     let dialog = $state<HTMLDialogElement>();
@@ -78,12 +80,8 @@
                         aria-label={managing ? `Edit ${p.name}` : current ? `${p.name} (current profile)` : `Switch to ${p.name}`}
                         aria-busy={busy}
                     >
-                        <span class="avatar" style:--c={p.color}>
-                            {#if managing}
-                                <span class="badge" aria-hidden="true"><Icon name="gear" size={40} /></span>
-                            {:else}
-                                <span class="initial" aria-hidden="true">{p.name.charAt(0).toUpperCase()}</span>
-                            {/if}
+                        <span class="avatar">
+                            <Avatar profile={p} size={132} rounded />
                             {#if busy}<span class="spinner" aria-hidden="true"></span>{/if}
                             {#if current && !managing}<span class="check" aria-hidden="true"><Icon name="check" size={14} /></span>{/if}
                         </span>
@@ -117,20 +115,8 @@
                     <input bind:value={draftName} onblur={saveName} onkeydown={(e) => e.key === 'Enter' && (saveName(), (e.currentTarget as HTMLInputElement).blur())} maxlength="24" />
                 </label>
                 <div class="field">
-                    <span>Color</span>
-                    <div class="swatches" role="radiogroup" aria-label="Profile color">
-                        {#each PROFILE_COLORS as c (c)}
-                            <button
-                                class="swatch"
-                                class:on={editingProfile.color === c}
-                                style:--c={c}
-                                role="radio"
-                                aria-checked={editingProfile.color === c}
-                                aria-label={c}
-                                onclick={() => profiles.update(editingProfile.uid, { color: c })}
-                            ></button>
-                        {/each}
-                    </div>
+                    <span>Picture</span>
+                    <PhotoControls uid={editingProfile.uid} />
                 </div>
                 <button class="remove" onclick={() => remove(editingProfile)}>
                     {#if confirmRemove}
@@ -270,18 +256,10 @@
         height: 132px;
         margin-bottom: 8px;
         border-radius: 30px;
-        background: linear-gradient(145deg, color-mix(in srgb, var(--c) 100%, white 18%), color-mix(in srgb, var(--c) 100%, black 32%));
         box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
         transition:
             transform var(--fast) var(--ease),
             box-shadow var(--fast) var(--ease);
-    }
-    .initial {
-        font-family: var(--font-display);
-        font-size: 56px;
-        font-weight: 700;
-        color: white;
-        text-shadow: 0 2px 12px rgb(0 0 0 / 0.25);
     }
     .tile:hover:not(:disabled) .avatar,
     .tile:focus-visible .avatar,
@@ -318,15 +296,6 @@
         background: var(--label);
         color: var(--bg);
         box-shadow: 0 0 0 3px rgb(10 10 14);
-    }
-    .badge {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        border-radius: inherit;
-        background: rgb(0 0 0 / 0.3);
-        color: white;
     }
     .spinner {
         position: absolute;
@@ -412,29 +381,6 @@
     .field input:focus {
         outline: none;
         border-color: var(--accent-hover);
-    }
-    .swatches {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-    .swatch {
-        width: 30px;
-        height: 30px;
-        padding: 0;
-        border: 0;
-        border-radius: 50%;
-        background: var(--c);
-        cursor: pointer;
-        transition: transform var(--fast) var(--ease);
-    }
-    .swatch:hover {
-        transform: scale(1.1);
-    }
-    .swatch.on {
-        box-shadow:
-            0 0 0 2px var(--elevated),
-            0 0 0 4px var(--label);
     }
     .remove {
         display: inline-flex;

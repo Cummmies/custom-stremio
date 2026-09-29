@@ -11,8 +11,23 @@ export type SavedProfile = {
     key: string;
     name: string;
     color: string;
+    /** Uploaded photo as a small JPEG data URL (stored on this PC only). */
+    avatar?: string;
     lastUsed: number;
 };
+
+/** Crops an image file to a centered square and shrinks it to a small JPEG. */
+export async function imageToAvatar(file: File, size = 256): Promise<string> {
+    const bitmap = await createImageBitmap(file);
+    const side = Math.min(bitmap.width, bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+    bitmap.close();
+    return canvas.toDataURL('image/jpeg', 0.88);
+}
 
 export const PROFILE_COLORS = ['#6d4af0', '#e0457b', '#f08c2e', '#2fb67c', '#2d8cf0', '#c04ae0', '#d4a72c', '#5f6b7a'];
 
@@ -90,7 +105,12 @@ class Profiles {
         this.#save();
     }
 
-    update(uid: string, patch: Partial<Pick<SavedProfile, 'name' | 'color'>>) {
+    /** The saved profile for an account, if any. */
+    get(uid: string | null | undefined) {
+        return uid ? (this.list.find((p) => p.uid === uid) ?? null) : null;
+    }
+
+    update(uid: string, patch: Partial<Pick<SavedProfile, 'name' | 'color' | 'avatar'>>) {
         this.list = this.list.map((p) => (p.uid === uid ? { ...p, ...patch } : p));
         this.#save();
     }

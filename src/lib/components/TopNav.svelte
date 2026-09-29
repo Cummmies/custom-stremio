@@ -7,6 +7,8 @@
     import Icon from './Icon.svelte';
     import ServerStatus from './ServerStatus.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
+    import { profiles } from '$lib/profiles.svelte';
+    import Avatar from './Avatar.svelte';
 
     let { scrolled }: { scrolled: boolean } = $props();
 
@@ -137,7 +139,11 @@
             title={app.user?.email ?? 'Account'}
             onclick={(e) => menu.toggleFor(e.currentTarget, accountMenu(), 'end')}
         >
-            {#if app.user}{app.user.email[0]?.toUpperCase()}{:else}<Icon name="user" size={17} />{/if}
+            {#if app.user}
+                <Avatar profile={profiles.get(app.user._id)} fallbackName={app.user.email} size={36} />
+            {:else}
+                <Icon name="user" size={17} />
+            {/if}
         </button>
     </div>
 </header>
@@ -243,13 +249,17 @@
     .circle:hover {
         background: rgb(60 60 72 / 0.7);
     }
+    /* The picture fills the button; hover adds a ring instead of a tint. */
     .avatar {
-        background: var(--accent);
+        padding: 0;
+        overflow: hidden;
+        background: transparent;
         border-color: transparent;
-        font-weight: 700;
+        transition: box-shadow var(--fast);
     }
     .avatar:hover {
-        background: var(--accent-hover);
+        background: transparent;
+        box-shadow: 0 0 0 2px var(--label);
     }
     .search {
         display: flex;

@@ -7,9 +7,13 @@
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { updates } from '$lib/updates.svelte';
+    import { profiles } from '$lib/profiles.svelte';
+    import Avatar from '$lib/components/Avatar.svelte';
+    import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
+    const myProfile = $derived(profiles.get(app.user?._id));
 
     // stremio:// link handling (registered per user in Windows, not synced).
     let handlesLinks = $state(false);
@@ -81,9 +85,10 @@
         <div class="group">
             <div class="row">
                 <div class="account">
-                    <span class="avatar" aria-hidden="true">{app.user ? app.user.email[0].toUpperCase() : '?'}</span>
+                    <Avatar profile={myProfile} fallbackName={app.user?.email ?? '?'} size={48} />
                     <div>
-                        <div class="title">{app.user?.email ?? 'Not logged in'}</div>
+                        <div class="title">{myProfile?.name ?? app.user?.email ?? 'Not logged in'}</div>
+                        {#if myProfile}<div class="sub">{app.user?.email}</div>{/if}
                         <div class="sub">{app.user ? 'Library, addons and settings sync with this account.' : 'Log in to sync your library, addons and settings.'}</div>
                     </div>
                 </div>
@@ -96,6 +101,33 @@
                     {/if}
                 </div>
             </div>
+            {#if myProfile}
+                <div class="row">
+                    <div>
+                        <div class="title">Profile picture</div>
+                        <div class="sub">Shown on your avatar and in Who’s Watching. Saved on this PC.</div>
+                    </div>
+                    <PhotoControls uid={myProfile.uid} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Profile name</div>
+                        <div class="sub">How this profile appears in the app.</div>
+                    </div>
+                    <input
+                        class="name-input"
+                        value={myProfile.name}
+                        maxlength="24"
+                        aria-label="Profile name"
+                        onchange={(e) => {
+                            const v = e.currentTarget.value.trim();
+                            if (v) profiles.update(myProfile.uid, { name: v });
+                            else e.currentTarget.value = myProfile.name;
+                        }}
+                        onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                    />
+                </div>
+            {/if}
         </div>
     </section>
 
@@ -370,17 +402,18 @@
         gap: 14px;
         min-width: 0;
     }
-    .avatar {
-        flex: none;
-        display: grid;
-        place-items: center;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        background: var(--accent);
-        color: white;
-        font-weight: 700;
-        font-size: 18px;
+    .name-input {
+        width: 220px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid var(--separator);
+        background: var(--bg);
+        color: var(--label);
+    }
+    .name-input:focus {
+        outline: none;
+        border-color: var(--accent-hover);
     }
     .buttons {
         display: flex;
