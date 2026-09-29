@@ -17,6 +17,8 @@ type Prefs = {
     maxResolution: number;
     /** Allow plain torrents as a last resort when no debrid source works. */
     allowTorrents: boolean;
+    /** Jump past intros and recaps without pressing anything. */
+    autoSkip: boolean;
 };
 
 const KEY = 'playerPrefs';
@@ -29,6 +31,7 @@ const defaults: Prefs = {
     easyLanguage: 'eng',
     maxResolution: 1080,
     allowTorrents: true,
+    autoSkip: false,
 };
 
 function load(): Prefs {
@@ -89,6 +92,12 @@ class PlayerPrefs {
     }
     set allowTorrents(v: boolean) {
         this.#save({ allowTorrents: v });
+    }
+    get autoSkip() {
+        return this.#p.autoSkip;
+    }
+    set autoSkip(v: boolean) {
+        this.#save({ autoSkip: v });
     }
 
     #save(patch: Partial<Prefs>) {

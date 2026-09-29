@@ -12,6 +12,8 @@
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue } from '$lib/player/easy';
     import { sameLanguage } from '$lib/player/lang';
+    import { fromChapters, lookupSegments, skipLabel, type Segment } from '$lib/player/skips';
+    import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
     import { fmtTime } from '$lib/player/format';
     import { titleHref } from '$lib/links';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -72,6 +74,7 @@
             clearTimeout(idleTimer);
             clearTimeout(watchdog);
             clearTimeout(stallTimer);
+            cancelSilenceSkip();
             if (pip) invoke('set_pip', { enabled: false });
             if (fullscreen) invoke('set_fullscreen', { fullscreen: false });
             mpv.stop();
@@ -84,6 +87,9 @@
         startError = null;
         subtitlesAdded = false;
         firstFrameSeen = false;
+        segments = [];
+        autoSkipped.clear();
+        cancelSilenceSkip();
         addedSubs.clear();
         nextDismissed = false;
         showNext = false;
@@ -194,6 +200,7 @@
         if (e.kind === 'file-loaded') {
             mpv.applyUpscaler(playerPrefs.upscaler);
             scheduleThumbnails();
+            loadSegments();
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
@@ -279,10 +286,78 @@
         if (mpv.loaded) core.dispatch({ action: 'Player', args: { action: 'PausedChanged', args: { paused } } }, 'player');
     });
 
+    // --- skip intro / recap / credits ---------------------------------------
+    let segments = $state<Segment[]>([]);
+    const autoSkipped = new Set<string>();
+    let silenceSearching = $state(false);
+    let skipNote = $state<string | null>(null);
+    let skipNoteTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function note(text: string | null, ms = 2500) {
+        clearTimeout(skipNoteTimer);
+        skipNote = text;
+        if (text) skipNoteTimer = setTimeout(() => (skipNote = null), ms);
+    }
+
+    async function loadSegments() {
+        const duration = mpv.duration;
+        if (!duration) return;
+        const forVideo = videoId;
+        const parts = videoId?.split(':') ?? [];
+        const season = model?.seriesInfo?.season ?? (parts.length >= 3 ? Number(parts[parts.length - 2]) : null);
+        const episode = model?.seriesInfo?.episode ?? (parts.length >= 3 ? Number(parts[parts.length - 1]) : null);
+        const chapters = fromChapters(await mpv.get('chapter-list').catch(() => null), duration);
+        const found = await lookupSegments({
+            imdb: id,
+            season: type === 'series' ? season : null,
+            episode: type === 'series' ? episode : null,
+            duration,
+            chapters,
+        });
+        if (forVideo === videoId) segments = found;
+    }
+
+    // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
+    const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);
+
+    function skip(s: Segment) {
+        if (s.kind === 'credits' && model?.nextVideo) return playNext();
+        mpv.seek(s.end);
+    }
+
+    // Optional: skip intros and recaps without asking (once each; seeking back in keeps it).
+    $effect(() => {
+        const s = currentSegment;
+        if (!s || !playerPrefs.autoSkip || (s.kind !== 'intro' && s.kind !== 'recap')) return;
+        const key = `${s.kind}:${s.start}`;
+        if (autoSkipped.has(key)) return;
+        autoSkipped.add(key);
+        mpv.seek(s.end);
+        note(s.kind === 'intro' ? 'Skipped intro' : 'Skipped recap');
+    });
+
+    /** Tab: skip the known section, otherwise look for the end of the intro by silence. */
+    function tabSkip() {
+        if (silenceSkipActive()) {
+            cancelSilenceSkip();
+            silenceSearching = false;
+            return note(null);
+        }
+        if (currentSegment) return skip(currentSegment);
+        silenceSearching = true;
+        note('Looking for the end of the intro… Press Tab to cancel', 60000);
+        startSilenceSkip((at) => {
+            silenceSearching = false;
+            note(at == null ? 'Couldn’t find the end of the intro' : null);
+        });
+    }
+
     // "Up next" card near the end of an episode.
     $effect(() => {
         const d = mpv.duration;
-        showNext = !!model?.nextVideo && !!d && d - mpv.time <= nextThreshold && !nextDismissed && !pip;
+        // Also as soon as the credits start, when we know where they are.
+        const inCredits = currentSegment?.kind === 'credits';
+        showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
     async function playNext() {
@@ -463,7 +538,8 @@
         if (menu.open || e.target instanceof HTMLInputElement) return;
         const k = e.key.toLowerCase();
         let handled = true;
-        if (k === ' ' || k === 'k') mpv.togglePause();
+        if (k === 'tab') tabSkip();
+        else if (k === ' ' || k === 'k') mpv.togglePause();
         else if (k === 'arrowright') mpv.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
         else if (k === 'arrowleft') mpv.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
         else if (k === 'arrowup') mpv.setVolume(mpv.volume + 5);
@@ -544,6 +620,17 @@
             <button class="icon" onclick={togglePip} aria-label="Exit picture in picture" title="Exit Picture in Picture (P)"><Icon name="exitFullscreen" size={18} /></button>
         {/if}
     </header>
+
+    {#if currentSegment && !(currentSegment.kind === 'credits' && showNext) && !silenceSearching}
+        <button class="skip" onclick={() => skip(currentSegment!)} title={`${skipLabel[currentSegment.kind]} (Tab)`}>
+            {skipLabel[currentSegment.kind]}
+            <Icon name="next" size={15} />
+        </button>
+    {/if}
+
+    {#if skipNote}
+        <div class="switching" role="status">{skipNote}</div>
+    {/if}
 
     {#if showNext && model?.nextVideo}
         <aside class="next" aria-label="Up next">
@@ -785,6 +872,45 @@
         background: white;
     }
 
+    /* Skip Intro / Recap / Credits: stays visible even when the controls fade. */
+    .skip {
+        position: absolute;
+        right: 24px;
+        bottom: 118px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 18px 0 22px;
+        border: 1px solid rgb(255 255 255 / 0.5);
+        border-radius: 999px;
+        background: rgb(20 20 26 / 0.72);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        color: white;
+        font-size: var(--text-callout);
+        font-weight: 700;
+        cursor: pointer;
+        animation: rise var(--slow) var(--ease);
+        transition:
+            background var(--fast),
+            color var(--fast),
+            bottom 240ms var(--ease);
+    }
+    .skip:hover {
+        background: white;
+        color: black;
+    }
+    .hidden .skip {
+        bottom: 40px;
+    }
+    .pip .skip {
+        right: 10px;
+        bottom: 56px;
+        height: 34px;
+        padding: 0 12px 0 14px;
+        font-size: 13px;
+    }
     .switching {
         position: absolute;
         top: 80px;

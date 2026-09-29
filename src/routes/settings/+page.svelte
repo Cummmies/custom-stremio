@@ -157,6 +157,13 @@
                 </div>
                 <div class="row">
                     <div>
+                        <div class="title">Skip intros and recaps automatically</div>
+                        <div class="sub">When their timing is known. Otherwise a Skip button appears, and Tab skips anytime.</div>
+                    </div>
+                    <Toggle label="Skip intros and recaps automatically" checked={playerPrefs.autoSkip} onchange={(v) => (playerPrefs.autoSkip = v)} />
+                </div>
+                <div class="row">
+                    <div>
                         <div class="title">Hardware-accelerated decoding</div>
                         <div class="sub">Uses your graphics card to decode video. Turn off if playback shows artifacts.</div>
                     </div>

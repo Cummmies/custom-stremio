@@ -1,5 +1,6 @@
 mod player;
 mod server;
+mod skips;
 mod theme_icon;
 mod window_modes;
 
@@ -42,6 +43,7 @@ pub fn run() {
             player::mpv_stop,
             player::thumb_frame,
             player::thumb_close,
+            skips::skip_lookup,
             window_modes::set_fullscreen,
             window_modes::is_fullscreen,
             window_modes::set_pip,
