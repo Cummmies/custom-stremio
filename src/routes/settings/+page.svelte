@@ -169,6 +169,62 @@
             </div>
         </section>
 
+        <section>
+            <h2>Easy Mode</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">Pick sources automatically</div>
+                        <div class="sub">
+                            Press Play and the best source starts on its own, preferring cached debrid streams. If one
+                            doesn’t work, the next best is tried. You’ll only see the source list if nothing works.
+                        </div>
+                    </div>
+                    <Toggle label="Pick sources automatically" checked={playerPrefs.easyMode} onchange={(v) => (playerPrefs.easyMode = v)} />
+                </div>
+                {#if playerPrefs.easyMode}
+                    <div class="row">
+                        <div>
+                            <div class="title">Audio language</div>
+                            <div class="sub">Sources in this language come first. Many releases don’t say, so others are still used.</div>
+                        </div>
+                        <PopupButton
+                            label="Easy Mode audio language"
+                            value={playerPrefs.easyLanguage}
+                            options={[{ value: null as string | null, label: 'No Preference' }, ...languages]}
+                            onchange={(v) => (playerPrefs.easyLanguage = v)}
+                        />
+                    </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Maximum quality</div>
+                            <div class="sub">The highest resolution to pick. Lower saves data and starts faster.</div>
+                        </div>
+                        <PopupButton
+                            label="Maximum quality"
+                            value={playerPrefs.maxResolution}
+                            options={[
+                                { value: 2160, label: 'Up to 4K' },
+                                { value: 1080, label: 'Up to 1080p' },
+                                { value: 720, label: 'Up to 720p' },
+                            ]}
+                            onchange={(v) => (playerPrefs.maxResolution = v)}
+                        />
+                    </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Fall back to regular torrents</div>
+                            <div class="sub">
+                                Used only when no debrid source works. Regular torrents connect your PC to other peers,
+                                so your IP address is visible to them.
+                            </div>
+                        </div>
+                        <Toggle label="Fall back to regular torrents" checked={playerPrefs.allowTorrents} onchange={(v) => (playerPrefs.allowTorrents = v)} />
+                    </div>
+                {/if}
+            </div>
+        </section>
+
         {#if inTauri}
             <section>
                 <h2>Integrations</h2>

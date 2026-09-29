@@ -7,6 +7,8 @@
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
+    import { easyQueue, rankedPicks, type Pick } from '$lib/player/easy';
+    import { playerPrefs } from '$lib/player/prefs.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -106,6 +108,63 @@
         goto(titleHref(type, id, { video: target }), { noScroll: true, keepFocus: true, replaceState: replace });
     }
 
+    /** Play a movie/episode: Easy Mode picks the source, otherwise you do. */
+    function playVideo(target: string, replace = false) {
+        if (playerPrefs.easyMode && inTauri) {
+            goto(titleHref(type, id, { video: target, auto: '1' }), { noScroll: true, keepFocus: true, replaceState: replace });
+        } else {
+            openSources(target, replace);
+        }
+    }
+
+    // --- Easy Mode: choose a source as addons answer ------------------------
+    const auto = $derived(!!page.url.searchParams.get('auto'));
+    const easyNotice = $derived(
+        page.url.searchParams.get('failed')
+            ? 'Easy Mode couldn’t play any of the best sources for this one. Pick one below.'
+            : page.url.searchParams.get('nomatch')
+              ? 'No source matched your Easy Mode preferences. Pick one below.'
+              : null
+    );
+    let autoStarted = 0;
+    let autoTimer: ReturnType<typeof setTimeout> | undefined;
+
+    $effect(() => {
+        if (!auto || !videoId || !details) return;
+        if (details.selected?.streamPath?.id !== videoId) return;
+        if (!autoStarted) autoStarted = performance.now();
+
+        const streams = details.streams;
+        const pending = streams.some((g) => g.content.type === 'Loading');
+        const { picks, top } = rankedPicks(streams);
+        const elapsed = performance.now() - autoStarted;
+
+        // A cached debrid source at your preferred quality is as good as it gets: go now.
+        const great = top && top.parsed.kind === 'debrid';
+        clearTimeout(autoTimer);
+        if (picks.length && (great || !pending || elapsed > 7000)) {
+            startEasy(picks);
+        } else if (!pending && !picks.length) {
+            autoStarted = 0;
+            goto(titleHref(type, id, { video: videoId, nomatch: '1' }), { noScroll: true, keepFocus: true, replaceState: true });
+        } else {
+            // Re-check when the slowest addons time out.
+            autoTimer = setTimeout(() => (details = details ? { ...details } : details), Math.max(250, 7000 - elapsed));
+        }
+    });
+
+    function startEasy(picks: Pick[]) {
+        autoStarted = 0;
+        easyQueue.start(videoId!, picks);
+        goto(picks[0].href, { replaceState: true });
+    }
+
+    function chooseManually() {
+        autoStarted = 0;
+        clearTimeout(autoTimer);
+        openSources(videoId!, true);
+    }
+
     function closeSources() {
         goto(titleHref(type, id), { noScroll: true, keepFocus: true, replaceState: true });
     }
@@ -122,7 +181,7 @@
             const href = sameVideo ? resumeHref(item?.deepLinks?.player) : null;
             if (href) return goto(href, { replaceState: replace });
         }
-        openSources(target, replace);
+        playVideo(target, replace);
     }
 
     function toggleLibrary() {
@@ -145,7 +204,7 @@
     }
 
     const selectedVideo = $derived(meta && videoId ? meta.videos.find((v) => v.id === videoId) ?? null : null);
-    const sheetOpen = $derived(!!meta && !!videoId && (videoId === meta.id || !!selectedVideo));
+    const sheetOpen = $derived(!!meta && !!videoId && !auto && (videoId === meta.id || !!selectedVideo));
     const sheetSubtitle = $derived(
         selectedVideo
             ? `S${selectedVideo.season} · E${selectedVideo.episode}${selectedVideo.title ? ` · ${selectedVideo.title}` : ''}`
@@ -264,7 +323,7 @@
                             bind:season
                             selectedId={videoId}
                             currentId={resuming ? (resumeVideo?.id ?? null) : null}
-                            onselect={(v) => openSources(v.id)}
+                            onselect={(v) => playVideo(v.id)}
                             ontogglewatched={toggleEpisodeWatched}
                         />
                     {:else}
@@ -292,7 +351,20 @@
 {/if}
 
 {#if sheetOpen && meta && details}
-    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} onclose={closeSources} />
+    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} notice={easyNotice} onclose={closeSources} />
+{/if}
+
+{#if auto && meta}
+    <div class="finding" role="status" aria-live="polite">
+        <div class="finding-card">
+            <span class="finding-spinner" aria-hidden="true"></span>
+            <div>
+                <p class="finding-title">Finding the best source…</p>
+                {#if sheetSubtitle}<p class="finding-sub">{sheetSubtitle}</p>{/if}
+            </div>
+            <button onclick={chooseManually}>Choose Manually</button>
+        </div>
+    </div>
 {/if}
 
 {#if trailer && meta}
@@ -302,6 +374,70 @@
 <style>
     .error {
         padding-top: var(--nav-h);
+    }
+    .finding {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+        background: rgb(0 0 0 / 0.45);
+        animation: fade var(--fast) var(--ease);
+    }
+    @keyframes fade {
+        from {
+            opacity: 0;
+        }
+    }
+    .finding-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 18px 18px 22px;
+        border-radius: var(--radius-l);
+        background: rgb(31 31 40 / 0.92);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--separator);
+        box-shadow: 0 24px 64px rgb(0 0 0 / 0.55);
+    }
+    .finding-spinner {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 3px solid rgb(255 255 255 / 0.2);
+        border-top-color: white;
+        animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin {
+        to {
+            rotate: 360deg;
+        }
+    }
+    .finding-title {
+        margin: 0;
+        font-weight: 600;
+    }
+    .finding-sub {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--label-2);
+    }
+    .finding-card button {
+        margin-left: 12px;
+        height: 34px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--fill-hover);
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .finding-card button:hover {
+        background: var(--label);
+        color: var(--bg);
     }
     .art {
         position: absolute;

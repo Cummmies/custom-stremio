@@ -10,6 +10,7 @@
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
+    import { easyQueue } from '$lib/player/easy';
     import { fmtTime } from '$lib/player/format';
     import { titleHref } from '$lib/links';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -68,6 +69,8 @@
             offEvents();
             document.documentElement.classList.remove('player-active', 'player-idle');
             clearTimeout(idleTimer);
+            clearTimeout(watchdog);
+            clearTimeout(stallTimer);
             if (pip) invoke('set_pip', { enabled: false });
             if (fullscreen) invoke('set_fullscreen', { fullscreen: false });
             mpv.stop();
@@ -112,6 +115,14 @@
         thumbs?.close();
         // Background thumbnail work steps aside whenever the main video is buffering.
         thumbs = new Thumbnails(url, () => mpv.buffering || !mpv.loaded);
+
+        // Easy Mode: if this source never shows a picture, move on to the next best.
+        firstFrame = false;
+        clearTimeout(watchdog);
+        if (easyQueue.activeFor(videoId)) {
+            const isTorrent = !!stream.infoHash && !stream.url;
+            watchdog = setTimeout(() => !firstFrame && tryNextSource(), isTorrent ? 30000 : 15000);
+        }
         try {
             await mpv.start(buildOptions(settings ?? {}));
             await mpv.load(url, await resumeFrom());
@@ -119,6 +130,42 @@
             startError = String(e);
         }
     }
+
+    // --- Easy Mode fallback -------------------------------------------------
+    let firstFrame = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    let switching = $state<string | null>(null);
+
+    async function tryNextSource() {
+        clearTimeout(watchdog);
+        clearTimeout(stallTimer);
+        if (!easyQueue.activeFor(videoId)) return;
+        const next = easyQueue.next();
+        if (next) {
+            switching = 'That source didn’t work. Trying the next best one…';
+            await goto(next.href, { replaceState: true });
+            await begin();
+            setTimeout(() => (switching = null), 2500);
+        } else {
+            // Out of good options: hand the choice back.
+            const target = videoId ?? id;
+            easyQueue.clear();
+            if (type && id && target) goto(titleHref(type, id, { video: target, failed: '1' }), { replaceState: true });
+        }
+    }
+
+    // A hard error on an auto-picked source → next source.
+    $effect(() => {
+        if ((startError || mpv.error) && easyQueue.activeFor(videoId)) tryNextSource();
+    });
+
+    // Stuck buffering for 30s mid-episode → next source (it resumes at the same time).
+    $effect(() => {
+        const stuck = mpv.buffering && firstFrame && !mpv.paused;
+        clearTimeout(stallTimer);
+        if (stuck && easyQueue.activeFor(videoId)) stallTimer = setTimeout(tryNextSource, 30000);
+    });
 
     // Pick up where you left off. The Player model carries the stored library
     // record (position in ms and which episode it belongs to).
@@ -133,6 +180,10 @@
     }
 
     function onMpvEvent(e: { kind: string; reason?: string }) {
+        if (e.kind === 'playback-restart') {
+            firstFrame = true;
+            clearTimeout(watchdog);
+        }
         if (e.kind === 'file-loaded') {
             addAddonSubtitles();
             mpv.applyUpscaler(playerPrefs.upscaler);
@@ -198,8 +249,18 @@
             await goto(playerHref(link), { replaceState: true });
             return begin();
         }
-        // No remembered source for the next episode: let the person pick one.
-        if (type && id) goto(titleHref(type, id, { video: next.id }), { replaceState: true });
+        // No remembered source for the next episode: Easy Mode picks one, otherwise you do.
+        if (type && id) {
+            const params: Record<string, string> = { video: next.id };
+            if (playerPrefs.easyMode) params.auto = '1';
+            goto(titleHref(type, id, params), { replaceState: true });
+        }
+    }
+
+    function changeSource() {
+        easyQueue.clear();
+        const target = videoId ?? id;
+        if (type && id && target) goto(titleHref(type, id, { video: target }));
     }
 
     // --- controls ----------------------------------------------------------
@@ -289,6 +350,7 @@
             el,
             [
                 { header: 'Video', detail: info.join(' · ') },
+                ...(type && id ? [{ label: 'Change Source…', icon: 'link', onselect: changeSource } as MenuEntry] : []),
                 {
                     label: 'Speed',
                     submenu: speeds.map((s) => ({ label: s === 1 ? 'Normal' : `${s}×`, checked: mpv.speed === s, onselect: () => mpv.set('speed', s) })),
@@ -376,12 +438,16 @@
         onpointerdown={onsurfacedown}
     ></button>
 
-    {#if startError || mpv.error}
+    {#if switching}
+        <div class="switching" role="status">{switching}</div>
+    {/if}
+
+    {#if (startError || mpv.error) && !easyQueue.activeFor(videoId)}
         <div class="center-card" role="alert">
             <p class="err-title">Can’t play this stream</p>
             <p class="err-body">{startError ?? mpv.error}</p>
             <div class="err-actions">
-                <button onclick={exit}>Choose Another Source</button>
+                <button onclick={() => (type && id ? changeSource() : exit())}>Choose Another Source</button>
             </div>
         </div>
     {:else if loadingVideo}
@@ -645,6 +711,19 @@
         background: white;
     }
 
+    .switching {
+        position: absolute;
+        top: 80px;
+        left: 50%;
+        translate: -50% 0;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgb(24 24 32 / 0.9);
+        font-size: 13px;
+        font-weight: 600;
+        pointer-events: none;
+        animation: rise var(--slow) var(--ease);
+    }
     .spinner {
         position: absolute;
         top: 50%;

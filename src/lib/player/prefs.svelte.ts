@@ -9,10 +9,27 @@ type Prefs = {
     /** Bitstream Dolby/DTS (incl. Atmos) to a receiver or soundbar. */
     audioPassthrough: boolean;
     volume: number;
+    /** Easy Mode: pick and play the best source automatically. */
+    easyMode: boolean;
+    /** Preferred audio language (ISO 639-2), or null for "no preference". */
+    easyLanguage: string | null;
+    /** Highest resolution Easy Mode will pick: 2160, 1080 or 720. */
+    maxResolution: number;
+    /** Allow plain torrents as a last resort when no debrid source works. */
+    allowTorrents: boolean;
 };
 
 const KEY = 'playerPrefs';
-const defaults: Prefs = { upscaler: 'off', hdrPassthrough: true, audioPassthrough: false, volume: 100 };
+const defaults: Prefs = {
+    upscaler: 'off',
+    hdrPassthrough: true,
+    audioPassthrough: false,
+    volume: 100,
+    easyMode: false,
+    easyLanguage: 'eng',
+    maxResolution: 1080,
+    allowTorrents: true,
+};
 
 function load(): Prefs {
     try {
@@ -48,6 +65,30 @@ class PlayerPrefs {
     }
     set volume(v: number) {
         this.#save({ volume: v });
+    }
+    get easyMode() {
+        return this.#p.easyMode;
+    }
+    set easyMode(v: boolean) {
+        this.#save({ easyMode: v });
+    }
+    get easyLanguage() {
+        return this.#p.easyLanguage;
+    }
+    set easyLanguage(v: string | null) {
+        this.#save({ easyLanguage: v });
+    }
+    get maxResolution() {
+        return this.#p.maxResolution;
+    }
+    set maxResolution(v: number) {
+        this.#save({ maxResolution: v });
+    }
+    get allowTorrents() {
+        return this.#p.allowTorrents;
+    }
+    set allowTorrents(v: boolean) {
+        this.#save({ allowTorrents: v });
     }
 
     #save(patch: Partial<Prefs>) {

@@ -6,14 +6,23 @@
     import { openExternal } from '$lib/links';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
+    import { easyQueue } from '$lib/player/easy';
     import Icon from '../Icon.svelte';
 
     let {
         title,
         subtitle,
         streams,
+        notice = null,
         onclose,
-    }: { title: string; subtitle: string | null; streams: MetaDetails['streams']; onclose: () => void } = $props();
+    }: {
+        title: string;
+        subtitle: string | null;
+        streams: MetaDetails['streams'];
+        /** Shown at the top, e.g. why Easy Mode handed the choice back to you. */
+        notice?: string | null;
+        onclose: () => void;
+    } = $props();
 
     let dialog = $state<HTMLDialogElement>();
     let copied = $state<string | null>(null);
@@ -44,6 +53,8 @@
     function play(s: Stream) {
         const link = parsePlayerDeepLink(s.deepLinks!.player!);
         const url = linkOf(s);
+        // A hand-picked source: don't auto-switch away from it.
+        easyQueue.clear();
         if (link && url) goto(playerHref(link, url));
     }
 
@@ -69,6 +80,7 @@
         </header>
 
         <div class="body">
+            {#if notice}<p class="notice" role="status">{notice}</p>{/if}
             {#each groups as group (group.addon)}
                 {#if group.loading || group.items.length}
                     <section>
@@ -200,6 +212,15 @@
         overflow-y: auto;
         padding: 8px 16px 24px;
     }
+    .notice {
+        margin: 16px 0 0;
+        padding: 12px 14px;
+        border-radius: var(--radius);
+        background: rgb(255 159 10 / 0.12);
+        border: 1px solid rgb(255 159 10 / 0.35);
+        font-size: 13px;
+        line-height: 1.45;
+    }
     section {
         margin-top: 16px;
     }
@@ -221,7 +242,8 @@
     }
     li {
         display: grid;
-        grid-template-columns: 88px 1fr auto;
+        /* minmax(0, …) lets long file names wrap instead of pushing the buttons out. */
+        grid-template-columns: 88px minmax(0, 1fr) auto;
         align-items: center;
         gap: 12px;
         padding: 12px;
