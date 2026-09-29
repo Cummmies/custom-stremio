@@ -6,6 +6,7 @@
     import { page } from '$app/state';
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
+    import { getCurrentWindow } from '@tauri-apps/api/window';
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
@@ -103,11 +104,27 @@
         const offMedia = inTauri
             ? listen<string>('media://button', (e) => mpv.set('pause', e.payload === 'pause'))
             : Promise.resolve(() => {});
+        // Pause on minimize / on switching to another window (Settings → Playback).
+        const win = inTauri ? getCurrentWindow() : null;
+        const pauseNow = () => {
+            if (mpv.loaded && !mpv.paused) mpv.set('pause', true);
+        };
+        const offWindow = win
+            ? Promise.all([
+                  win.onResized(async () => {
+                      if (playerPrefs.pauseOnMinimize && (await win.isMinimized())) pauseNow();
+                  }),
+                  win.onFocusChanged(({ payload: focused }) => {
+                      if (!focused && playerPrefs.pauseOnLostFocus && !pip) pauseNow();
+                  }),
+              ])
+            : Promise.resolve([]);
         begin();
         return () => {
             unwatch();
             offEvents();
             offMedia.then((off) => off());
+            offWindow.then((offs) => offs.forEach((off) => off()));
             if (inTauri) invoke('media_clear').catch(() => {});
             document.documentElement.classList.remove('player-active', 'player-idle');
             clearTimeout(idleTimer);
@@ -314,6 +331,9 @@
         const subs = model.subtitles;
         // Decide after a short delay, once mpv has reported the file's own tracks.
         setTimeout(() => {
+            // Listening in that language already (e.g. an English dub): no subtitles needed.
+            const audio = mpv.audioTracks.find((t) => t.selected);
+            if (audio && sameLanguage(audio.lang, pref)) return;
             const builtIn = mpv.subTracks.some((t) => !t.external && sameLanguage(t.lang, pref));
             const match = subs.find((s) => sameLanguage(s.lang, pref) && s.url);
             if (!builtIn && match) addAddonSubtitle(match, mpv.sid === 'no');

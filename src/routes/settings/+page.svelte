@@ -158,9 +158,23 @@
                 <div class="row">
                     <div>
                         <div class="title">Skip intros and recaps automatically</div>
-                        <div class="sub">When their timing is known. Otherwise a Skip button appears, and Tab skips anytime.</div>
+                        <div class="sub">When their timing is known. Otherwise a Skip button appears, and S skips anytime.</div>
                     </div>
                     <Toggle label="Skip intros and recaps automatically" checked={playerPrefs.autoSkip} onchange={(v) => (playerPrefs.autoSkip = v)} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Pause when minimized</div>
+                        <div class="sub">Pauses playback when you minimize the window.</div>
+                    </div>
+                    <Toggle label="Pause when minimized" checked={playerPrefs.pauseOnMinimize} onchange={(v) => (playerPrefs.pauseOnMinimize = v)} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Pause when the window loses focus</div>
+                        <div class="sub">Pauses playback when you switch to another window. Not in picture in picture.</div>
+                    </div>
+                    <Toggle label="Pause when the window loses focus" checked={playerPrefs.pauseOnLostFocus} onchange={(v) => (playerPrefs.pauseOnLostFocus = v)} />
                 </div>
                 <div class="row">
                     <div>

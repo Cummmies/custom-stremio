@@ -46,6 +46,11 @@ const WORDS: [RegExp, string][] = [
     [/\b(hin|hindi)\b/i, 'hin'],
 ];
 
+const SUBS = /\b(?:eng(?:lish)?|multi(?:ple)?|softs?)[ ._-]*(?:sub(?:s|bed|titles?)?|srt)\b|\bsub(?:s|bed|titles?)?[ ._-]*(?:eng(?:lish)?)\b|\besubs?\b/gi;
+const DUAL_AUDIO = /\bdual\b/i; // "Dual Audio", "Dual-Audio", "[DUAL]", ".DUAL."
+const ENGLISH_DUB = /\beng(?:lish)?[ ._-]*dub(?:bed)?\b|\bdub(?:bed)?[ ._-]*eng(?:lish)?\b/i;
+const DUBBED = /\bdub(?:bed|s)?\b/i;
+
 const DEBRID_TAG = /\[(RD|AD|PM|DL|TB|OC|ED|PK|DB|EN|TRD|DLS)(\+| ?download)?\]/i;
 
 function parseSize(text: string, hint?: number): number | null {
@@ -87,7 +92,15 @@ export function parseStream(s: Stream): Parsed {
 
     const languages = new Set<string>();
     for (const [flag, code] of Object.entries(FLAGS)) if (text.includes(flag)) languages.add(code);
-    for (const [re, code] of WORDS) if (re.test(text)) languages.add(code);
+    // Subtitle languages ("Eng Subs", "English Subtitles", "ESub") aren't audio: an
+    // anime release "with English subs" is Japanese audio.
+    const audioText = text.replace(SUBS, ' ');
+    for (const [re, code] of WORDS) if (re.test(audioText)) languages.add(code);
+    // Dubs: "Dual Audio" is the original plus English (anime: Japanese + English);
+    // "English Dub" / "Dubbed" with no other language named is English too.
+    const dualAudio = DUAL_AUDIO.test(text);
+    if (dualAudio || ENGLISH_DUB.test(text) || (DUBBED.test(text) && [...languages].every((l) => l === 'jpn' || l === 'eng')))
+        languages.add('eng');
 
     const tier = /\bremux\b/i.test(text)
         ? 5
@@ -107,7 +120,7 @@ export function parseStream(s: Stream): Parsed {
         seeders: seed ? Number(seed[1]) : null,
         sizeBytes: parseSize(text, s.behaviorHints?.videoSize),
         languages: [...languages],
-        multiAudio: /\b(multi|dual)[ .-]?(audio|lang)?\b/i.test(text),
+        multiAudio: dualAudio || /\bmulti[ .-]?(audio|lang)?\b/i.test(audioText),
         tier,
         junk:
             /\b(cam|camrip|hdcam|telesync|hdts|telecine|hdtc|screener|scr|dvdscr)\b/i.test(text) ||

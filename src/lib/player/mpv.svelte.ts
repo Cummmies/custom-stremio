@@ -2,6 +2,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { playerPrefs, type Upscaler } from './prefs.svelte';
+import { langKey } from './lang';
 
 export type Track = {
     id: number;
@@ -250,8 +251,18 @@ export function buildOptions(settings: {
         'sub-shadow-color': '#80000000',
         'sub-ass-override': 'scale',
     };
-    if (settings.audioLanguage) o.alang = settings.audioLanguage;
-    if (settings.subtitlesLanguage) o.slang = settings.subtitlesLanguage;
+    // Files tag tracks "en" or "eng" (or "fre"/"fra"): list every spelling.
+    if (settings.audioLanguage) o.alang = spellings(settings.audioLanguage);
+    if (settings.subtitlesLanguage) o.slang = spellings(settings.subtitlesLanguage);
+    // Don't turn on subtitles in the language you're already hearing (dubs),
+    // apart from forced ones (signs and songs).
+    o['subs-with-matching-audio'] = 'no';
     if (playerPrefs.audioPassthrough) o['audio-spdif'] = 'ac3,eac3,dts,dts-hd,truehd';
     return o;
+}
+
+/** "eng" → "eng,en": the setting's code plus its 2-letter form. */
+function spellings(code: string) {
+    const short = langKey(code);
+    return short && short !== code.toLowerCase() ? `${code},${short}` : code;
 }

@@ -19,6 +19,10 @@ type Prefs = {
     allowTorrents: boolean;
     /** Jump past intros and recaps without pressing anything. */
     autoSkip: boolean;
+    /** Pause when the window is minimized. */
+    pauseOnMinimize: boolean;
+    /** Pause when you switch to another window. */
+    pauseOnLostFocus: boolean;
 };
 
 const KEY = 'playerPrefs';
@@ -32,6 +36,8 @@ const defaults: Prefs = {
     maxResolution: 1080,
     allowTorrents: true,
     autoSkip: false,
+    pauseOnMinimize: true,
+    pauseOnLostFocus: false,
 };
 
 function load(): Prefs {
@@ -98,6 +104,18 @@ class PlayerPrefs {
     }
     set autoSkip(v: boolean) {
         this.#save({ autoSkip: v });
+    }
+    get pauseOnMinimize() {
+        return this.#p.pauseOnMinimize;
+    }
+    set pauseOnMinimize(v: boolean) {
+        this.#save({ pauseOnMinimize: v });
+    }
+    get pauseOnLostFocus() {
+        return this.#p.pauseOnLostFocus;
+    }
+    set pauseOnLostFocus(v: boolean) {
+        this.#save({ pauseOnLostFocus: v });
     }
 
     #save(patch: Partial<Prefs>) {
