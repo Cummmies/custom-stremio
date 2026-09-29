@@ -24,7 +24,7 @@
     let details = $state<MetaDetails | null>(null);
     let season = $state(1);
     let seasonFor = '';
-    let tab = $state<'episodes' | 'extras'>('episodes');
+    let tab = $state<'episodes' | 'extras' | 'details'>('episodes');
     let trailer = $state<string | null>(null);
     let expanded = $state(false);
     let artReady = $state(false);
@@ -97,6 +97,16 @@
         const fromUrl = videoId ? meta.videos.find((v) => v.id === videoId)?.season : undefined;
         season = fromUrl ?? resumeVideo?.season ?? meta.videos[0]?.season ?? 1;
         tab = isSeries ? 'episodes' : 'extras';
+    });
+
+    // The Details tab only exists on narrow windows; widening goes back to the main section.
+    $effect(() => {
+        const wide = matchMedia('(min-width: 1001px)');
+        const onChange = () => {
+            if (wide.matches && tab === 'details') tab = isSeries ? 'episodes' : 'extras';
+        };
+        wide.addEventListener('change', onChange);
+        return () => wide.removeEventListener('change', onChange);
     });
 
     // Arriving from a Play button: jump straight to sources.
@@ -313,46 +323,60 @@
     </header>
 
     {#if meta}
-        <div class="body" class:single={!isSeries && !trailers.length}>
+        <div class="body">
+            <!-- Sections bar: its rule runs the full width, and both columns start below it. -->
             {#if isSeries || trailers.length}
-                <section class="main">
-                    {#if isSeries && trailers.length}
-                        <div class="tabs" role="tablist" aria-label="Sections">
+                <div class="bar">
+                    <div class="tabs" role="tablist" aria-label="Sections">
+                        {#if isSeries}
                             <button role="tab" aria-selected={tab === 'episodes'} class:on={tab === 'episodes'} onclick={() => (tab = 'episodes')}>Episodes</button>
+                        {/if}
+                        {#if trailers.length}
                             <button role="tab" aria-selected={tab === 'extras'} class:on={tab === 'extras'} onclick={() => (tab = 'extras')}>Trailers & Extras</button>
-                        </div>
-                    {:else}
-                        <h2 class="section-title">{isSeries ? 'Episodes' : 'Trailers & Extras'}</h2>
-                    {/if}
-
-                    {#if isSeries && tab === 'episodes'}
-                        <EpisodeList
-                            videos={meta.videos}
-                            bind:season
-                            selectedId={videoId}
-                            currentId={resuming ? (resumeVideo?.id ?? null) : null}
-                            onselect={(v) => playVideo(v.id)}
-                            ontogglewatched={toggleEpisodeWatched}
-                        />
-                    {:else}
-                        <ul class="extras">
-                            {#each trailers as t, i (t.ytId)}
-                                <li>
-                                    <button onclick={() => (trailer = t.ytId!)}>
-                                        <span class="thumb">
-                                            <img src={`https://i.ytimg.com/vi/${t.ytId}/hqdefault.jpg`} alt="" loading="lazy" />
-                                            <span class="play-badge" aria-hidden="true"><Icon name="play" size={20} filled /></span>
-                                        </span>
-                                        <span class="extra-title">{i === 0 ? 'Trailer' : `Trailer ${i + 1}`}</span>
-                                    </button>
-                                </li>
-                            {/each}
-                        </ul>
-                    {/if}
-                </section>
+                        {/if}
+                        <!-- Narrow windows have no room for the Details column: it becomes a tab. -->
+                        <button class="narrow-only" role="tab" aria-selected={tab === 'details'} class:on={tab === 'details'} onclick={() => (tab = 'details')}>Details</button>
+                    </div>
+                </div>
             {/if}
 
-            <div class="side"><DetailsPanel {meta} /></div>
+            <div class="columns" class:single={!isSeries && !trailers.length}>
+                {#if isSeries || trailers.length}
+                    <section class="main" aria-label={tab === 'details' ? 'Details' : isSeries && tab === 'episodes' ? 'Episodes' : 'Trailers & Extras'}>
+                        {#if tab === 'details'}
+                            <div class="details-tab"><DetailsPanel {meta} /></div>
+                        {:else if isSeries && tab === 'episodes'}
+                            <EpisodeList
+                                videos={meta.videos}
+                                bind:season
+                                selectedId={videoId}
+                                currentId={resuming ? (resumeVideo?.id ?? null) : null}
+                                onselect={(v) => playVideo(v.id)}
+                                ontogglewatched={toggleEpisodeWatched}
+                            />
+                        {:else}
+                            <ul class="extras">
+                                {#each trailers as t, i (t.ytId)}
+                                    <li>
+                                        <button onclick={() => (trailer = t.ytId!)}>
+                                            <span class="thumb">
+                                                <img src={`https://i.ytimg.com/vi/${t.ytId}/hqdefault.jpg`} alt="" loading="lazy" />
+                                                <span class="play-badge" aria-hidden="true"><Icon name="play" size={20} filled /></span>
+                                            </span>
+                                            <span class="extra-title">{i === 0 ? 'Trailer' : `Trailer ${i + 1}`}</span>
+                                        </button>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </section>
+                {/if}
+
+                <div class="side">
+                    <h2 class="side-title">Details</h2>
+                    <DetailsPanel {meta} />
+                </div>
+            </div>
         </div>
     {/if}
     </div>
@@ -649,13 +673,25 @@
         position: relative;
         flex: 1;
         min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    /* Full-width sections bar, like a toolbar under the hero. */
+    .bar {
+        flex: none;
+        padding: 0 var(--gutter);
+        border-bottom: 1px solid var(--separator);
+    }
+    .columns {
+        flex: 1;
+        min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr) 340px;
         grid-template-rows: minmax(0, 1fr);
         gap: 40px;
-        padding: 0 var(--gutter);
+        padding: 20px var(--gutter) 0;
     }
-    .body.single {
+    .columns.single {
         grid-template-columns: minmax(0, 720px);
     }
     /* Each column fills the remaining height and scrolls inside itself. */
@@ -670,19 +706,44 @@
         overscroll-behavior: contain;
         padding-bottom: 24px;
     }
+    /* Same height as the season picker beside it, so the two columns line up. */
+    .side-title {
+        display: flex;
+        align-items: center;
+        min-height: 36px;
+        margin: 0 0 14px;
+        font-size: var(--text-title3);
+        font-weight: 600;
+    }
+    .narrow-only {
+        display: none;
+    }
+    .details-tab {
+        min-height: 0;
+        overflow-y: auto;
+        max-width: 560px;
+        padding-bottom: 24px;
+    }
+    @media (min-width: 1001px) {
+        /* The Details tab's content lives in the side column at this width. */
+        .details-tab {
+            display: none;
+        }
+    }
     @media (max-width: 1000px) {
-        .body {
+        .tabs .narrow-only {
+            display: block;
+        }
+        .columns {
             grid-template-columns: minmax(0, 1fr);
         }
-        .side {
+        .columns:not(.single) .side {
             display: none;
         }
     }
     .tabs {
         display: flex;
         gap: 28px;
-        border-bottom: 1px solid var(--separator);
-        margin-bottom: 20px;
     }
     .tabs button {
         position: relative;
@@ -709,12 +770,6 @@
         height: 2px;
         border-radius: 2px;
         background: var(--label);
-    }
-    .section-title {
-        margin: 0 0 16px;
-        font-family: var(--font-display);
-        font-size: var(--text-title3);
-        font-weight: 600;
     }
     .extras {
         list-style: none;

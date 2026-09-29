@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { MetaItem } from '$lib/core/types';
+    import { openExternal } from '$lib/links';
 
     let { meta }: { meta: MetaItem } = $props();
 
@@ -13,6 +14,14 @@
         meta.released ? new Date(meta.released).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null
     );
 
+    const imdb = $derived(meta.links.find((l) => l.category === 'imdb') ?? null);
+    const seasonsLine = $derived.by(() => {
+        const regular = meta.videos.filter((v) => (v.season ?? 0) > 0 && !v.upcoming);
+        const seasons = new Set(regular.map((v) => v.season)).size;
+        if (!seasons) return null;
+        return `${seasons} ${seasons === 1 ? 'season' : 'seasons'} · ${regular.length} ${regular.length === 1 ? 'episode' : 'episodes'}`;
+    });
+
     const rows = $derived(
         [
             ['Genres', genres.join(', ')],
@@ -20,6 +29,7 @@
             [writers.length > 1 ? 'Writers' : 'Writer', writers.join(', ')],
             ['Released', released ?? meta.releaseInfo],
             ['Runtime', meta.runtime],
+            ['Seasons', seasonsLine],
         ].filter(([, v]) => v) as [string, string][]
     );
 
@@ -33,10 +43,19 @@
 </script>
 
 <aside class="panel" aria-label="Details">
-    {#if rows.length}
+    {#if rows.length || imdb}
         <section class="card">
-            <h3>Details</h3>
             <dl>
+                {#if imdb}
+                    <div>
+                        <dt>IMDb</dt>
+                        <dd>
+                            <button class="link" onclick={() => openExternal(imdb.url)} title="Open on IMDb">
+                                ★ {imdb.name}<span class="out" aria-hidden="true">↗</span>
+                            </button>
+                        </dd>
+                    </div>
+                {/if}
                 {#each rows as [k, v] (k)}
                     <div>
                         <dt>{k}</dt>
@@ -102,6 +121,23 @@
     dd {
         margin: 0;
         font-size: 13px;
+    }
+    .link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--label);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+    .link:hover {
+        text-decoration: underline;
+    }
+    .out {
+        margin-left: 4px;
+        color: var(--label-2);
     }
     .cast {
         list-style: none;
