@@ -25,6 +25,8 @@ type Prefs = {
     pauseOnLostFocus: boolean;
     /** After two episodes that started by themselves with nobody touching anything, ask. */
     askStillWatching: boolean;
+    /** Show what's playing on your Discord profile. */
+    discordPresence: boolean;
 };
 
 const KEY = 'playerPrefs';
@@ -41,6 +43,7 @@ const defaults: Prefs = {
     pauseOnMinimize: true,
     pauseOnLostFocus: false,
     askStillWatching: true,
+    discordPresence: false,
 };
 
 function load(): Prefs {
@@ -125,6 +128,12 @@ class PlayerPrefs {
     }
     set askStillWatching(v: boolean) {
         this.#save({ askStillWatching: v });
+    }
+    get discordPresence() {
+        return this.#p.discordPresence;
+    }
+    set discordPresence(v: boolean) {
+        this.#save({ discordPresence: v });
     }
 
     #save(patch: Partial<Prefs>) {

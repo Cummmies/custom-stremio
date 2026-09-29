@@ -1,3 +1,4 @@
+mod discord;
 mod media_controls;
 mod player;
 mod server;
@@ -41,6 +42,7 @@ pub fn run() {
         .manage(Player::default())
         .manage(player::Thumbnailer::default())
         .manage(WindowModes::default())
+        .manage(discord::Discord::default())
         .invoke_handler(tauri::generate_handler![
             server_status,
             player::mpv_start,
@@ -59,6 +61,8 @@ pub fn run() {
             window_modes::start_dragging,
             media_controls::media_update,
             media_controls::media_clear,
+            discord::discord_set,
+            discord::discord_clear,
         ])
         .setup(|app| {
             server::start(app.handle().clone());

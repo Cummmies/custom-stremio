@@ -298,6 +298,13 @@
                         </div>
                         <Toggle label="Open addon install links in this app" checked={handlesLinks} onchange={setLinkHandling} />
                     </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Show what you’re watching on Discord</div>
+                            <div class="sub">Your Discord profile shows the title, episode and time left while something plays. Needs the Discord app running.</div>
+                        </div>
+                        <Toggle label="Show what you’re watching on Discord" checked={playerPrefs.discordPresence} onchange={(v) => (playerPrefs.discordPresence = v)} />
+                    </div>
                 </div>
             </section>
         {/if}

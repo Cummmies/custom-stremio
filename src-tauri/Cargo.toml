@@ -26,6 +26,7 @@ libloading = "0.8"
 raw-window-handle = "0.6"
 tauri-plugin-deep-link = "2"
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+discord-rich-presence = "1.1"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

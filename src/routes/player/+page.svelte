@@ -8,7 +8,7 @@
 <script lang="ts">
     // Full-window player. mpv draws the video underneath this transparent page;
     // everything you see here is the control layer on top of it.
-    import { onMount } from 'svelte';
+    import { onMount, untrack } from 'svelte';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { invoke } from '@tauri-apps/api/core';
@@ -137,6 +137,7 @@
             offMedia.then((off) => off());
             offWindow.then((offs) => offs.forEach((off) => off()));
             if (inTauri) invoke('media_clear').catch(() => {});
+            if (inTauri) invoke('discord_clear').catch(() => {});
             document.documentElement.classList.remove('player-active', 'player-idle');
             clearTimeout(idleTimer);
             clearTimeout(watchdog);
@@ -301,6 +302,7 @@
 
     function onMpvEvent(e: { kind: string; reason?: string }) {
         if (e.kind === 'playback-restart') {
+            seeks++;
             firstFrame = true;
             firstFrameSeen = true;
             addToLibraryIfNeeded();
@@ -443,6 +445,29 @@
         if (!inTauri || !mpv.loaded || !model) return;
         const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
         invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: mpv.paused }).catch(() => {});
+    });
+
+    // --- Discord: "Watching <show> · S3 · E7" with time left (Settings, off by default) ---
+    /** Bumped when playback restarts after a seek, so Discord's progress bar is redone. */
+    let seeks = $state(0);
+    $effect(() => {
+        if (!inTauri) return;
+        if (!playerPrefs.discordPresence) {
+            invoke('discord_clear').catch(() => {});
+            return;
+        }
+        if (!fileReady || !model || errorClip) return;
+        seeks;
+        const presence = {
+            title: heading,
+            subtitle: subheading ?? '',
+            image: episodeVideo?.thumbnail || meta?.poster || meta?.background || null,
+            // Read without subscribing: the time ticks constantly; seeks and pauses re-run this.
+            position: untrack(() => mpv.time),
+            duration: mpv.duration,
+            paused: mpv.paused,
+        };
+        invoke('discord_set', { presence }).catch(() => {});
     });
 
     // --- report progress to Stremio (drives Continue Watching) --------------
