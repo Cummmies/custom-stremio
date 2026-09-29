@@ -7,7 +7,7 @@
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
 
-    let { items, badge }: { items: MetaItemPreview[]; badge: string } = $props();
+    let { items }: { items: MetaItemPreview[] } = $props();
 
     const INTERVAL = 9000;
 
@@ -103,7 +103,6 @@
                 aria-live={paused ? 'polite' : 'off'}
                 use:titleContext={{ type: item.type, id: item.id, name: item.name, preview: item }}
             >
-                <span class="badge">{badge}</span>
                 {#if logo}
                     <img
                         class="logo"
@@ -213,18 +212,6 @@
             opacity: 0;
             transform: translateY(6px);
         }
-    }
-    .badge {
-        display: inline-block;
-        margin-bottom: 16px;
-        padding: 3px 8px;
-        border: 1px solid rgb(255 255 255 / 0.4);
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--label);
     }
     .logo {
         display: block;

@@ -1,7 +1,7 @@
 <script lang="ts">
     // Continue Watching card: 16:9 artwork, progress, and where you are.
     import type { LibraryItem } from '$lib/core/types';
-    import { episodeLabel, watchedLabel } from '$lib/library';
+    import { episodeLabel } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
@@ -13,7 +13,7 @@
     const isImdb = $derived(/^tt\d+$/.test(item._id));
     const art = $derived(isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster);
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
-    const detail = $derived([episodeLabel(item), watchedLabel(item)].filter(Boolean).join(' · '));
+    const detail = $derived(episodeLabel(item) ?? '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
     // Core remembers the stream you last used; if it has one, go straight back to it.
     const href = $derived(

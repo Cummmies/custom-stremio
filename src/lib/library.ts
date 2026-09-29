@@ -18,9 +18,3 @@ export function episodeLabel(item: LibraryItem): string | null {
     if (item.type !== 'series' || !parts || parts.length < 3) return null;
     return `S${parts[parts.length - 2]} · E${parts[parts.length - 1]}`;
 }
-
-/** "35% watched" (the slim library view has no duration, so no "min left"). */
-export function watchedLabel(item: LibraryItem): string | null {
-    const pct = Math.round(item.progress);
-    return pct > 0 && pct < 100 ? `${pct}% watched` : null;
-}

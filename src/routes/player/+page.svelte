@@ -188,6 +188,7 @@
         if (e.kind === 'playback-restart') {
             firstFrame = true;
             firstFrameSeen = true;
+            addToLibraryIfNeeded();
             clearTimeout(watchdog);
         }
         if (e.kind === 'file-loaded') {
@@ -199,6 +200,17 @@
             if (settings?.bingeWatching && model?.nextVideo) playNext();
         }
     }
+
+    // Starting to watch something saves it to your library (once it actually plays).
+    function addToLibraryIfNeeded() {
+        const meta = model?.metaItem?.type === 'Ready' ? (model.metaItem as { content: { id?: string } }).content : null;
+        if (meta?.id && !app.inLibrary(meta.id)) app.addToLibrary(meta);
+    }
+
+    // The meta item can arrive after playback starts.
+    $effect(() => {
+        if (firstFrameSeen && model?.metaItem?.type === 'Ready') addToLibraryIfNeeded();
+    });
 
     // Seek-bar thumbnails open a second connection and decode frames, so they wait
     // until playback has settled: 30s in, with a healthy buffer ahead.

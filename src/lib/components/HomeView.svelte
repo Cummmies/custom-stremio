@@ -39,13 +39,9 @@
     };
 
     // Hero: the top titles of the first loaded catalog (for Home, favor movies then series).
-    const featured = $derived.by(() => {
+    const featured = $derived.by((): MetaItemPreview[] => {
         const first = ofType.find(({ index }) => readyItems(index).length > 0);
-        if (!first) return { items: [] as MetaItemPreview[], badge: '' };
-        return {
-            items: readyItems(first.index).filter((m) => backgroundOf(m)).slice(0, 6),
-            badge: catalogTitle(first.c),
-        };
+        return first ? readyItems(first.index).filter((m) => backgroundOf(m)).slice(0, 6) : [];
     });
 
     // Top 10: the first catalog of this kind, which is the most popular one.
@@ -80,7 +76,7 @@
 
 <svelte:head><title>{pageTitle} · Stremio</title></svelte:head>
 
-<Hero items={featured.items} badge={featured.badge} />
+<Hero items={featured} />
 
 <div class="content">
     {#if tiles.length > 1}
