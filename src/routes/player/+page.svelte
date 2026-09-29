@@ -89,6 +89,7 @@
         subtitlesAdded = false;
         firstFrameSeen = false;
         segments = [];
+        segmentsFor = null;
         autoSkipped.clear();
         cancelSilenceSkip();
         addedSubs.clear();
@@ -201,7 +202,6 @@
         if (e.kind === 'file-loaded') {
             mpv.applyUpscaler(playerPrefs.upscaler);
             scheduleThumbnails();
-            loadSegments();
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
@@ -300,6 +300,16 @@
         if (text) skipNoteTimer = setTimeout(() => (skipNote = null), ms);
     }
 
+    // Look them up once per video, as soon as its length is known (it isn't yet
+    // when the file first opens, and the databases match on length).
+    let segmentsFor: string | null = null;
+    $effect(() => {
+        const key = `${id}|${videoId}`;
+        if (!mpv.loaded || !mpv.duration || !id || segmentsFor === key) return;
+        segmentsFor = key;
+        loadSegments();
+    });
+
     async function loadSegments() {
         const duration = mpv.duration;
         if (!duration) return;
@@ -315,6 +325,7 @@
             duration,
             chapters,
         });
+        if (import.meta.env.DEV) console.info('[skip] segments', { id, season, episode, duration, found });
         if (forVideo === videoId) segments = found;
     }
 
