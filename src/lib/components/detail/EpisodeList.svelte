@@ -21,21 +21,14 @@
     } = $props();
 
     let list = $state<HTMLElement>();
+    let atTop = $state(true);
+    let atBottom = $state(false);
 
-    // Scroll handoff: until the whole list is on screen, the wheel moves the page;
-    // after that it moves episodes. At the first episode, scrolling up moves the page again.
-    function wheelHandoff(node: HTMLElement) {
-        const onwheel = (e: WheelEvent) => {
-            const pageAtBottom = scrollY + innerHeight >= document.documentElement.scrollHeight - 1;
-            const fullyVisible = pageAtBottom || node.getBoundingClientRect().bottom <= innerHeight + 1;
-            const toPage = (e.deltaY > 0 && !fullyVisible) || (e.deltaY < 0 && node.scrollTop <= 0);
-            if (toPage) {
-                e.preventDefault();
-                window.scrollBy({ top: e.deltaY });
-            }
-        };
-        node.addEventListener('wheel', onwheel, { passive: false });
-        return { destroy: () => node.removeEventListener('wheel', onwheel) };
+    // Which edges have hidden episodes past them; those edges get a fade.
+    function updateEdges() {
+        if (!list) return;
+        atTop = list.scrollTop <= 1;
+        atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
     }
 
     // On opening a season, bring the relevant episode into view (inside the list only).
@@ -44,6 +37,7 @@
         const target = selectedId ?? currentId;
         const row = target && list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(target)}"]`);
         if (list) list.scrollTop = row ? Math.max(0, row.offsetTop - list.offsetTop - 8) : 0;
+        updateEdges();
     });
 
     // Specials (season 0) go last, as every TV app does.
@@ -71,7 +65,7 @@
     <span class="count">{episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}</span>
 </div>
 
-<ol class="episodes" bind:this={list} use:wheelHandoff>
+<ol class="episodes" class:fade-top={!atTop} class:fade-bottom={!atBottom} bind:this={list} onscroll={updateEdges}>
     {#each episodes as ep (ep.id)}
         {@const progress = ep.progress && ep.progress > 0 ? Math.min(ep.progress, 100) : 0}
         <li class:selected={ep.id === selectedId} class:current={ep.id === currentId} data-id={ep.id}>
@@ -138,8 +132,22 @@
         max-height: calc(100vh - var(--nav-h) - 96px);
         overflow-y: auto;
         overscroll-behavior: contain;
-        /* Soft fade at the bottom edge hints there's more to scroll. */
-        mask-image: linear-gradient(to bottom, black calc(100% - 40px), transparent);
+        --fade-top: 0px;
+        --fade-bottom: 0px;
+        /* Edges that cut off episodes fade out, hinting there's more to scroll. */
+        mask-image: linear-gradient(
+            to bottom,
+            transparent,
+            black var(--fade-top),
+            black calc(100% - var(--fade-bottom)),
+            transparent
+        );
+    }
+    .episodes.fade-top {
+        --fade-top: 48px;
+    }
+    .episodes.fade-bottom {
+        --fade-bottom: 72px;
     }
     li.current:not(.selected) {
         box-shadow: inset 3px 0 0 var(--label);
