@@ -277,7 +277,7 @@
         const info = [
             mpv.width && mpv.height ? `${mpv.width}×${mpv.height}` : null,
             mpv.hdr ? (mpv.gamma === 'hlg' ? 'HLG' : 'HDR10') : 'SDR',
-            mpv.hwdec && mpv.hwdec !== 'no' ? `GPU decoding (${mpv.hwdec})` : 'CPU decoding',
+            mpv.hwdec == null ? null : mpv.hwdec && mpv.hwdec !== 'no' ? `GPU decoding (${mpv.hwdec})` : 'CPU decoding',
         ].filter(Boolean);
         const setUpscaler = (u: Upscaler) => {
             const needsRestart = (u === 'rtx') !== (playerPrefs.upscaler === 'rtx');

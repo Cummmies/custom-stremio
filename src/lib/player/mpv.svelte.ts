@@ -26,6 +26,13 @@ const HIGH_QUALITY: Record<string, string> = {
     deband: 'yes',
 };
 
+/** Same list the Rust side observes (src-tauri/src/player.rs, OBSERVED). */
+const OBSERVED = [
+    'time-pos', 'duration', 'pause', 'paused-for-cache', 'cache-buffering-state', 'demuxer-cache-time',
+    'volume', 'mute', 'track-list', 'aid', 'sid', 'speed', 'video-params/gamma', 'video-params/w',
+    'video-params/h', 'hwdec-current',
+];
+
 export const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 const num = (v: string | null) => (v == null || v === '' ? null : Number(v));
@@ -118,6 +125,21 @@ class Mpv {
         }
         await invoke('mpv_start', { options });
         this.running = true;
+        await this.sync();
+    }
+
+    /**
+     * Reads every watched property once. mpv only reports changes, so a page that
+     * (re)connects to an mpv that's already playing would otherwise show blanks.
+     */
+    async sync() {
+        await Promise.all(
+            OBSERVED.map(async (name) => {
+                const v = await this.get(name).catch(() => null);
+                if (v != null) this.#apply(name, v);
+            })
+        );
+        if (this.duration) this.loaded = true;
     }
 
     async load(url: string, startSeconds = 0) {
