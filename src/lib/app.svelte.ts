@@ -8,6 +8,7 @@ class AppState {
     server = $state<ServerStatus>({ state: 'starting' });
     library = $state<Library | null>(null);
     loginOpen = $state(false);
+    loginMode = $state<'login' | 'switch'>('login');
 
     user = $derived(this.ctx?.profile.auth?.user ?? null);
     libraryIds = $derived(new Set(this.library?.catalog.map((i) => i._id) ?? []));
@@ -43,13 +44,28 @@ class AppState {
         return this.libraryIds.has(id);
     }
 
+    addToLibrary(preview: object) {
+        core.dispatch({ action: 'Ctx', args: { action: 'AddToLibrary', args: preview } });
+    }
+
+    removeFromLibrary(id: string) {
+        core.dispatch({ action: 'Ctx', args: { action: 'RemoveFromLibrary', args: id } });
+    }
+
     toggleLibrary(item: MetaItemPreview) {
-        core.dispatch({
-            action: 'Ctx',
-            args: this.inLibrary(item.id)
-                ? { action: 'RemoveFromLibrary', args: item.id }
-                : { action: 'AddToLibrary', args: item },
-        });
+        if (this.inLibrary(item.id)) this.removeFromLibrary(item.id);
+        else this.addToLibrary(item);
+    }
+
+    /** Signing in again while signed in replaces the current account. */
+    switchAccount() {
+        this.loginMode = 'switch';
+        this.loginOpen = true;
+    }
+
+    openLogin() {
+        this.loginMode = 'login';
+        this.loginOpen = true;
     }
 
     logout() {

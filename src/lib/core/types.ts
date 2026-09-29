@@ -35,8 +35,18 @@ export type Board = {
 export type Ctx = {
     profile: {
         auth: { key: string; user: { _id: string; email: string; avatar: string } } | null;
-        settings: { streamingServerUrl: string };
+        settings: Settings;
+        addons: import('$lib/components/addons/AddonCard.svelte').AddonDescriptor[];
     };
+};
+
+export type Settings = {
+    streamingServerUrl: string;
+    audioLanguage: string | null;
+    subtitlesLanguage: string | null;
+    bingeWatching: boolean;
+    hardwareDecoding: boolean;
+    [key: string]: unknown;
 };
 
 export type ServerStatus =

@@ -51,7 +51,13 @@
     // Top 10: the first catalog of this kind, which is the most popular one.
     const top10 = $derived.by(() => {
         const first = ofType.find(({ index }) => readyItems(index).length > 0);
-        return first ? { items: readyItems(first.index).slice(0, 10), title: `Top 10 ${first.c.type === 'series' ? 'Series' : 'Movies'} Today` } : null;
+        return first
+            ? {
+                  index: first.index,
+                  items: readyItems(first.index).slice(0, 10),
+                  title: `Top 10 ${first.c.type === 'series' ? 'Series' : 'Movies'} Today`,
+              }
+            : null;
     });
 
     const cwItems = $derived((continueWatching?.items ?? []).filter((i) => !type || i.type === type));
@@ -90,7 +96,7 @@
     {/if}
 
     {#if top10 && top10.items.length >= 5}
-        <Shelf title={top10.title} itemWidth="200px" gap="8px">
+        <Shelf title={top10.title} itemWidth="max-content" gap="20px">
             {#each top10.items as item, i (item.id)}
                 <RankCard {item} rank={i + 1} />
             {/each}
@@ -102,7 +108,13 @@
             <p>None of your addons provide {type === 'series' ? 'series' : type === 'movie' ? 'movie' : ''} catalogs. Install an addon like Cinemeta to fill this page.</p>
         </EmptyState>
     {:else}
-        <CatalogList model="board" {catalogs} {type} />
+        <!-- The Top 10 already shows that catalog's first ten; its row continues from #11. -->
+        <CatalogList
+            model="board"
+            {catalogs}
+            {type}
+            continueFrom={top10 && top10.items.length >= 5 ? { index: top10.index, skip: top10.items.length } : null}
+        />
     {/if}
 </div>
 

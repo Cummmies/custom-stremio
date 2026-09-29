@@ -5,6 +5,7 @@
     import type { MetaDetails, MetaItem, Video } from '$lib/core/types';
     import { backgroundOf, logoOf } from '$lib/core/art';
     import { titleHref } from '$lib/links';
+    import { titleContext } from '$lib/contextmenu';
     import Icon from '$lib/components/Icon.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import EpisodeList from '$lib/components/detail/EpisodeList.svelte';
@@ -167,7 +168,7 @@
         </button>
 
         {#if meta}
-            <div class="copy">
+            <div class="copy" use:titleContext={{ type: meta.type, id: meta.id, name: meta.name, preview: meta }}>
                 {#if logo}
                     <img class="logo" src={logo} alt={meta.name} onerror={() => (logoFailed = true)} />
                 {:else}

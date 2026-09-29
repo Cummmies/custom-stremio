@@ -5,6 +5,7 @@
     import type { MetaItemPreview } from '$lib/core/types';
     import Icon from './Icon.svelte';
     import { titleHref } from '$lib/links';
+    import { titleContext } from '$lib/contextmenu';
 
     let { items, badge }: { items: MetaItemPreview[]; badge: string } = $props();
 
@@ -97,7 +98,11 @@
         onfocusout={() => (paused = false)}
     >
         {#key item.id}
-            <div class="copy" aria-live={paused ? 'polite' : 'off'}>
+            <div
+                class="copy"
+                aria-live={paused ? 'polite' : 'off'}
+                use:titleContext={{ type: item.type, id: item.id, name: item.name, preview: item }}
+            >
                 <span class="badge">{badge}</span>
                 {#if logo}
                     <img

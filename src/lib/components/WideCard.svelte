@@ -4,6 +4,7 @@
     import { episodeLabel, timeLeft } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
+    import { titleContext } from '$lib/contextmenu';
 
     let { item }: { item: LibraryItem } = $props();
 
@@ -19,7 +20,9 @@
 <a
     class="card"
     href={titleHref(item.type, item._id, item.state.video_id && item.type === 'series' ? { video: item.state.video_id } : undefined)}
-    onkeydown={arrowNav} aria-label={[item.name, detail].filter(Boolean).join(', ')}>
+    use:titleContext={{ type: item.type, id: item._id, name: item.name }}
+    onkeydown={arrowNav}
+    aria-label={[item.name, detail].filter(Boolean).join(', ')}>
     <div class="art" class:loaded>
         {#if art && !failed}
             <img

@@ -14,7 +14,27 @@
     import { core } from '$lib/core';
     import CatalogRow from './CatalogRow.svelte';
 
-    let { model, catalogs, type = null }: { model: string; catalogs: Catalog[]; type?: string | null } = $props();
+    let {
+        model,
+        catalogs,
+        type = null,
+        continueFrom = null,
+    }: {
+        model: string;
+        catalogs: Catalog[];
+        type?: string | null;
+        /** Start one catalog's row after its first `skip` items (they're shown elsewhere). */
+        continueFrom?: { index: number; skip: number } | null;
+    } = $props();
+
+    function rowItems(catalog: Catalog, index: number) {
+        if (catalog.content?.type !== 'Ready') return null;
+        return continueFrom?.index === index ? catalog.content.content.slice(continueFrom.skip) : catalog.content.content;
+    }
+
+    function rowTitle(catalog: Catalog, index: number) {
+        return continueFrom?.index === index ? `More ${catalogTitle(catalog)}` : catalogTitle(catalog);
+    }
 
     const PRELOAD_ROWS = 2;
     const visible = new Set<number>();
@@ -63,12 +83,13 @@
 </script>
 
 {#each shown as { catalog, index } (index)}
-    {#if !isEmptyCatalog(catalog)}
+    {@const items = rowItems(catalog, index)}
+    {#if !isEmptyCatalog(catalog) && !(items && items.length === 0)}
         <div data-index={index} use:observe>
             <CatalogRow
                 id={catalogAnchor(index)}
-                title={catalogTitle(catalog)}
-                items={catalog.content?.type === 'Ready' ? catalog.content.content : null}
+                title={rowTitle(catalog, index)}
+                {items}
                 loading={catalog.content?.type !== 'Ready'}
             />
         </div>

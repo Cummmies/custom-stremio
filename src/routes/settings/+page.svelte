@@ -1,0 +1,293 @@
+<script lang="ts">
+    import { core } from '$lib/core';
+    import { app } from '$lib/app.svelte';
+    import type { Settings } from '$lib/core/types';
+    import PopupButton from '$lib/components/menu/PopupButton.svelte';
+    import Toggle from '$lib/components/Toggle.svelte';
+    import ServerStatus from '$lib/components/ServerStatus.svelte';
+
+    const settings = $derived(app.ctx?.profile.settings ?? null);
+
+    // Settings live in the Stremio profile, so they sync with the official apps.
+    function update(patch: Partial<Settings>) {
+        if (!settings) return;
+        core.dispatch({ action: 'Ctx', args: { action: 'UpdateSettings', args: { ...settings, ...patch } } });
+    }
+
+    // ISO 639-2 codes, as Stremio stores them.
+    const languages = [
+        ['eng', 'English'], ['spa', 'Spanish'], ['fre', 'French'], ['ger', 'German'], ['ita', 'Italian'],
+        ['por', 'Portuguese'], ['rus', 'Russian'], ['jpn', 'Japanese'], ['kor', 'Korean'], ['chi', 'Chinese'],
+        ['ara', 'Arabic'], ['hin', 'Hindi'], ['tur', 'Turkish'], ['pol', 'Polish'], ['dut', 'Dutch'],
+        ['swe', 'Swedish'], ['nor', 'Norwegian'], ['dan', 'Danish'], ['fin', 'Finnish'], ['gre', 'Greek'],
+        ['heb', 'Hebrew'], ['ukr', 'Ukrainian'], ['cze', 'Czech'], ['hun', 'Hungarian'], ['rum', 'Romanian'],
+        ['bul', 'Bulgarian'], ['vie', 'Vietnamese'], ['tha', 'Thai'], ['ind', 'Indonesian'],
+    ].map(([value, label]) => ({ value, label }));
+
+    const audioOptions = $derived([{ value: null as string | null, label: 'Default' }, ...languages]);
+    const subtitleOptions = $derived([{ value: null as string | null, label: 'Off' }, ...languages]);
+
+    let serverUrl = $state('');
+    $effect(() => {
+        if (settings) serverUrl = settings.streamingServerUrl;
+    });
+    const serverUrlChanged = $derived(!!settings && serverUrl.trim() !== settings.streamingServerUrl);
+
+    function saveServerUrl(e: SubmitEvent) {
+        e.preventDefault();
+        let url = serverUrl.trim();
+        if (!/^https?:\/\//.test(url)) return;
+        if (!url.endsWith('/')) url += '/';
+        update({ streamingServerUrl: url });
+        core.dispatch({ action: 'StreamingServer', args: { action: 'Reload' } });
+    }
+
+    const shortcuts = [
+        ['Search', 'Ctrl K'],
+        ['Settings', 'Ctrl ,'],
+        ['Move between titles in a row', '← →'],
+        ['Open the menu for the focused item', 'Shift F10'],
+    ];
+</script>
+
+<svelte:head><title>Settings · Stremio</title></svelte:head>
+
+<div class="page">
+    <h1>Settings</h1>
+
+    <section>
+        <h2>Account</h2>
+        <div class="group">
+            <div class="row">
+                <div class="account">
+                    <span class="avatar" aria-hidden="true">{app.user ? app.user.email[0].toUpperCase() : '?'}</span>
+                    <div>
+                        <div class="title">{app.user?.email ?? 'Not logged in'}</div>
+                        <div class="sub">{app.user ? 'Library, addons and settings sync with this account.' : 'Log in to sync your library, addons and settings.'}</div>
+                    </div>
+                </div>
+                <div class="buttons">
+                    {#if app.user}
+                        <button class="btn" onclick={() => app.switchAccount()}>Switch Account…</button>
+                        <button class="btn destructive" onclick={() => app.logout()}>Log Out</button>
+                    {:else}
+                        <button class="btn primary" onclick={() => app.openLogin()}>Log In…</button>
+                    {/if}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {#if settings}
+        <section>
+            <h2>Playback</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">Audio language</div>
+                        <div class="sub">Preferred when a stream has several audio tracks.</div>
+                    </div>
+                    <PopupButton label="Audio language" value={settings.audioLanguage} options={audioOptions} onchange={(v) => update({ audioLanguage: v })} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Subtitles</div>
+                        <div class="sub">Turned on automatically in this language when available.</div>
+                    </div>
+                    <PopupButton label="Subtitle language" value={settings.subtitlesLanguage} options={subtitleOptions} onchange={(v) => update({ subtitlesLanguage: v })} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Play next episode automatically</div>
+                        <div class="sub">Keeps going through a series without stopping.</div>
+                    </div>
+                    <Toggle label="Play next episode automatically" checked={settings.bingeWatching} onchange={(v) => update({ bingeWatching: v })} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Hardware-accelerated decoding</div>
+                        <div class="sub">Uses your graphics card to decode video. Turn off if playback shows artifacts.</div>
+                    </div>
+                    <Toggle label="Hardware-accelerated decoding" checked={settings.hardwareDecoding} onchange={(v) => update({ hardwareDecoding: v })} />
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Streaming Server</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">Status</div>
+                        <div class="sub">Plays torrents and converts formats. This app starts it automatically.</div>
+                    </div>
+                    <div class="status"><ServerStatus status={app.server} /></div>
+                </div>
+                <form class="row" onsubmit={saveServerUrl}>
+                    <div>
+                        <label class="title" for="server-url">Server address</label>
+                        <div class="sub">Change only if you run the server on another device.</div>
+                    </div>
+                    <div class="url">
+                        <input id="server-url" type="url" bind:value={serverUrl} spellcheck="false" />
+                        {#if serverUrlChanged}<button class="btn primary" type="submit">Save</button>{/if}
+                    </div>
+                </form>
+            </div>
+        </section>
+    {/if}
+
+    <section>
+        <h2>Keyboard Shortcuts</h2>
+        <div class="group">
+            {#each shortcuts as [label, keys] (label)}
+                <div class="row compact">
+                    <span>{label}</span>
+                    <kbd>{keys}</kbd>
+                </div>
+            {/each}
+        </div>
+    </section>
+
+    <p class="about">Custom Stremio 0.1.0 · stremio-core-web 0.63.2</p>
+</div>
+
+<style>
+    .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: calc(var(--nav-h) + 28px) var(--gutter) 64px;
+    }
+    h1 {
+        margin: 0 0 28px;
+        font-family: var(--font-display);
+        font-size: clamp(28px, 3vw, 36px);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    section {
+        margin-bottom: 28px;
+    }
+    h2 {
+        margin: 0 0 10px 4px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--label-2);
+    }
+    /* Grouped rows, like a native settings window. */
+    .group {
+        border-radius: var(--radius-l);
+        background: var(--elevated);
+        border: 1px solid var(--separator);
+        overflow: hidden;
+    }
+    .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        min-height: 64px;
+        padding: 12px 18px;
+    }
+    .row + .row {
+        border-top: 1px solid var(--separator);
+    }
+    .row.compact {
+        min-height: 44px;
+    }
+    .title {
+        font-weight: 500;
+    }
+    .sub {
+        margin-top: 2px;
+        font-size: 13px;
+        color: var(--label-2);
+    }
+    .account {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-width: 0;
+    }
+    .avatar {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        font-weight: 700;
+        font-size: 18px;
+    }
+    .buttons {
+        display: flex;
+        gap: 8px;
+        flex: none;
+    }
+    .btn {
+        height: 32px;
+        padding: 0 14px;
+        border: 1px solid var(--separator);
+        border-radius: 8px;
+        background: var(--fill);
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btn:hover {
+        background: var(--fill-hover);
+    }
+    .btn.primary {
+        background: var(--accent);
+        border-color: transparent;
+        color: white;
+    }
+    .btn.destructive {
+        color: #ff6961;
+    }
+    .status {
+        flex: none;
+        min-width: 220px;
+    }
+    .url {
+        display: flex;
+        gap: 8px;
+        flex: none;
+    }
+    .url input {
+        width: 240px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid var(--separator);
+        background: var(--bg);
+        color: var(--label);
+    }
+    .url input:focus {
+        outline: none;
+        border-color: var(--accent-hover);
+    }
+    kbd {
+        font-family: var(--font);
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--separator);
+        background: var(--fill);
+        color: var(--label-2);
+        white-space: nowrap;
+    }
+    .about {
+        text-align: center;
+        font-size: var(--text-caption);
+        color: var(--label-2);
+    }
+    @media (max-width: 640px) {
+        .row {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>

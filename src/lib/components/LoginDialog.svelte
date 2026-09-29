@@ -1,8 +1,12 @@
 <script lang="ts">
     import { core } from '$lib/core';
+    import { app } from '$lib/app.svelte';
     import Icon from './Icon.svelte';
 
     let { onclose }: { onclose: () => void } = $props();
+
+    // Captured once so the heading doesn't change mid-login.
+    const switching = app.loginMode === 'switch' && !!app.user;
 
     let email = $state('');
     let password = $state('');
@@ -43,8 +47,13 @@
         <button type="button" class="close" onclick={() => dialog?.close()} aria-label="Close">
             <Icon name="close" size={16} />
         </button>
-        <h2 id="login-title">Log In to Stremio</h2>
-        <p class="hint">Your library, addons and watch progress stay in sync with your other Stremio apps.</p>
+        {#if switching}
+            <h2 id="login-title">Switch Account</h2>
+            <p class="hint">Log in with another Stremio account. You’ll be signed out of {app.user?.email ?? 'the current one'}.</p>
+        {:else}
+            <h2 id="login-title">Log In to Stremio</h2>
+            <p class="hint">Your library, addons and watch progress stay in sync with your other Stremio apps.</p>
+        {/if}
 
         <label>
             <span>Email</span>

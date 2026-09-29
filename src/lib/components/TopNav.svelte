@@ -6,6 +6,7 @@
     import { app } from '$lib/app.svelte';
     import Icon from './Icon.svelte';
     import ServerStatus from './ServerStatus.svelte';
+    import { menu, type MenuEntry } from '$lib/menu.svelte';
 
     let { scrolled }: { scrolled: boolean } = $props();
 
@@ -20,7 +21,6 @@
     let input = $state<HTMLInputElement>();
     let query = $state('');
     let searchOpen = $state(false);
-    let menuOpen = $state(false);
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const onSearchPage = $derived(page.url.pathname === '/search');
@@ -58,6 +58,35 @@
         if (!query) searchOpen = false;
     }
 
+    function serverLine() {
+        const st = app.server;
+        if (st.state === 'ready') return st.source === 'managed' ? 'Streaming server running' : 'Using the running Stremio server';
+        if (st.state === 'starting') return 'Starting streaming server…';
+        return 'Streaming server offline';
+    }
+
+    function accountMenu(): MenuEntry[] {
+        const account: MenuEntry[] = app.user
+            ? [{ header: app.user.email, detail: serverLine() }]
+            : [
+                  { header: 'Not logged in', detail: serverLine() },
+                  { label: 'Log In…', icon: 'user', onselect: () => app.openLogin() },
+              ];
+        return [
+            ...account,
+            { separator: true },
+            { label: 'Addons', icon: 'puzzle', onselect: () => goto('/addons') },
+            { label: 'Settings', icon: 'gear', shortcut: 'Ctrl+,', onselect: () => goto('/settings') },
+            ...(app.user
+                ? ([
+                      { label: 'Switch Account…', icon: 'users', onselect: () => app.switchAccount() },
+                      { separator: true },
+                      { label: 'Log Out', icon: 'logout', destructive: true, onselect: () => app.logout() },
+                  ] as MenuEntry[])
+                : []),
+        ];
+    }
+
     export async function focusSearch() {
         searchOpen = true;
         await Promise.resolve();
@@ -65,8 +94,6 @@
         input?.select();
     }
 </script>
-
-<svelte:window onclick={() => (menuOpen = false)} />
 
 <header class="nav" class:scrolled>
     <a class="brand" href="/" aria-label="Stremio home">Stremio</a>
@@ -101,48 +128,17 @@
             />
         </div>
 
-        <div class="account">
-            {#if app.user}
-                <button
-                    class="circle avatar"
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    aria-label="Account"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        menuOpen = !menuOpen;
-                    }}
-                >
-                    {app.user.email[0]?.toUpperCase()}
-                </button>
-            {:else}
-                <button
-                    class="circle"
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    aria-label="Account"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        menuOpen = !menuOpen;
-                    }}
-                >
-                    <Icon name="user" size={17} />
-                </button>
-            {/if}
-            {#if menuOpen}
-                <div class="menu" role="menu">
-                    {#if app.user}
-                        <p class="menu-label">{app.user.email}</p>
-                    {/if}
-                    <div class="menu-status"><ServerStatus status={app.server} /></div>
-                    {#if app.user}
-                        <button role="menuitem" onclick={() => app.logout()}>Log Out</button>
-                    {:else}
-                        <button role="menuitem" onclick={() => (app.loginOpen = true)}>Log In…</button>
-                    {/if}
-                </div>
-            {/if}
-        </div>
+        <button
+            class="circle"
+            class:avatar={app.user}
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-label="Account"
+            title={app.user?.email ?? 'Account'}
+            onclick={(e) => menu.toggleFor(e.currentTarget, accountMenu(), 'end')}
+        >
+            {#if app.user}{app.user.email[0]?.toUpperCase()}{:else}<Icon name="user" size={17} />{/if}
+        </button>
     </div>
 </header>
 
@@ -288,46 +284,6 @@
     }
     .search:focus-within {
         border-color: var(--accent-hover);
-    }
-    .account {
-        position: relative;
-    }
-    .menu {
-        position: absolute;
-        right: 0;
-        top: calc(100% + 8px);
-        width: 260px;
-        padding: 6px;
-        border-radius: var(--radius);
-        background: var(--elevated-2);
-        border: 1px solid var(--separator);
-        box-shadow: 0 16px 40px rgb(0 0 0 / 0.55);
-    }
-    .menu-label {
-        margin: 0;
-        padding: 8px 10px 6px;
-        font-size: var(--text-caption);
-        color: var(--label-2);
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .menu-status {
-        padding: 4px 4px 6px;
-        border-bottom: 1px solid var(--separator);
-        margin-bottom: 4px;
-    }
-    .menu button {
-        width: 100%;
-        text-align: left;
-        padding: 8px 10px;
-        border: 0;
-        border-radius: var(--radius-s);
-        background: transparent;
-        cursor: pointer;
-    }
-    .menu button:hover {
-        background: var(--accent);
-        color: white;
     }
     .server-note :global(.status) {
         background: rgb(30 30 38 / 0.8);

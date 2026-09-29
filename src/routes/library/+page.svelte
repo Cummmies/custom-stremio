@@ -36,7 +36,7 @@
         {#if !app.user}
             <EmptyState icon="library" title="Keep your library in sync">
                 <p>Log in to bring over your library and watch progress from your other Stremio apps.</p>
-                <button onclick={() => (app.loginOpen = true)}>Log In</button>
+                <button onclick={() => app.openLogin()}>Log In</button>
             </EmptyState>
         {:else if type}
             <EmptyState icon="library" title="No {type === 'movie' ? 'movies' : 'series'} saved">

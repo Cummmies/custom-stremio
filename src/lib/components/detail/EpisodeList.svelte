@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { Video } from '$lib/core/types';
     import Icon from '../Icon.svelte';
+    import PopupButton from '../menu/PopupButton.svelte';
 
     let {
         videos,
@@ -30,15 +31,11 @@
 
 <div class="head">
     {#if seasons.length > 1}
-        <label class="season-picker">
-            <span class="sr-only">Season</span>
-            <select bind:value={season}>
-                {#each seasons as s (s)}
-                    <option value={s}>{s === 0 ? 'Specials' : `Season ${s}`}</option>
-                {/each}
-            </select>
-            <Icon name="chevronRight" size={14} />
-        </label>
+        <PopupButton
+            label="Season"
+            bind:value={season}
+            options={seasons.map((s) => ({ value: s, label: s === 0 ? 'Specials' : `Season ${s}` }))}
+        />
     {:else}
         <h3>{season === 0 ? 'Specials' : `Season ${season}`}</h3>
     {/if}
@@ -95,36 +92,6 @@
         margin: 0;
         font-size: var(--text-title3);
         font-weight: 600;
-    }
-    .season-picker {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-    }
-    select {
-        appearance: none;
-        height: 34px;
-        padding: 0 34px 0 14px;
-        border-radius: 999px;
-        border: 1px solid var(--separator);
-        background: var(--fill);
-        color: var(--label);
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    select:hover {
-        background: var(--fill-hover);
-    }
-    .season-picker :global(svg) {
-        position: absolute;
-        right: 12px;
-        transform: rotate(90deg);
-        pointer-events: none;
-        color: var(--label-2);
-    }
-    option {
-        background: var(--elevated-2);
     }
     .count {
         font-size: 13px;

@@ -3,12 +3,17 @@
     import type { MetaItemPreview } from '$lib/core/types';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
+    import { titleContext } from '$lib/contextmenu';
 
     let { item, rank }: { item: MetaItemPreview; rank: number } = $props();
     let loaded = $state(false);
 </script>
 
-<a class="card" href={titleHref(item.type, item.id)} onkeydown={arrowNav} aria-label={`Number ${rank}: ${item.name}`}>
+<a
+    class="card"
+    href={titleHref(item.type, item.id)}
+    use:titleContext={{ type: item.type, id: item.id, name: item.name, preview: item }}
+    onkeydown={arrowNav} aria-label={`Number ${rank}: ${item.name}`}>
     <span class="rank" aria-hidden="true">{rank}</span>
     <div class="poster" class:loaded>
         {#if item.poster}
@@ -18,32 +23,33 @@
 </a>
 
 <style>
+    /* Numeral and poster sit side by side; the poster only overlaps the numeral's
+       trailing edge, so every rank (including "10") stays fully readable. */
     .card {
         all: unset;
         cursor: pointer;
-        position: relative;
         display: flex;
         align-items: flex-end;
-        justify-content: flex-end;
-        height: 220px;
+        padding-top: 8px;
         scroll-snap-align: start;
     }
     .rank {
-        position: absolute;
-        left: 0;
-        bottom: -18px;
+        flex: none;
+        margin-right: -18px;
         font-family: var(--font-display);
-        font-size: 190px;
+        font-size: 168px;
         font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.06em;
+        line-height: 0.74;
+        letter-spacing: -0.07em;
         color: var(--bg);
-        -webkit-text-stroke: 2px rgb(255 255 255 / 0.6);
+        -webkit-text-stroke: 4px rgb(255 255 255 / 0.55);
         paint-order: stroke fill;
         user-select: none;
+        transition: -webkit-text-stroke-color var(--fast);
     }
     .poster {
         position: relative;
+        flex: none;
         width: 140px;
         aspect-ratio: 2 / 3;
         border-radius: var(--radius);
