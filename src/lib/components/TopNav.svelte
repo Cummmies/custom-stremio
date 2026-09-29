@@ -60,20 +60,12 @@
         if (!query) searchOpen = false;
     }
 
-    function serverLine() {
-        const st = app.server;
-        if (st.state === 'ready') return st.source === 'managed' ? 'Streaming server running' : 'Using the running Stremio server';
-        if (st.state === 'starting') return 'Starting streaming server…';
-        return 'Streaming server offline';
-    }
-
     function accountMenu(): MenuEntry[] {
-        const account: MenuEntry[] = app.user
-            ? [{ header: app.user.email, detail: serverLine() }]
-            : [
-                  { header: 'Not logged in', detail: serverLine() },
-                  { label: 'Log In…', icon: 'user', onselect: () => app.openLogin() },
-              ];
+        const user = app.user;
+        const name = user ? profiles.list.find((p) => p.uid === user._id)?.name || user.email : null;
+        const account: MenuEntry[] = name
+            ? [{ header: name }]
+            : [{ header: 'Not logged in' }, { label: 'Log In…', icon: 'user', onselect: () => app.openLogin() }];
         return [
             ...account,
             { separator: true },
