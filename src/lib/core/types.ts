@@ -55,14 +55,25 @@ export type ServerStatus =
     | { state: 'missing'; message: string }
     | { state: 'failed'; message: string };
 
+/** A library entry as the Library and Continue Watching models send it (a slim view). */
 export type LibraryItem = {
     _id: string;
     name: string;
     type: string;
     poster: string | null;
     posterShape: PosterShape;
-    state: { timeOffset: number; duration: number; lastWatched: string | null; video_id: string | null };
-    removed?: boolean;
+    /** Percent watched, 0–100. */
+    progress: number;
+    watched?: boolean;
+    /** Continue Watching only: the episode to resume. */
+    state?: { videoId?: string | null };
+};
+
+/** The full stored library record (MetaDetails and Player models). Times are in ms. */
+export type LibraryRecord = {
+    _id: string;
+    type: string;
+    state: { timeOffset: number; duration: number; video_id: string | null };
 };
 
 export type ContinueWatchingPreview = {
@@ -120,7 +131,7 @@ export type Addon = { manifest: { id: string; name: string; logo?: string | null
 
 export type MetaDetails = {
     metaItem: { addon: Addon; content: Loadable<MetaItem> } | null;
-    libraryItem: LibraryItem | null;
+    libraryItem: LibraryRecord | null;
     selected: { metaPath: { id: string; type: string }; streamPath: { id: string } | null } | null;
     streams: { addon: Addon; content: Loadable<Stream[]> }[];
 };

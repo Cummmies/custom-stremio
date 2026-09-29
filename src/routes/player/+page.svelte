@@ -89,7 +89,7 @@
 
         const st = params.get('st');
         const mt = params.get('mt');
-        core.dispatch(
+        await core.dispatch(
             {
                 action: 'Load',
                 args: {
@@ -113,20 +113,22 @@
         thumbs = new Thumbnails(url);
         try {
             await mpv.start(buildOptions(settings ?? {}));
-            await mpv.load(url, resumeFrom());
+            await mpv.load(url, await resumeFrom());
         } catch (e) {
             startError = String(e);
         }
     }
 
-    // Pick up where you left off, unless you'd basically finished.
-    function resumeFrom() {
-        const item = app.library?.catalog.find((i) => i._id === id);
-        if (!item) return 0;
-        const sameVideo = !item.state.video_id || item.state.video_id === videoId || item.type === 'movie';
-        const { timeOffset, duration } = item.state;
-        if (!sameVideo || !timeOffset || (duration && timeOffset / duration > 0.95)) return 0;
-        return Math.floor(timeOffset / 1000);
+    // Pick up where you left off. The Player model carries the stored library
+    // record (position in ms and which episode it belongs to).
+    async function resumeFrom() {
+        const state = await core
+            .getState<{ libraryItem: { state?: { timeOffset?: number; video_id?: string | null } } | null }>('player')
+            .catch(() => null);
+        const saved = state?.libraryItem?.state;
+        if (!saved?.timeOffset) return 0;
+        const sameVideo = type === 'movie' || !saved.video_id || saved.video_id === videoId;
+        return sameVideo ? Math.floor(saved.timeOffset / 1000) : 0;
     }
 
     function onMpvEvent(e: { kind: string; reason?: string }) {

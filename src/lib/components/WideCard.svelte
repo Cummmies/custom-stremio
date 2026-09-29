@@ -1,7 +1,7 @@
 <script lang="ts">
-    // Continue Watching card: 16:9 artwork, progress, and what's left.
+    // Continue Watching card: 16:9 artwork, progress, and where you are.
     import type { LibraryItem } from '$lib/core/types';
-    import { episodeLabel, timeLeft } from '$lib/library';
+    import { episodeLabel, watchedLabel } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
@@ -10,8 +10,9 @@
 
     const isImdb = $derived(/^tt\d+$/.test(item._id));
     const art = $derived(isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster);
-    const progress = $derived(item.state.duration > 0 ? Math.min(1, item.state.timeOffset / item.state.duration) : 0);
-    const detail = $derived([episodeLabel(item), timeLeft(item)].filter(Boolean).join(' · '));
+    const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
+    const detail = $derived([episodeLabel(item), watchedLabel(item)].filter(Boolean).join(' · '));
+    const resumeVideo = $derived(item.type === 'series' ? item.state?.videoId : null);
 
     let loaded = $state(false);
     let failed = $state(false);
@@ -19,7 +20,7 @@
 
 <a
     class="card"
-    href={titleHref(item.type, item._id, item.state.video_id && item.type === 'series' ? { video: item.state.video_id } : undefined)}
+    href={titleHref(item.type, item._id, resumeVideo ? { video: resumeVideo } : undefined)}
     use:titleContext={{ type: item.type, id: item._id, name: item.name }}
     onkeydown={arrowNav}
     aria-label={[item.name, detail].filter(Boolean).join(', ')}>
