@@ -8,6 +8,9 @@ type EventListener = (event: string, args: any) => void;
 
 const APP_VERSION = '0.1.0';
 
+/** A plain, cloneable copy (drops Svelte state proxies). */
+const plain = <T>(value: T): T => (value === undefined ? value : JSON.parse(JSON.stringify(value)));
+
 const stateListeners = new Set<StateListener>();
 const eventListeners = new Set<EventListener>();
 
@@ -35,18 +38,21 @@ export const core = {
 
     async dispatch(action: CoreAction, model?: string): Promise<void> {
         await ready;
-        return bridge.call(['dispatch'], [action, model, location.hash]);
+        // Actions often carry objects taken from Svelte state, which are Proxies and
+        // can't cross postMessage to the worker (the call fails silently). Send a
+        // plain copy instead.
+        return bridge.call(['dispatch'], [plain(action), model, location.hash]);
+    },
+
+    async encodeStream(stream: object): Promise<string> {
+        await ready;
+        return bridge.call(['encodeStream'], [plain(stream)]);
     },
 
     /** Turns the encoded stream in a player deep link back into a Stream object. */
     async decodeStream<T = any>(encoded: string): Promise<T> {
         await ready;
         return bridge.call(['decodeStream'], [encoded]);
-    },
-
-    async encodeStream(stream: object): Promise<string> {
-        await ready;
-        return bridge.call(['encodeStream'], [stream]);
     },
 
     onEvent(listener: EventListener) {
