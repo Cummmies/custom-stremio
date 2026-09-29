@@ -961,12 +961,13 @@
     {#if stillAsk}
         <div class="still" role="alertdialog" aria-labelledby="still-title" aria-describedby="still-sub">
             <p id="still-title" class="still-title">Are you still watching?</p>
-            <p id="still-sub" class="still-sub">
-                {#if 'left' in stillAsk}Pausing in {stillAsk.left}s{:else}Paused{/if}{#if subheading} · {heading} · {subheading}{/if}
-            </p>
+            <p class="still-show">{heading}{#if subheading} · {subheading}{/if}</p>
             <button class="still-button" onclick={keepWatching}>
                 <Icon name="play" size={14} filled /> Continue Watching
             </button>
+            <p id="still-sub" class="still-sub" aria-live="polite">
+                {#if 'left' in stillAsk}Pausing in {stillAsk.left}s{:else}Paused{/if}
+            </p>
         </div>
     {/if}
 
@@ -1432,10 +1433,19 @@
         font-size: var(--text-title3);
         font-weight: 600;
     }
-    .still-sub {
-        margin: 0 0 12px;
+    .still-show {
+        max-width: 100%;
+        margin: 0 0 14px;
         font-size: 13px;
         color: rgb(255 255 255 / 0.7);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .still-sub {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: rgb(255 255 255 / 0.55);
         font-variant-numeric: tabular-nums;
     }
     .still-button {
