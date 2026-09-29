@@ -96,7 +96,7 @@ mod imp {
 
     /// Gives the process our AUMID (before any window exists) and records its name
     /// and icon under HKCU, so Windows can show "Stremio" and our logo.
-    pub fn register(aumid: &str, icon_path: Option<&std::path::Path>) {
+    pub fn register(aumid: &str, icon_path: Option<&std::path::Path>, shortcut_icon: Option<&std::path::Path>) {
         use windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
         unsafe {
             let _ = SetCurrentProcessExplicitAppUserModelID(&HSTRING::from(aumid));
@@ -112,33 +112,36 @@ mod imp {
         // when the .exe moves, e.g. after an update or a new build location).
         let Ok(exe) = std::env::current_exe() else { return };
         let exe = exe.to_string_lossy().into_owned();
+        // Windows caches shortcut icons by file, so a new icon gets a new file name.
+        let icon = shortcut_icon.map_or_else(|| exe.clone(), |p| p.to_string_lossy().into_owned());
+        let marker = format!("{exe}|{icon}");
         let Some(programs) = std::env::var_os("APPDATA").map(|d| {
             std::path::PathBuf::from(d).join(r"Microsoft\Windows\Start Menu\Programs")
         }) else {
             return;
         };
         let lnk = programs.join(format!("{}.lnk", super::DISPLAY_NAME));
-        if lnk.exists() && key.get_string("Shortcut").is_ok_and(|s| s == exe) {
+        if lnk.exists() && key.get_string("Shortcut").is_ok_and(|s| s == marker) {
             return;
         }
         let aumid = aumid.to_owned();
         // Its own thread and COM apartment, so startup doesn't wait and the UI
         // thread's COM setup is left alone.
         std::thread::spawn(move || {
-            let written = write_shortcut(&lnk, &exe, &aumid);
+            let written = write_shortcut(&lnk, &exe, &icon, &aumid);
             match &written {
                 Ok(()) => eprintln!("media controls: Start menu shortcut written: {}", lnk.display()),
                 Err(e) => eprintln!("media controls: couldn't write the Start menu shortcut {}: {e}", lnk.display()),
             }
             if written.is_ok() {
                 if let Ok(key) = windows_registry::CURRENT_USER.create(format!(r"Software\Classes\AppUserModelId\{aumid}")) {
-                    let _ = key.set_string("Shortcut", &exe);
+                    let _ = key.set_string("Shortcut", &marker);
                 }
             }
         });
     }
 
-    fn write_shortcut(lnk: &std::path::Path, exe: &str, aumid: &str) -> windows::core::Result<()> {
+    fn write_shortcut(lnk: &std::path::Path, exe: &str, icon: &str, aumid: &str) -> windows::core::Result<()> {
         use windows::core::{Interface, PWSTR};
         use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
         use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
@@ -153,7 +156,7 @@ mod imp {
             let result = (|| {
                 let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
                 link.SetPath(&HSTRING::from(exe))?;
-                link.SetIconLocation(&HSTRING::from(exe), 0)?;
+                link.SetIconLocation(&HSTRING::from(icon), 0)?;
                 if let Some(dir) = std::path::Path::new(exe).parent() {
                     link.SetWorkingDirectory(&HSTRING::from(dir.as_os_str()))?;
                 }
@@ -217,12 +220,28 @@ pub fn media_clear(app: AppHandle) {
 /// Call at the very start, before any window is created (Windows only).
 #[cfg(windows)]
 pub fn register(aumid: &str) {
-    // The icon has to be a file on disk; keep a copy next to our data.
-    const ICON: &[u8] = include_bytes!("../icons/128x128@2x.png");
-    let icon = std::env::var_os("LOCALAPPDATA").map(|d| std::path::PathBuf::from(d).join(aumid).join("media-icon.png"));
-    let icon = icon.filter(|p| {
-        p.parent().is_some_and(|d| std::fs::create_dir_all(d).is_ok())
-            && (std::fs::read(p).is_ok_and(|b| b == ICON) || std::fs::write(p, ICON).is_ok())
-    });
-    imp::register(aumid, icon.as_deref());
+    use std::path::PathBuf;
+    const PNG: &[u8] = include_bytes!("../icons/128x128@2x.png");
+    const ICO: &[u8] = include_bytes!("../icons/icon.ico");
+
+    // Windows wants the icons as files on disk; keep copies next to our data,
+    // named by content so a changed icon is a new file (see the shortcut above).
+    let dir = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join(aumid));
+    let save = |name: &str, bytes: &[u8]| -> Option<PathBuf> {
+        let dir = dir.as_ref()?;
+        std::fs::create_dir_all(dir).ok()?;
+        let path = dir.join(format!("{name}-{:016x}.{}", fnv1a(bytes), if name == "app-icon" { "ico" } else { "png" }));
+        if !path.exists() {
+            std::fs::write(&path, bytes).ok()?;
+        }
+        Some(path)
+    };
+    let png = save("media-icon", PNG);
+    let ico = save("app-icon", ICO);
+    imp::register(aumid, png.as_deref(), ico.as_deref());
+}
+
+#[cfg(windows)]
+fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf29ce484222325, |h, &b| (h ^ b as u64).wrapping_mul(0x100000001b3))
 }
