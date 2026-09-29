@@ -2,10 +2,12 @@
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { core } from '$lib/core';
-    import type { MetaDetails, MetaItem, Video } from '$lib/core/types';
+    import type { ContinueWatchingPreview, MetaDetails, MetaItem, Video } from '$lib/core/types';
     import { backgroundOf, logoOf } from '$lib/core/art';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
+    import { resumeHref } from '$lib/player/deeplink';
+    import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import EpisodeList from '$lib/components/detail/EpisodeList.svelte';
@@ -108,9 +110,19 @@
         goto(titleHref(type, id), { noScroll: true, keepFocus: true, replaceState: true });
     }
 
-    function play(replace = false) {
+    async function play(replace = false) {
         if (!meta) return;
-        openSources(resumeVideo?.id ?? meta.id, replace);
+        const target = resumeVideo?.id ?? meta.id;
+
+        // Resuming: reuse the stream you picked last time, if core remembers one.
+        if (resuming && inTauri) {
+            const cw = await core.getState<ContinueWatchingPreview>('continue_watching_preview').catch(() => null);
+            const item = cw?.items.find((i) => i._id === meta!.id);
+            const sameVideo = !isSeries || item?.state?.videoId === target;
+            const href = sameVideo ? resumeHref(item?.deepLinks?.player) : null;
+            if (href) return goto(href, { replaceState: replace });
+        }
+        openSources(target, replace);
     }
 
     function toggleLibrary() {
@@ -249,6 +261,7 @@
                             videos={meta.videos}
                             bind:season
                             selectedId={videoId}
+                            currentId={resuming ? (resumeVideo?.id ?? null) : null}
                             onselect={(v) => openSources(v.id)}
                             ontogglewatched={toggleEpisodeWatched}
                         />

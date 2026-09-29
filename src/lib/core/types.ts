@@ -67,6 +67,8 @@ export type LibraryItem = {
     watched?: boolean;
     /** Continue Watching only: the episode to resume. */
     state?: { videoId?: string | null };
+    /** `player` is set when core remembers the stream you last used for it. */
+    deepLinks?: { player?: string | null; metaDetailsStreams?: string | null };
 };
 
 /** The full stored library record (MetaDetails and Player models). Times are in ms. */

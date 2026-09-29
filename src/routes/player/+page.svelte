@@ -9,7 +9,7 @@
     import { app } from '$lib/app.svelte';
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
-    import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
+    import { parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { fmtTime } from '$lib/player/format';
     import { titleHref } from '$lib/links';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -105,7 +105,7 @@
             'player'
         );
 
-        const url = params.get('url') ?? stream.url;
+        const url = params.get('url') ?? streamUrl(stream, settings?.streamingServerUrl ?? 'http://127.0.0.1:11470/');
         if (!url) return (startError = 'This stream has no playable address.');
         if (!inTauri) return (startError = 'Playback runs in the desktop app.');
 
@@ -189,20 +189,11 @@
         core.dispatch({ action: 'Player', args: { action: 'NextVideo' } }, 'player');
         const link = next.deepLinks?.player ? parsePlayerDeepLink(next.deepLinks.player) : null;
         if (link) {
-            const stream = await core.decodeStream(link.stream).catch(() => null);
-            const url = stream?.url ?? streamingUrl(stream);
-            if (url) {
-                await goto(playerHref(link, url), { replaceState: true });
-                return begin();
-            }
+            await goto(playerHref(link), { replaceState: true });
+            return begin();
         }
         // No remembered source for the next episode: let the person pick one.
         if (type && id) goto(titleHref(type, id, { video: next.id }), { replaceState: true });
-    }
-
-    function streamingUrl(stream: any): string | null {
-        if (!stream?.infoHash || !settings?.streamingServerUrl) return null;
-        return `${settings.streamingServerUrl}${stream.infoHash}/${stream.fileIdx ?? -1}`;
     }
 
     // --- controls ----------------------------------------------------------

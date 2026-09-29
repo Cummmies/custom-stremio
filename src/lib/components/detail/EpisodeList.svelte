@@ -7,15 +7,44 @@
         videos,
         season = $bindable(),
         selectedId,
+        currentId = null,
         onselect,
         ontogglewatched,
     }: {
         videos: Video[];
         season: number;
         selectedId: string | null;
+        /** The episode you're up to; the list opens scrolled to it. */
+        currentId?: string | null;
         onselect: (video: Video) => void;
         ontogglewatched: (video: Video) => void;
     } = $props();
+
+    let list = $state<HTMLElement>();
+
+    // Scroll handoff: until the whole list is on screen, the wheel moves the page;
+    // after that it moves episodes. At the first episode, scrolling up moves the page again.
+    function wheelHandoff(node: HTMLElement) {
+        const onwheel = (e: WheelEvent) => {
+            const pageAtBottom = scrollY + innerHeight >= document.documentElement.scrollHeight - 1;
+            const fullyVisible = pageAtBottom || node.getBoundingClientRect().bottom <= innerHeight + 1;
+            const toPage = (e.deltaY > 0 && !fullyVisible) || (e.deltaY < 0 && node.scrollTop <= 0);
+            if (toPage) {
+                e.preventDefault();
+                window.scrollBy({ top: e.deltaY });
+            }
+        };
+        node.addEventListener('wheel', onwheel, { passive: false });
+        return { destroy: () => node.removeEventListener('wheel', onwheel) };
+    }
+
+    // On opening a season, bring the relevant episode into view (inside the list only).
+    $effect(() => {
+        season;
+        const target = selectedId ?? currentId;
+        const row = target && list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(target)}"]`);
+        if (list) list.scrollTop = row ? Math.max(0, row.offsetTop - list.offsetTop - 8) : 0;
+    });
 
     // Specials (season 0) go last, as every TV app does.
     const seasons = $derived(
@@ -42,10 +71,10 @@
     <span class="count">{episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}</span>
 </div>
 
-<ol class="episodes">
+<ol class="episodes" bind:this={list} use:wheelHandoff>
     {#each episodes as ep (ep.id)}
         {@const progress = ep.progress && ep.progress > 0 ? Math.min(ep.progress, 100) : 0}
-        <li class:selected={ep.id === selectedId}>
+        <li class:selected={ep.id === selectedId} class:current={ep.id === currentId} data-id={ep.id}>
             <button class="main" onclick={() => onselect(ep)} disabled={ep.upcoming} aria-label={`Episode ${ep.episode}: ${ep.title}${ep.watched ? ', watched' : ''}`}>
                 <div class="thumb">
                     {#if ep.thumbnail}
@@ -97,13 +126,23 @@
         font-size: 13px;
         color: var(--label-2);
     }
+    /* The list scrolls by itself: wheel/touchpad scrolling here moves episodes,
+       not the page, and stops at the ends instead of handing off to the page. */
     .episodes {
         list-style: none;
         margin: 0;
-        padding: 0;
+        padding: 0 0 24px;
         display: flex;
         flex-direction: column;
         gap: 8px;
+        max-height: calc(100vh - var(--nav-h) - 96px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        /* Soft fade at the bottom edge hints there's more to scroll. */
+        mask-image: linear-gradient(to bottom, black calc(100% - 40px), transparent);
+    }
+    li.current:not(.selected) {
+        box-shadow: inset 3px 0 0 var(--label);
     }
     li {
         position: relative;

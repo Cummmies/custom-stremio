@@ -5,6 +5,8 @@
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
+    import { resumeHref } from '$lib/player/deeplink';
+    import { inTauri } from '$lib/player/mpv.svelte';
 
     let { item }: { item: LibraryItem } = $props();
 
@@ -13,6 +15,11 @@
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
     const detail = $derived([episodeLabel(item), watchedLabel(item)].filter(Boolean).join(' · '));
     const resumeVideo = $derived(item.type === 'series' ? item.state?.videoId : null);
+    // Core remembers the stream you last used; if it has one, go straight back to it.
+    const href = $derived(
+        (inTauri && resumeHref(item.deepLinks?.player)) ||
+            titleHref(item.type, item._id, resumeVideo ? { video: resumeVideo } : undefined)
+    );
 
     let loaded = $state(false);
     let failed = $state(false);
@@ -20,7 +27,7 @@
 
 <a
     class="card"
-    href={titleHref(item.type, item._id, resumeVideo ? { video: resumeVideo } : undefined)}
+    {href}
     use:titleContext={{ type: item.type, id: item._id, name: item.name }}
     onkeydown={arrowNav}
     aria-label={[item.name, detail].filter(Boolean).join(', ')}>
