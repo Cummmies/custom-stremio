@@ -62,6 +62,14 @@ pub fn run() {
         ])
         .setup(|app| {
             server::start(app.handle().clone());
+            // Title bar and taskbar icon, set here so it's always the current logo
+            // (the one compiled into the .exe can lag behind in incremental builds).
+            if let (Some(window), Ok(icon)) = (
+                app.get_webview_window("main"),
+                tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png")),
+            ) {
+                window.set_icon(icon).ok();
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
