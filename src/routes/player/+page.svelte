@@ -10,8 +10,10 @@
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
-    import { easyQueue, type Pick } from '$lib/player/easy';
+    import { easyQueue, type Like, type Pick } from '$lib/player/easy';
     import { prefetchPicks } from '$lib/player/prefetch';
+    import { parseStream } from '$lib/player/ranking';
+    import type { Stream } from '$lib/core/types';
     import { sameLanguage } from '$lib/player/lang';
     import { fromChapters, lookupSegments, skipLabel, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
@@ -102,6 +104,7 @@
 
         const stream = await core.decodeStream(encoded).catch(() => null);
         if (!stream) return (startError = 'This stream link is broken.');
+        playingStream = stream;
 
         const st = params.get('st');
         const mt = params.get('mt');
@@ -159,6 +162,7 @@
      *  the next episode, while mpv still reports the previous file's length and time. */
     let fileFor = $state<string | null>(null);
     const fileReady = $derived(mpv.loaded && fileFor === `${id}|${videoId}`);
+    let playingStream: Stream | null = null;
 
     async function tryNextSource() {
         clearTimeout(watchdog);
@@ -380,6 +384,9 @@
             return note(null);
         }
         if (currentSegment) return skip(currentSegment);
+        // Known timings beat guessing: an intro or recap coming up next skips straight past it.
+        const upcoming = segments.find((s) => (s.kind === 'intro' || s.kind === 'recap') && s.start > mpv.time);
+        if (upcoming) return skip(upcoming);
         silenceSearching = true;
         note('Looking for the end of the intro… Press Tab to cancel', 60000);
         startSilenceSkip((at) => {
@@ -396,9 +403,9 @@
         showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
-    // Easy Mode: a minute before the "Up next" card appears, quietly find sources
-    // for the next episode so the Next button can start it straight away. (Not needed when core already
-    // remembers a source for it.)
+    // A minute before the "Up next" card appears, quietly find sources for the next
+    // episode so the Next button can start it straight away. (Not needed when core
+    // already remembers a source for it.)
     let prefetched: { video: string; picks: Pick[] } | null = null;
     let prefetchFor: string | null = null;
     const PREFETCH_LEAD = 60;
@@ -406,13 +413,13 @@
         const next = model?.nextVideo;
         const d = mpv.duration;
         if (!next || !d || !fileReady || !type || !id || next.id === videoId) return;
-        if (!playerPrefs.easyMode || next.deepLinks?.player || prefetchFor === next.id) return;
+        if (next.deepLinks?.player || prefetchFor === next.id) return;
         // The card shows at the credits (when known) or `nextThreshold` before the end.
         const credits = segments.find((s) => s.kind === 'credits');
         const cardAt = Math.min(credits?.start ?? d, d - nextThreshold);
         if (mpv.time < cardAt - PREFETCH_LEAD) return;
         prefetchFor = next.id;
-        prefetchPicks(type, id, next.id).then((picks) => {
+        prefetchPicks(type, id, next.id, likeThis()).then((picks) => {
             if (picks.length) prefetched = { video: next.id, picks };
         });
     });
@@ -426,19 +433,29 @@
             await goto(playerHref(link), { replaceState: true });
             return begin();
         }
-        if (playerPrefs.easyMode && prefetched?.video === next.id) {
+        // Stremio found no source for the next episode in the same "binge group" as this one
+        // (many addons don't tag them). Like Stremio, don't make you choose again: pick the
+        // best source, preferring the addon and quality you were just watching. Usually
+        // that's already been done in the background (above).
+        if (prefetched?.video === next.id) {
             const { picks } = prefetched;
             prefetched = null;
             easyQueue.start(next.id, picks);
             await goto(picks[0].href, { replaceState: true });
             return begin();
         }
-        // No remembered source for the next episode: Easy Mode picks one, otherwise you do.
         if (type && id) {
-            const params: Record<string, string> = { video: next.id };
-            if (playerPrefs.easyMode) params.auto = '1';
-            goto(titleHref(type, id, params), { replaceState: true });
+            const q: Record<string, string> = { video: next.id, auto: '1' };
+            const like = likeThis();
+            if (like.addonUrl) q.likeAddon = like.addonUrl;
+            if (like.resolution) q.likeRes = String(like.resolution);
+            goto(titleHref(type, id, q), { replaceState: true });
         }
+    }
+
+    /** The addon and quality of what's playing, for choosing the next episode's source. */
+    function likeThis(): Like {
+        return { addonUrl: params.get('st'), resolution: playingStream ? parseStream(playingStream).resolution : null };
     }
 
     function changeSource() {
@@ -946,6 +963,8 @@
         position: absolute;
         right: 24px;
         bottom: 118px;
+        /* Above the controls' gradient, which otherwise covers it and eats the hover. */
+        z-index: 3;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -961,17 +980,14 @@
         font-weight: 700;
         cursor: pointer;
         animation: rise var(--slow) var(--ease);
+        /* Never moves: sliding it when the controls appear pulled it out from under the cursor. */
         transition:
             background var(--fast),
-            color var(--fast),
-            bottom 240ms var(--ease);
+            color var(--fast);
     }
     .skip:hover {
         background: white;
         color: black;
-    }
-    .hidden .skip {
-        bottom: 40px;
     }
     .pip .skip {
         right: 10px;

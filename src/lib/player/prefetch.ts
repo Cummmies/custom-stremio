@@ -1,8 +1,8 @@
-// Easy Mode: find sources for the next episode while this one is still playing,
+// Find sources for the next episode while this one is still playing,
 // so "Next Episode" can start right away instead of waiting on the addons.
 import { core } from '$lib/core';
 import type { MetaDetails } from '$lib/core/types';
-import { rankedPicks, type Pick } from './easy';
+import { rankedPicks, type Like, type Pick } from './easy';
 
 const GIVE_UP_MS = 20000;
 
@@ -11,7 +11,7 @@ const GIVE_UP_MS = 20000;
  * playing) MetaDetails model and resolves with the ranked picks once they've
  * all answered, or with whatever has arrived after 20s.
  */
-export function prefetchPicks(type: string, id: string, videoId: string): Promise<Pick[]> {
+export function prefetchPicks(type: string, id: string, videoId: string, like?: Like | null): Promise<Pick[]> {
     return new Promise((resolve) => {
         let done = false;
         let latest: Pick[] = [];
@@ -25,7 +25,7 @@ export function prefetchPicks(type: string, id: string, videoId: string): Promis
         const timer = setTimeout(finish, GIVE_UP_MS);
         const unwatch = core.watch<MetaDetails>('meta_details', (details) => {
             if (done || details?.selected?.streamPath?.id !== videoId) return;
-            latest = rankedPicks(details.streams).picks;
+            latest = rankedPicks(details.streams, like).picks;
             if (!details.streams.some((g) => g.content.type === 'Loading')) finish();
         });
         core.dispatch(

@@ -9,20 +9,30 @@ const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ??
 
 export type Pick = { href: string; label: string; torrent: boolean };
 
+/** "More like what you were watching": the addon and resolution of the previous episode's source. */
+export type Like = { addonUrl: string | null; resolution: number | null };
+
 /** Ranked, playable choices from whatever the addons have returned so far. */
-export function rankedPicks(streams: MetaDetails['streams']): { picks: Pick[]; top: Candidate | null } {
+export function rankedPicks(streams: MetaDetails['streams'], like?: Like | null): { picks: Pick[]; top: Candidate | null } {
     const candidates: Candidate[] = [];
     streams.forEach((group, addonIndex) => {
         if (group.content.type !== 'Ready') return;
         for (const stream of group.content.content) {
-            candidates.push({ stream, addon: group.addon.manifest.name, addonIndex, parsed: parseStream(stream) });
+            candidates.push({ stream, addon: group.addon.manifest.name, addonUrl: group.addon.transportUrl ?? null, addonIndex, parsed: parseStream(stream) });
         }
     });
-    const ranked = rankStreams(candidates, {
-        maxResolution: playerPrefs.maxResolution,
+    let ranked = rankStreams(candidates, {
+        // A source you picked yourself above the Easy Mode cap is still fine for the next episode.
+        maxResolution: Math.max(playerPrefs.maxResolution, like?.resolution ?? 0),
         language: playerPrefs.easyLanguage,
         allowTorrents: playerPrefs.allowTorrents,
     });
+    if (like?.addonUrl) {
+        // Same addon at the same quality first, then the same addon, then everything else (each still in rank order).
+        const score = (c: Candidate) =>
+            c.addonUrl !== like.addonUrl ? 2 : like.resolution && c.parsed.resolution !== like.resolution ? 1 : 0;
+        ranked = ranked.map((c, i) => [c, i] as const).sort((a, b) => score(a[0]) - score(b[0]) || a[1] - b[1]).map(([c]) => c);
+    }
     const picks: Pick[] = [];
     for (const c of ranked) {
         const link = c.stream.deepLinks?.player ? parsePlayerDeepLink(c.stream.deepLinks.player) : null;

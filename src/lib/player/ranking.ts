@@ -21,7 +21,7 @@ export type Parsed = {
     dolbyVisionOnly: boolean; // DV without an HDR10 fallback layer
 };
 
-export type Candidate = { stream: Stream; addon: string; addonIndex: number; parsed: Parsed };
+export type Candidate = { stream: Stream; addon: string; addonUrl?: string | null; addonIndex: number; parsed: Parsed };
 
 export type EasyPrefs = { maxResolution: number; language: string | null; allowTorrents: boolean };
 

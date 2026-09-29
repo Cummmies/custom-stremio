@@ -7,7 +7,7 @@
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
-    import { easyQueue, rankedPicks, type Pick } from '$lib/player/easy';
+    import { easyQueue, rankedPicks, type Like, type Pick } from '$lib/player/easy';
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
@@ -119,6 +119,12 @@
 
     // --- Easy Mode: choose a source as addons answer ------------------------
     const auto = $derived(!!page.url.searchParams.get('auto'));
+    // Set by the player's Next Episode: keep to the same addon and quality.
+    const like = $derived.by((): Like | null => {
+        const addonUrl = page.url.searchParams.get('likeAddon');
+        const res = Number(page.url.searchParams.get('likeRes'));
+        return addonUrl ? { addonUrl, resolution: res || null } : null;
+    });
     const easyNotice = $derived(
         page.url.searchParams.get('failed')
             ? 'Easy Mode couldn’t play any of the best sources for this one. Pick one below.'
@@ -136,11 +142,13 @@
 
         const streams = details.streams;
         const pending = streams.some((g) => g.content.type === 'Loading');
-        const { picks, top } = rankedPicks(streams);
+        const { picks, top } = rankedPicks(streams, like);
         const elapsed = performance.now() - autoStarted;
 
         // A cached debrid source at your preferred quality is as good as it gets: go now.
-        const great = top && top.parsed.kind === 'debrid';
+        // Continuing an episode, it has to be from the addon you were watching (once it has answered).
+        const likeAddonDone = !like?.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl && g.content.type === 'Loading');
+        const great = top && top.parsed.kind === 'debrid' && likeAddonDone && (!like?.addonUrl || top.addonUrl === like.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl));
         clearTimeout(autoTimer);
         if (picks.length && (great || !pending || elapsed > 7000)) {
             startEasy(picks);
