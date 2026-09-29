@@ -7,6 +7,10 @@
     import { inTauri } from '$lib/player/mpv.svelte';
     import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
     import { easyQueue } from '$lib/player/easy';
+    import { parseStream } from '$lib/player/ranking';
+    import { langKey } from '$lib/player/lang';
+    import { playerPrefs } from '$lib/player/prefs.svelte';
+    import { app } from '$lib/app.svelte';
     import Icon from '../Icon.svelte';
 
     let {
@@ -47,6 +51,25 @@
     const label = (s: Stream) => (s.name ?? '').split('\n').filter(Boolean);
     const details = (s: Stream) => s.description ?? s.title ?? '';
     const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
+
+    // Which sources are in your audio language (dubs, dual audio), read from the release name.
+    const audioPref = $derived((app.ctx?.profile.settings.audioLanguage as string | null | undefined) ?? playerPrefs.easyLanguage);
+    const audioPrefName = $derived.by(() => {
+        const code = langKey(audioPref);
+        if (!code) return null;
+        try {
+            return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? null;
+        } catch {
+            return null;
+        }
+    });
+    function audioBadge(s: Stream): string | null {
+        const p = parseStream(s);
+        if (audioPref && audioPrefName && p.languages.some((l) => langKey(l) === langKey(audioPref))) {
+            return p.multiAudio ? `Dual audio · ${audioPrefName}` : `${audioPrefName} audio`;
+        }
+        return p.multiAudio ? 'Multi audio' : null;
+    }
 
     const playable = (s: Stream) => inTauri && !!s.deepLinks?.player && !s.ytId && !!linkOf(s);
 
@@ -92,10 +115,12 @@
                                 {#each group.items as stream, i (i)}
                                     {@const key = `${group.addon}-${i}`}
                                     {@const [quality, ...rest] = label(stream)}
+                                    {@const badge = audioBadge(stream)}
                                     <li>
                                         <div class="quality">
                                             <span>{quality ?? group.addon}</span>
                                             {#if rest.length}<span class="sub">{rest.join(' ')}</span>{/if}
+                                            {#if badge}<span class="badge">{badge}</span>{/if}
                                         </div>
                                         <p class="details">{details(stream)}</p>
                                         {#if stream.externalUrl}
@@ -262,6 +287,17 @@
         font-weight: 500;
         font-size: var(--text-caption);
         color: var(--label-2);
+    }
+    .quality .badge {
+        align-self: flex-start;
+        margin-top: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--fill-hover);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--label);
+        white-space: nowrap;
     }
     .details {
         margin: 0;

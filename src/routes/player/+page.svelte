@@ -16,7 +16,7 @@
     import { prefetchPicks } from '$lib/player/prefetch';
     import { parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
-    import { sameLanguage } from '$lib/player/lang';
+    import { langKey, sameLanguage } from '$lib/player/lang';
     import { fromChapters, lookupSegments, skipLabel, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
@@ -338,6 +338,17 @@
             const match = subs.find((s) => sameLanguage(s.lang, pref) && s.url);
             if (!builtIn && match) addAddonSubtitle(match, mpv.sid === 'no');
         }, 3000);
+    });
+
+    // No audio in your language in this file (e.g. an anime episode with no dub yet): say so.
+    let audioChecked: string | null = null;
+    $effect(() => {
+        const key = `${videoId}|${params.get('stream')}`;
+        const pref = settings?.audioLanguage as string | null | undefined;
+        if (!pref || !firstFrameSeen || audioChecked === key || !mpv.audioTracks.length) return;
+        audioChecked = key;
+        if (mpv.audioTracks.some((t) => !t.lang || sameLanguage(t.lang, pref))) return;
+        note(`No ${langName(langKey(pref) ?? pref)} audio in this source`, 5000);
     });
 
     // --- Windows media overlay: show name, "S1 · E3 · Episode", play/pause ---
