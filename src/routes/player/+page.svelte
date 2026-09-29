@@ -10,7 +10,8 @@
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
-    import { easyQueue } from '$lib/player/easy';
+    import { easyQueue, type Pick } from '$lib/player/easy';
+    import { prefetchPicks } from '$lib/player/prefetch';
     import { sameLanguage } from '$lib/player/lang';
     import { fromChapters, lookupSegments, skipLabel, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
@@ -86,6 +87,7 @@
 
     async function begin() {
         startError = null;
+        fileFor = null;
         subtitlesAdded = false;
         firstFrameSeen = false;
         segments = [];
@@ -136,7 +138,11 @@
         }
         try {
             await mpv.start(buildOptions(settings ?? {}));
-            await mpv.load(url, await resumeFrom());
+            const start = await resumeFrom();
+            // mpv.load clears the old file's state in the same tick, so `fileFor`
+            // never pairs this video with the previous file's length or position.
+            fileFor = `${id}|${videoId}`;
+            await mpv.load(url, start);
         } catch (e) {
             startError = String(e);
         }
@@ -149,6 +155,10 @@
     let switching = $state<string | null>(null);
     /** Reactive twin of firstFrame, for effects that wait on playback starting. */
     let firstFrameSeen = $state(false);
+    /** Which video mpv's current file belongs to. The URL changes first when moving to
+     *  the next episode, while mpv still reports the previous file's length and time. */
+    let fileFor = $state<string | null>(null);
+    const fileReady = $derived(mpv.loaded && fileFor === `${id}|${videoId}`);
 
     async function tryNextSource() {
         clearTimeout(watchdog);
@@ -305,7 +315,7 @@
     let segmentsFor: string | null = null;
     $effect(() => {
         const key = `${id}|${videoId}`;
-        if (!mpv.loaded || !mpv.duration || !id || segmentsFor === key) return;
+        if (!fileReady || !mpv.duration || !id || segmentsFor === key) return;
         segmentsFor = key;
         loadSegments();
     });
@@ -386,6 +396,22 @@
         showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
+    // Easy Mode: past halfway, quietly find sources for the next episode so the
+    // Next button can start it straight away. (Not needed when core already
+    // remembers a source for it.)
+    let prefetched: { video: string; picks: Pick[] } | null = null;
+    let prefetchFor: string | null = null;
+    $effect(() => {
+        const next = model?.nextVideo;
+        const d = mpv.duration;
+        if (!next || !d || !fileReady || !type || !id || next.id === videoId) return;
+        if (!playerPrefs.easyMode || next.deepLinks?.player || prefetchFor === next.id || mpv.time < d / 2) return;
+        prefetchFor = next.id;
+        prefetchPicks(type, id, next.id).then((picks) => {
+            if (picks.length) prefetched = { video: next.id, picks };
+        });
+    });
+
     async function playNext() {
         const next = model?.nextVideo;
         if (!next) return;
@@ -393,6 +419,13 @@
         const link = next.deepLinks?.player ? parsePlayerDeepLink(next.deepLinks.player) : null;
         if (link) {
             await goto(playerHref(link), { replaceState: true });
+            return begin();
+        }
+        if (playerPrefs.easyMode && prefetched?.video === next.id) {
+            const { picks } = prefetched;
+            prefetched = null;
+            easyQueue.start(next.id, picks);
+            await goto(picks[0].href, { replaceState: true });
             return begin();
         }
         // No remembered source for the next episode: Easy Mode picks one, otherwise you do.
