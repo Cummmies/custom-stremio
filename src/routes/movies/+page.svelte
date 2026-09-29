@@ -2,5 +2,5 @@
     import HomeView from '$lib/components/HomeView.svelte';
 </script>
 
-<HomeView />
+<HomeView type="movie" />
 

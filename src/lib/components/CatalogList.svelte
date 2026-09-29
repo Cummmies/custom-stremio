@@ -1,25 +1,29 @@
+<script lang="ts" module>
+    import type { Catalog } from '$lib/core/types';
+
+    export const isEmptyCatalog = (c: Catalog) => c.content?.type === 'Err';
+    export const catalogTitle = (c: Catalog) =>
+        [c.name, c.type].filter(Boolean).map((s) => s!.charAt(0).toUpperCase() + s!.slice(1)).join(' · ');
+    export const catalogAnchor = (index: number) => `row-${index}`;
+</script>
+
 <script lang="ts">
     // Renders a CatalogsWithExtra model (board or search) and only asks addons
     // for the catalogs that are on, or close to, the screen.
     import { tick } from 'svelte';
     import { core } from '$lib/core';
-    import type { Catalog } from '$lib/core/types';
     import CatalogRow from './CatalogRow.svelte';
-    import type { PosterItem } from './PosterCard.svelte';
 
-    let {
-        model,
-        catalogs,
-        onspotlight,
-    }: { model: string; catalogs: Catalog[]; onspotlight?: (item: PosterItem) => void } = $props();
+    let { model, catalogs, type = null }: { model: string; catalogs: Catalog[]; type?: string | null } = $props();
 
     const PRELOAD_ROWS = 2;
     const visible = new Set<number>();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const isEmpty = (c: Catalog) => c.content?.type === 'Err' && c.content.content === 'EmptyContent';
-    const titleOf = (c: Catalog) =>
-        [c.name, c.type].filter(Boolean).map((s) => s!.charAt(0).toUpperCase() + s!.slice(1)).join(' · ');
+    // Keep each catalog's original index: that's what LoadRange refers to.
+    const shown = $derived(
+        catalogs.map((catalog, index) => ({ catalog, index })).filter(({ catalog }) => !type || catalog.type === type)
+    );
 
     const observer = new IntersectionObserver(
         (entries) => {
@@ -35,17 +39,11 @@
     );
 
     function loadVisibleRange() {
-        // Before the observer reports anything, load the top rows right away.
-        if (visible.size === 0) {
-            if (catalogs.length) dispatchRange(0, Math.min(catalogs.length - 1, 3));
-            return;
-        }
-        const start = Math.max(0, Math.min(...visible) - PRELOAD_ROWS);
-        const end = Math.min(catalogs.length - 1, Math.max(...visible) + PRELOAD_ROWS);
-        dispatchRange(start, end);
-    }
-
-    function dispatchRange(start: number, end: number) {
+        const indices = visible.size ? [...visible] : shown.slice(0, 4).map((s) => s.index);
+        if (!indices.length) return;
+        // With a type filter the visible rows aren't contiguous; load the span that covers them.
+        const start = Math.max(0, Math.min(...indices) - (type ? 0 : PRELOAD_ROWS));
+        const end = Math.min(catalogs.length - 1, Math.max(...indices) + (type ? 0 : PRELOAD_ROWS));
         core.dispatch({ action: 'CatalogsWithExtra', args: { action: 'LoadRange', args: { start, end } } }, model);
     }
 
@@ -55,7 +53,7 @@
     }
 
     $effect(() => {
-        catalogs.length;
+        shown.length;
         tick().then(loadVisibleRange);
     });
     $effect(() => () => {
@@ -64,14 +62,14 @@
     });
 </script>
 
-{#each catalogs as catalog, index (index)}
-    {#if !isEmpty(catalog) && catalog.content?.type !== 'Err'}
+{#each shown as { catalog, index } (index)}
+    {#if !isEmptyCatalog(catalog)}
         <div data-index={index} use:observe>
             <CatalogRow
-                title={titleOf(catalog)}
+                id={catalogAnchor(index)}
+                title={catalogTitle(catalog)}
                 items={catalog.content?.type === 'Ready' ? catalog.content.content : null}
                 loading={catalog.content?.type !== 'Ready'}
-                {onspotlight}
             />
         </div>
     {/if}

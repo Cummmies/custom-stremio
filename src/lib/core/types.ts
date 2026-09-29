@@ -18,6 +18,8 @@ export type MetaItemPreview = {
     posterShape: PosterShape;
     releaseInfo: string | null;
     runtime?: string | null;
+    imdbRating?: string | null;
+    genres?: string[];
 };
 
 export type Catalog = {
@@ -49,7 +51,8 @@ export type LibraryItem = {
     type: string;
     poster: string | null;
     posterShape: PosterShape;
-    state: { timeOffset: number; duration: number; lastWatched: string | null };
+    state: { timeOffset: number; duration: number; lastWatched: string | null; video_id: string | null };
+    removed?: boolean;
 };
 
 export type ContinueWatchingPreview = {

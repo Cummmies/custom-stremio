@@ -1,15 +1,16 @@
 // App-wide state shared by the shell and every screen.
 import { core } from '$lib/core';
 import { watchServer } from '$lib/core/server';
-import type { Ctx, ServerStatus } from '$lib/core/types';
+import type { Ctx, Library, MetaItemPreview, ServerStatus } from '$lib/core/types';
 
 class AppState {
     ctx = $state<Ctx | null>(null);
     server = $state<ServerStatus>({ state: 'starting' });
+    library = $state<Library | null>(null);
     loginOpen = $state(false);
-    sidebarCollapsed = $state(false);
 
     user = $derived(this.ctx?.profile.auth?.user ?? null);
+    libraryIds = $derived(new Set(this.library?.catalog.map((i) => i._id) ?? []));
 
     #started = false;
 
@@ -18,7 +19,14 @@ class AppState {
         this.#started = true;
 
         core.watch<Ctx>('ctx', (s) => (this.ctx = s));
+        core.watch<Library>('library', (s) => (this.library = s));
         watchServer((s) => (this.server = s));
+
+        // The whole library stays loaded; screens filter it locally, which is instant.
+        core.dispatch(
+            { action: 'Load', args: { model: 'LibraryWithFilters', args: { request: { type: null, sort: 'lastwatched' } } } },
+            'library'
+        );
 
         // Same background sync the official app runs on launch and on focus.
         const sync = () => {
@@ -29,17 +37,19 @@ class AppState {
         };
         sync();
         window.addEventListener('focus', sync);
-
-        try {
-            this.sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === '1';
-        } catch {}
     }
 
-    toggleSidebar() {
-        this.sidebarCollapsed = !this.sidebarCollapsed;
-        try {
-            localStorage.setItem('sidebarCollapsed', this.sidebarCollapsed ? '1' : '0');
-        } catch {}
+    inLibrary(id: string) {
+        return this.libraryIds.has(id);
+    }
+
+    toggleLibrary(item: MetaItemPreview) {
+        core.dispatch({
+            action: 'Ctx',
+            args: this.inLibrary(item.id)
+                ? { action: 'RemoveFromLibrary', args: item.id }
+                : { action: 'AddToLibrary', args: item },
+        });
     }
 
     logout() {

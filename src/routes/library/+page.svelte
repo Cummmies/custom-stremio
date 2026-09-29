@@ -1,7 +1,5 @@
 <script lang="ts">
-    import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
-    import type { Library } from '$lib/core/types';
     import { libraryToPoster } from '$lib/library';
     import PosterCard from '$lib/components/PosterCard.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -12,19 +10,12 @@
         { type: 'series', label: 'Series' },
     ] as const;
 
-    let library = $state<Library | null>(null);
     let type = $state<string | null>(null);
 
-    $effect(() => core.watch<Library>('library', (s) => (library = s)));
-    $effect(() => {
-        core.dispatch(
-            { action: 'Load', args: { model: 'LibraryWithFilters', args: { request: { type, sort: 'lastwatched' } } } },
-            'library'
-        );
-    });
-    $effect(() => () => core.dispatch({ action: 'Unload' }, 'library'));
-
-    const items = $derived(library?.catalog.map(libraryToPoster) ?? []);
+    // The library is already loaded app-wide, so filtering is instant.
+    const items = $derived(
+        (app.library?.catalog ?? []).filter((i) => !type || i.type === type).map(libraryToPoster)
+    );
 </script>
 
 <svelte:head><title>Library · Stremio</title></svelte:head>
@@ -41,15 +32,19 @@
         </div>
     </header>
 
-    {#if library && items.length === 0}
-        {#if app.user}
-            <EmptyState icon="library" title="Your library is empty">
-                <p>Titles you add or start watching in any Stremio app show up here.</p>
-            </EmptyState>
-        {:else}
+    {#if app.library && items.length === 0}
+        {#if !app.user}
             <EmptyState icon="library" title="Keep your library in sync">
                 <p>Log in to bring over your library and watch progress from your other Stremio apps.</p>
                 <button onclick={() => (app.loginOpen = true)}>Log In</button>
+            </EmptyState>
+        {:else if type}
+            <EmptyState icon="library" title="No {type === 'movie' ? 'movies' : 'series'} saved">
+                <p>Use the + button on any title to save it here.</p>
+            </EmptyState>
+        {:else}
+            <EmptyState icon="library" title="Your library is empty">
+                <p>Titles you save or start watching in any Stremio app show up here.</p>
             </EmptyState>
         {/if}
     {:else}
@@ -63,7 +58,7 @@
 
 <style>
     .page {
-        padding: 28px var(--gutter) 56px;
+        padding: calc(var(--nav-h) + 24px) var(--gutter) 56px;
     }
     header {
         display: flex;

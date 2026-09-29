@@ -10,6 +10,8 @@
         info: 'M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 11v5M12 7.5v.5',
         user: 'M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5',
         sidebar: 'M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 4v16',
+        plus: 'M12 5v14M5 12h14',
+        check: 'M5 12.5l4.5 4.5L19 7',
         close: 'M6 6l12 12M18 6 6 18',
     } as const;
     export type IconName = keyof typeof paths;

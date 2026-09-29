@@ -28,7 +28,7 @@
 <div class="page">
     {#if !query}
         <EmptyState icon="search" title="Find something to watch">
-            <p>Search movies and series across all your addons. Press Ctrl K from anywhere to jump here.</p>
+            <p>Search movies and series across all your addons. Press Ctrl K from anywhere to start typing.</p>
         </EmptyState>
     {:else}
         <h1>Results for “{query}”</h1>
@@ -46,7 +46,7 @@
 
 <style>
     .page {
-        padding: 28px 0 56px;
+        padding: calc(var(--nav-h) + 24px) 0 56px;
     }
     h1 {
         margin: 0 0 24px;
