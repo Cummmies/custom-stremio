@@ -7,6 +7,7 @@
     import { titleContext } from '$lib/contextmenu';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { inTauri } from '$lib/player/mpv.svelte';
+    import { playerPrefs } from '$lib/player/prefs.svelte';
 
     let { item }: { item: LibraryItem } = $props();
 
@@ -16,9 +17,14 @@
     const detail = $derived(episodeLabel(item) ?? '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
     // Core remembers the stream you last used; if it has one, go straight back to it.
+    // Otherwise Easy Mode picks a source for the episode (or movie) you were on, and
+    // without it you choose. Not knowing the episode, open the title's episode list.
+    const target = $derived(item.type === 'series' ? resumeVideo : item._id);
     const href = $derived(
         (inTauri && resumeHref(item.deepLinks?.player)) ||
-            titleHref(item.type, item._id, resumeVideo ? { video: resumeVideo } : undefined)
+            (target
+                ? titleHref(item.type, item._id, playerPrefs.easyMode && inTauri ? { video: target, auto: '1' } : { video: target })
+                : titleHref(item.type, item._id))
     );
 
     let loaded = $state(false);

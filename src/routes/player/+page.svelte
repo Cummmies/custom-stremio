@@ -29,7 +29,14 @@
     type PlayerModel = {
         title: string | null;
         seriesInfo: { season: number; episode: number } | null;
-        nextVideo: { id: string; title: string; season?: number; episode?: number; deepLinks?: { player: string | null } } | null;
+        nextVideo: {
+            id: string;
+            title: string;
+            season?: number;
+            episode?: number;
+            thumbnail?: string | null;
+            deepLinks?: { player: string | null };
+        } | null;
         subtitles: { id: string; lang: string; url?: string | null; label?: string | null }[];
         stream: { type: 'Ready'; content: { deepLinks?: { externalPlayer?: { streaming?: string | null } } } } | { type: string } | null;
         metaItem: { type: 'Ready'; content: { name: string; logo?: string | null } } | { type: string } | null;
@@ -99,6 +106,9 @@
         addedSubs.clear();
         nextDismissed = false;
         showNext = false;
+        nextCardAt = null;
+        autoplayFired = false;
+        nextThumbFailed = false;
         const encoded = params.get('stream');
         if (!encoded) return (startError = 'Nothing to play.');
 
@@ -219,7 +229,8 @@
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
-            if (settings?.bingeWatching && model?.nextVideo) playNext();
+            // Unless you cancelled the countdown on the Up next card.
+            if (settings?.bingeWatching && model?.nextVideo && !nextDismissed && !autoplayFired) playNext();
         }
     }
 
@@ -347,7 +358,7 @@
     const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);
 
     // The Skip button shows for 10s when a section starts, then gets out of the way
-    // (it comes back while the controls are up, and Tab works throughout).
+    // (it comes back while the controls are up, and S works throughout).
     const SKIP_PROMPT_MS = 10000;
     const segmentKey = $derived(currentSegment ? `${currentSegment.kind}:${currentSegment.start}` : null);
     let skipPromptExpired = $state<string | null>(null);
@@ -359,6 +370,9 @@
         return () => clearTimeout(t);
     });
     const skipPrompting = $derived(!!segmentKey && skipPromptExpired !== segmentKey);
+    const skipVisible = $derived(
+        !!currentSegment && (skipPrompting || controlsVisible) && !(currentSegment.kind === 'credits' && showNext) && !silenceSearching
+    );
 
     function skip(s: Segment) {
         if (s.kind === 'credits' && model?.nextVideo) return playNext();
@@ -376,7 +390,7 @@
         note(s.kind === 'intro' ? 'Skipped intro' : 'Skipped recap');
     });
 
-    /** Tab: skip the known section, otherwise look for the end of the intro by silence. */
+    /** S (or Tab while the Skip button shows): skip the known section, otherwise look for the end of the intro by silence. */
     function tabSkip() {
         if (silenceSkipActive()) {
             cancelSilenceSkip();
@@ -388,7 +402,7 @@
         const upcoming = segments.find((s) => (s.kind === 'intro' || s.kind === 'recap') && s.start > mpv.time);
         if (upcoming) return skip(upcoming);
         silenceSearching = true;
-        note('Looking for the end of the intro… Press Tab to cancel', 60000);
+        note('Looking for the end of the intro… Press S to cancel', 60000);
         startSilenceSkip((at) => {
             silenceSearching = false;
             note(at == null ? 'Couldn’t find the end of the intro' : null);
@@ -401,6 +415,27 @@
         // Also as soon as the credits start, when we know where they are.
         const inCredits = currentSegment?.kind === 'credits';
         showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
+    });
+
+    // With "Play next episode automatically" on, the card counts down and starts the
+    // next episode when it runs out: `nextThreshold` seconds after the card appears,
+    // or at the end if that's sooner. Counted in video time, so pausing pauses it.
+    let nextCardAt = $state<number | null>(null);
+    let autoplayFired = false;
+    let nextThumbFailed = $state(false);
+    $effect(() => {
+        if (!showNext) nextCardAt = null;
+        else if (nextCardAt == null) nextCardAt = mpv.time;
+    });
+    const autoplayIn = $derived.by(() => {
+        if (!settings?.bingeWatching || !showNext || nextCardAt == null || !mpv.duration) return null;
+        return Math.max(0, Math.min(mpv.duration, nextCardAt + nextThreshold) - mpv.time);
+    });
+    const autoplayTotal = $derived(mpv.duration && nextCardAt != null ? Math.min(mpv.duration, nextCardAt + nextThreshold) - nextCardAt : 0);
+    $effect(() => {
+        if (autoplayIn == null || autoplayIn > 0.25 || autoplayFired) return;
+        autoplayFired = true;
+        playNext();
     });
 
     // A minute before the "Up next" card appears, quietly find sources for the next
@@ -619,7 +654,9 @@
         if (menu.open || e.target instanceof HTMLInputElement) return;
         const k = e.key.toLowerCase();
         let handled = true;
-        if (k === 'tab') tabSkip();
+        // Tab skips while the Skip button is up; otherwise it moves between controls as usual.
+        if (k === 'tab' && !e.shiftKey && skipVisible) tabSkip();
+        else if (k === 's') tabSkip();
         else if (k === ' ' || k === 'k') mpv.togglePause();
         else if (k === 'arrowright') mpv.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
         else if (k === 'arrowleft') mpv.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
@@ -702,7 +739,7 @@
         {/if}
     </header>
 
-    {#if currentSegment && (skipPrompting || controlsVisible) && !(currentSegment.kind === 'credits' && showNext) && !silenceSearching}
+    {#if skipVisible && currentSegment}
         <button
             class="skip"
             onclick={() => skip(currentSegment!)}
@@ -720,13 +757,27 @@
 
     {#if showNext && model?.nextVideo}
         <aside class="next" aria-label="Up next">
-            <span class="next-eyebrow">Up Next</span>
-            <span class="next-title">
-                {#if model.nextVideo.season != null}S{model.nextVideo.season} · E{model.nextVideo.episode} · {/if}{model.nextVideo.title}
-            </span>
-            <div class="next-actions">
-                <button class="primary" onclick={playNext}><Icon name="play" size={14} filled /> Play Now</button>
-                <button onclick={() => (nextDismissed = true)}>Dismiss</button>
+            {#if model.nextVideo.thumbnail && !nextThumbFailed}
+                <img class="next-thumb" src={model.nextVideo.thumbnail} alt="" onerror={() => (nextThumbFailed = true)} />
+            {/if}
+            <div class="next-body">
+                <span class="next-eyebrow">
+                    Up Next{#if autoplayIn != null}<span class="next-countdown"> · Playing in {Math.ceil(autoplayIn)}s</span>{/if}
+                </span>
+                <span class="next-title">
+                    {#if model.nextVideo.season != null}S{model.nextVideo.season} · E{model.nextVideo.episode} · {/if}{model.nextVideo.title}
+                </span>
+                <div class="next-actions">
+                    <button
+                        class="primary"
+                        class:counting={autoplayIn != null}
+                        style:--left={autoplayIn != null && autoplayTotal > 0 ? autoplayIn / autoplayTotal : 0}
+                        onclick={playNext}
+                    >
+                        <Icon name="play" size={14} filled /> Play Now
+                    </button>
+                    <button onclick={() => (nextDismissed = true)}>{autoplayIn != null ? 'Cancel' : 'Dismiss'}</button>
+                </div>
             </div>
         </aside>
     {/if}
@@ -1080,11 +1131,10 @@
         position: absolute;
         right: 24px;
         bottom: 120px;
-        width: 320px;
+        width: 340px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        padding: 16px;
+        overflow: hidden;
         border-radius: var(--radius-l);
         background: rgb(24 24 32 / 0.9);
         backdrop-filter: blur(20px);
@@ -1097,6 +1147,22 @@
             opacity: 0;
             transform: translateY(8px);
         }
+    }
+    .next-thumb {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        background: rgb(255 255 255 / 0.06);
+    }
+    .next-body {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 14px 16px 16px;
+    }
+    .next-countdown {
+        color: white;
     }
     .next-eyebrow {
         font-size: 11px;
@@ -1119,6 +1185,36 @@
         gap: 6px;
         background: white;
         color: black;
+    }
+    /* Counting down: the button fills from the left as the time runs out. */
+    .next-actions .primary.counting {
+        background: linear-gradient(to right, white calc((1 - var(--left)) * 100%), rgb(255 255 255 / 0.72) 0);
+    }
+
+    /* Reduce Motion: things fade in and out, but don't slide. */
+    @media (prefers-reduced-motion: reduce) {
+        .top,
+        .bottom,
+        .next {
+            transition: opacity 240ms var(--ease);
+        }
+        .hidden .top,
+        .hidden .bottom {
+            transform: none;
+        }
+        .skip,
+        .switching,
+        .next {
+            animation: fade-in var(--slow) var(--ease);
+        }
+        .volume input {
+            transition: opacity var(--fast);
+        }
+    }
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
     }
 
     /* Picture in picture: just the essentials, sized for a small window. */
