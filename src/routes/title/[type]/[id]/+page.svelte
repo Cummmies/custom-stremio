@@ -6,7 +6,7 @@
     import { backgroundOf, logoOf } from '$lib/core/art';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
-    import { resumeHref } from '$lib/player/deeplink';
+    import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -71,7 +71,7 @@
     // Where "Play" goes: the episode you were on, else the first released episode.
     const resumeVideo = $derived.by((): Video | null => {
         if (!meta || !isSeries) return null;
-        const lastId = details?.libraryItem?.state.video_id;
+        const lastId = cleanVideoId(details?.libraryItem?.state.video_id);
         const last = lastId ? meta.videos.find((v) => v.id === lastId) : null;
         if (last) return last;
         const regular = meta.videos
@@ -118,7 +118,7 @@
         if (resuming && inTauri) {
             const cw = await core.getState<ContinueWatchingPreview>('continue_watching_preview').catch(() => null);
             const item = cw?.items.find((i) => i._id === meta!.id);
-            const sameVideo = !isSeries || item?.state?.videoId === target;
+            const sameVideo = !isSeries || cleanVideoId(item?.state?.videoId) === target;
             const href = sameVideo ? resumeHref(item?.deepLinks?.player) : null;
             if (href) return goto(href, { replaceState: replace });
         }

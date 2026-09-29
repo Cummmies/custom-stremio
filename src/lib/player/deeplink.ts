@@ -12,7 +12,8 @@ export type PlayerLink = {
 };
 
 export function parsePlayerDeepLink(link: string): PlayerLink | null {
-    const m = link.match(/#\/player\/(.+)$/);
+    // Core appends hints like "?position=12" after the path; they're not part of any id.
+    const m = link.match(/#\/player\/([^?]+)/);
     if (!m) return null;
     const [stream, st, mt, type, id, videoId] = m[1].split('/').map((p) => decodeURIComponent(p));
     if (!stream) return null;
@@ -22,8 +23,16 @@ export function parsePlayerDeepLink(link: string): PlayerLink | null {
         metaTransportUrl: mt || null,
         type: type || null,
         id: id || null,
-        videoId: videoId || null,
+        videoId: cleanVideoId(videoId),
     };
+}
+
+/**
+ * Stremio video ids ("tt0472954:18:8") never contain "?". Earlier builds of this
+ * app saved ids with "?position=…" glued on; strip that so they match again.
+ */
+export function cleanVideoId(videoId: string | null | undefined): string | null {
+    return videoId ? videoId.split('?')[0] || null : null;
 }
 
 /** `url` is optional: the player works it out from the stream when it's missing. */

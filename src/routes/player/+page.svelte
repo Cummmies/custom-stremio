@@ -9,7 +9,7 @@
     import { app } from '$lib/app.svelte';
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
-    import { parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
+    import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { fmtTime } from '$lib/player/format';
     import { titleHref } from '$lib/links';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -30,7 +30,7 @@
     const params = $derived(page.url.searchParams);
     const type = $derived(params.get('type'));
     const id = $derived(params.get('id'));
-    const videoId = $derived(params.get('video'));
+    const videoId = $derived(cleanVideoId(params.get('video')));
 
     let model = $state<PlayerModel | null>(null);
     let thumbs = $state<Thumbnails | null>(null);
@@ -128,7 +128,7 @@
             .catch(() => null);
         const saved = state?.libraryItem?.state;
         if (!saved?.timeOffset) return 0;
-        const sameVideo = type === 'movie' || !saved.video_id || saved.video_id === videoId;
+        const sameVideo = type === 'movie' || !saved.video_id || cleanVideoId(saved.video_id) === videoId;
         return sameVideo ? Math.floor(saved.timeOffset / 1000) : 0;
     }
 
