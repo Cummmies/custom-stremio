@@ -1,7 +1,10 @@
 <script lang="ts">
-    // "Change Photo… / Remove Photo" for a profile. The picture is cropped to a
-    // square and shrunk before it's saved, so it stays small.
+    // One button for a profile picture: "Upload…" when there's none, otherwise
+    // "Change…" with Upload New Photo / Remove Photo in the app menu. The picture
+    // is cropped to a square and shrunk before it's saved, so it stays small.
     import { imageToAvatar, profiles } from '$lib/profiles.svelte';
+    import { menu } from '$lib/menu.svelte';
+    import Icon from './Icon.svelte';
 
     let { uid }: { uid: string } = $props();
 
@@ -17,27 +20,42 @@
         try {
             profiles.update(uid, { avatar: await imageToAvatar(file) });
         } catch {
-            error = 'That file couldn’t be used as a picture. Try a JPG or PNG.';
+            error = 'That file couldn’t be used. Try a JPG or PNG.';
         }
+    }
+
+    function onclick(e: MouseEvent) {
+        if (!hasPhoto) return input?.click();
+        menu.toggleFor(
+            e.currentTarget as HTMLElement,
+            [
+                { label: 'Upload New Photo…', onselect: () => input?.click() },
+                { label: 'Remove Photo', destructive: true, onselect: () => profiles.update(uid, { avatar: undefined }) },
+            ],
+            'end'
+        );
     }
 </script>
 
 <div class="photo">
     <input bind:this={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" {onchange} hidden />
-    <button class="btn" onclick={() => input?.click()}>{hasPhoto ? 'Change Photo…' : 'Upload Photo…'}</button>
-    {#if hasPhoto}
-        <button class="btn quiet" onclick={() => profiles.update(uid, { avatar: undefined })}>Remove Photo</button>
-    {/if}
+    <button class="btn" aria-haspopup={hasPhoto ? 'menu' : undefined} aria-expanded="false" {onclick}>
+        {hasPhoto ? 'Change' : 'Upload…'}
+        {#if hasPhoto}<Icon name="chevronDown" size={14} />{/if}
+    </button>
+    {#if error}<p class="error" role="alert">{error}</p>{/if}
 </div>
-{#if error}<p class="error" role="alert">{error}</p>{/if}
 
 <style>
     .photo {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: flex-end;
     }
     .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         height: 32px;
         padding: 0 14px;
         border: 1px solid var(--separator);
@@ -51,8 +69,7 @@
     .btn:hover {
         background: var(--fill-hover);
     }
-    .quiet {
-        background: transparent;
+    .btn :global(svg) {
         color: var(--label-2);
     }
     .error {

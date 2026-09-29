@@ -88,27 +88,16 @@
                     <Avatar profile={myProfile} fallbackName={app.user?.email ?? '?'} size={48} />
                     <div>
                         <div class="title">{myProfile?.name ?? app.user?.email ?? 'Not logged in'}</div>
-                        {#if myProfile}<div class="sub">{app.user?.email}</div>{/if}
-                        <div class="sub">{app.user ? 'Library, addons and settings sync with this account.' : 'Log in to sync your library, addons and settings.'}</div>
+                        <div class="sub">{app.user ? app.user.email : 'Log in to sync your library, addons and settings.'}</div>
                     </div>
                 </div>
-                <div class="buttons">
-                    {#if app.user}
-                        <button class="btn" onclick={() => app.openProfiles()}>Switch Profile…</button>
-                        <button class="btn destructive" onclick={() => app.logout()}>Log Out</button>
-                    {:else}
-                        <button class="btn primary" onclick={() => app.openLogin()}>Log In…</button>
-                    {/if}
-                </div>
+                {#if app.user}
+                    <button class="btn" onclick={() => app.openProfiles()}>Switch Profile…</button>
+                {:else}
+                    <button class="btn primary" onclick={() => app.openLogin()}>Log In…</button>
+                {/if}
             </div>
             {#if myProfile}
-                <div class="row">
-                    <div>
-                        <div class="title">Profile picture</div>
-                        <div class="sub">Shown on your avatar and in Who’s Watching. Saved on this PC.</div>
-                    </div>
-                    <PhotoControls uid={myProfile.uid} />
-                </div>
                 <div class="row">
                     <div>
                         <div class="title">Profile name</div>
@@ -127,6 +116,16 @@
                         onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                     />
                 </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Profile picture</div>
+                        <div class="sub">Saved on this PC.</div>
+                    </div>
+                    <PhotoControls uid={myProfile.uid} />
+                </div>
+            {/if}
+            {#if app.user}
+                <button class="row action destructive" onclick={() => app.logout()}>Log Out</button>
             {/if}
         </div>
     </section>
@@ -388,6 +387,30 @@
     .row.compact {
         min-height: 44px;
     }
+    /* A whole row that's a single action (Log Out), like native settings lists. */
+    .row.action {
+        all: unset;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 48px;
+        border-top: 1px solid var(--separator);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background var(--fast);
+    }
+    .row.action:hover {
+        background: var(--fill);
+    }
+    .row.action:focus-visible {
+        outline: 2px solid var(--accent-hover);
+        outline-offset: -2px;
+    }
+    .row.action.destructive {
+        color: #ff6961;
+    }
     .title {
         font-weight: 500;
     }
@@ -415,11 +438,6 @@
         outline: none;
         border-color: var(--accent-hover);
     }
-    .buttons {
-        display: flex;
-        gap: 8px;
-        flex: none;
-    }
     .btn {
         height: 32px;
         padding: 0 14px;
@@ -437,9 +455,6 @@
         background: var(--accent);
         border-color: transparent;
         color: white;
-    }
-    .btn.destructive {
-        color: #ff6961;
     }
     .status {
         flex: none;
