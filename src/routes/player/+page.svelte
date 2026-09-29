@@ -219,10 +219,34 @@
     const fileReady = $derived(mpv.loaded && fileFor === `${id}|${videoId}`);
     let playingStream: Stream | null = null;
 
+    /** Easy Mode can step in: it picked this source, or it's on and can take over. */
+    const easyCanAct = () =>
+        easyQueue.activeFor(videoId) || (playerPrefs.easyMode && !!type && !!id && !!videoId && easyQueue.handPicked !== videoId);
+
+    // Easy Mode is on, but this source was remembered rather than picked by it
+    // (resuming, a next episode Stremio had a source for): rank the sources now,
+    // leaving out this one, so there's something to fall back on.
+    let adopting = $state(false);
+    async function adoptQueue(): Promise<boolean> {
+        if (easyQueue.activeFor(videoId)) return true;
+        if (!easyCanAct() || !type || !id || !videoId || adopting) return false;
+        adopting = true;
+        switching = 'Finding another source…';
+        const forVideo = videoId;
+        const picks = await prefetchPicks(type, id, forVideo, likeThis()).catch(() => []);
+        adopting = false;
+        if (forVideo !== videoId || !picks.length) {
+            switching = null;
+            return false;
+        }
+        easyQueue.adopt(forVideo, picks, location.pathname + location.search);
+        return true;
+    }
+
     async function tryNextSource() {
         clearTimeout(watchdog);
         clearTimeout(stallTimer);
-        if (!easyQueue.activeFor(videoId)) return;
+        if (!(await adoptQueue())) return;
         const next = easyQueue.next();
         if (next) {
             switching = 'That source didn’t work. Trying the next best one…';
@@ -239,14 +263,14 @@
 
     // A hard error on an auto-picked source → next source.
     $effect(() => {
-        if ((startError || mpv.error) && easyQueue.activeFor(videoId)) tryNextSource();
+        if ((startError || mpv.error) && easyCanAct()) tryNextSource();
     });
 
     // Stuck buffering for 30s mid-episode → next source (it resumes at the same time).
     $effect(() => {
         const stuck = mpv.buffering && firstFrame && !mpv.paused;
         clearTimeout(stallTimer);
-        if (stuck && easyQueue.activeFor(videoId)) stallTimer = setTimeout(tryNextSource, 30000);
+        if (stuck && easyCanAct()) stallTimer = setTimeout(tryNextSource, 30000);
     });
 
     // Pick up where you left off. The Player model carries the stored library
@@ -352,7 +376,7 @@
         const key = `${videoId}|${params.get('stream')}`;
         if (!errorClip || errorClipHandled === key) return;
         errorClipHandled = key;
-        if (easyQueue.activeFor(videoId)) {
+        if (easyCanAct()) {
             mpv.set('pause', true);
             tryNextSource();
         } else {
@@ -361,29 +385,33 @@
     });
 
     // No audio in your language in this file (e.g. an anime episode with no dub yet).
-    // If Easy Mode picked it, try other cached sources that look like they have that
+    // With Easy Mode on, try other cached sources that look like they have that
     // language (dual audio, dubs), and come back here if none does. Otherwise say so.
     let audioChecked: string | null = null;
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
         if (!fileReady || !mpv.duration || errorClip || audioChecked === key || !mpv.audioTracks.length) return;
         audioChecked = key;
-        const auto = easyQueue.activeFor(videoId);
+        const auto = easyCanAct();
         const pref = (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
         if (!pref) return;
         const name = langName(langKey(pref) ?? pref);
         const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
         // An untagged track could be anything: don't guess.
         if (mpv.audioTracks.some((t) => inPref(t) || !t.lang)) return;
-        if (auto && easyQueue.current?.cached) {
-            const step = easyQueue.nextForLanguage();
-            if (step) {
-                switchForLanguage(step.pick.href, step.returning, name);
-                return;
-            }
+        if (auto) {
+            findLanguage(name);
+            return;
         }
         note(`No ${name} audio in this source`, 5000);
     });
+
+    async function findLanguage(name: string) {
+        const step = (await adoptQueue()) && easyQueue.current?.cached ? easyQueue.nextForLanguage() : null;
+        if (step) return switchForLanguage(step.pick.href, step.returning, name);
+        switching = null;
+        note(`No ${name} audio in this source`, 5000);
+    }
 
     async function switchForLanguage(href: string, returning: boolean, name: string) {
         clearTimeout(watchdog);
@@ -821,7 +849,7 @@
         <div class="switching" role="status">{switching}</div>
     {/if}
 
-    {#if (startError || mpv.error) && !easyQueue.activeFor(videoId)}
+    {#if (startError || mpv.error) && !easyQueue.activeFor(videoId) && !adopting}
         <div class="center-card" role="alert">
             <p class="err-title">Can’t play this stream</p>
             <p class="err-body">{startError ?? mpv.error}</p>

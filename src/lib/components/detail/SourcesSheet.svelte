@@ -78,6 +78,7 @@
         const url = linkOf(s);
         // A hand-picked source: don't auto-switch away from it.
         easyQueue.clear();
+        easyQueue.handPicked = link?.videoId ?? null;
         if (link && url) goto(playerHref(link, url));
     }
 

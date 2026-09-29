@@ -70,9 +70,12 @@ class EasyQueue {
     #fallback: Pick | null = null;
     #languageTries = 0;
     languageSearchDone = false;
+    /** A video whose source you chose yourself: Easy Mode leaves it alone. */
+    handPicked: string | null = null;
 
     start(videoId: string, picks: Pick[]) {
         this.videoId = videoId;
+        this.handPicked = null;
         this.#all = picks;
         this.current = picks[0] ?? null;
         this.#fallback = null;
@@ -85,6 +88,24 @@ class EasyQueue {
         const torrent = picks.find((p) => p.torrent);
         if (torrent && !rest.includes(torrent) && picks[0] !== torrent) rest.push(torrent);
         this.#rest = rest;
+    }
+
+    /**
+     * Easy Mode is on but didn't pick what's playing (a remembered stream, e.g.
+     * resuming): take over with fresh picks, leaving out the source playing now.
+     */
+    adopt(videoId: string, picks: Pick[], currentHref: string) {
+        const streamOf = (href: string) => new URL(href, 'http://x').searchParams.get('stream');
+        const playing = streamOf(currentHref);
+        const others = picks.filter((p) => streamOf(p.href) !== playing);
+        const current: Pick = picks.find((p) => streamOf(p.href) === playing) ?? {
+            href: currentHref,
+            label: 'the source playing now',
+            torrent: false,
+            cached: true,
+            audio: 'unknown',
+        };
+        this.start(videoId, [current, ...others]);
     }
 
     /** Next choice after a failure, or null when we should ask the person. */
