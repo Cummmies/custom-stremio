@@ -178,6 +178,13 @@
                 </div>
                 <div class="row">
                     <div>
+                        <div class="title">Ask if you’re still watching</div>
+                        <div class="sub">After two episodes play on their own with no one touching anything, asks, and pauses after 15 seconds without an answer.</div>
+                    </div>
+                    <Toggle label="Ask if you’re still watching" checked={playerPrefs.askStillWatching} onchange={(v) => (playerPrefs.askStillWatching = v)} />
+                </div>
+                <div class="row">
+                    <div>
                         <div class="title">Hardware-accelerated decoding</div>
                         <div class="sub">Uses your graphics card to decode video. Turn off if playback shows artifacts.</div>
                     </div>

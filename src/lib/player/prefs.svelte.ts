@@ -23,6 +23,8 @@ type Prefs = {
     pauseOnMinimize: boolean;
     /** Pause when you switch to another window. */
     pauseOnLostFocus: boolean;
+    /** After two episodes that started by themselves with nobody touching anything, ask. */
+    askStillWatching: boolean;
 };
 
 const KEY = 'playerPrefs';
@@ -38,6 +40,7 @@ const defaults: Prefs = {
     autoSkip: false,
     pauseOnMinimize: true,
     pauseOnLostFocus: false,
+    askStillWatching: true,
 };
 
 function load(): Prefs {
@@ -116,6 +119,12 @@ class PlayerPrefs {
     }
     set pauseOnLostFocus(v: boolean) {
         this.#save({ pauseOnLostFocus: v });
+    }
+    get askStillWatching() {
+        return this.#p.askStillWatching;
+    }
+    set askStillWatching(v: boolean) {
+        this.#save({ askStillWatching: v });
     }
 
     #save(patch: Partial<Prefs>) {

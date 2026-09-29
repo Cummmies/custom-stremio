@@ -1,3 +1,10 @@
+<script module lang="ts">
+    // "Still watching?": how many episodes in a row started by themselves (Up next
+    // countdown or the end of the last one) with nobody touching anything. Kept
+    // outside the page because moving to the next episode can reload it.
+    const stillWatching = { autoEpisodes: 0 };
+</script>
+
 <script lang="ts">
     // Full-window player. mpv draws the video underneath this transparent page;
     // everything you see here is the control layer on top of it.
@@ -103,7 +110,10 @@
         const offEvents = mpv.onEvent(onMpvEvent);
         // Play/pause from the Windows media overlay or the keyboard's media keys.
         const offMedia = inTauri
-            ? listen<string>('media://button', (e) => mpv.set('pause', e.payload === 'pause'))
+            ? listen<string>('media://button', (e) => {
+                  markActive();
+                  mpv.set('pause', e.payload === 'pause');
+              })
             : Promise.resolve(() => {});
         // Pause on minimize / on switching to another window (Settings → Playback).
         const win = inTauri ? getCurrentWindow() : null;
@@ -131,6 +141,7 @@
             clearTimeout(idleTimer);
             clearTimeout(watchdog);
             clearTimeout(stallTimer);
+            clearInterval(stillTimer);
             cancelSilenceSkip();
             if (pip) invoke('set_pip', { enabled: false });
             if (fullscreen) invoke('set_fullscreen', { fullscreen: false });
@@ -152,6 +163,8 @@
         addedSubs.clear();
         nextDismissed = false;
         showNext = false;
+        stillAsk = null;
+        activeThisEpisode = false;
         nextCardAt = null;
         autoplayFired = false;
         nextThumbFailed = false;
@@ -302,7 +315,7 @@
             if (mpv.duration != null && mpv.duration < ERROR_CLIP_MAX_S) return;
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
             // Unless you cancelled the countdown on the Up next card.
-            if (settings?.bingeWatching && model?.nextVideo && !nextDismissed && !autoplayFired) playNext();
+            if (settings?.bingeWatching && model?.nextVideo && !nextDismissed && !autoplayFired) autoPlayNext();
         }
     }
 
@@ -576,7 +589,7 @@
     $effect(() => {
         if (autoplayIn == null || autoplayIn > 0.25 || autoplayFired) return;
         autoplayFired = true;
-        playNext();
+        autoPlayNext();
     });
 
     // A minute before the "Up next" card appears, quietly find sources for the next
@@ -599,6 +612,54 @@
             if (picks.length) prefetched = { video: next.id, picks, anime: isAnime };
         });
     });
+
+    // --- still watching? ----------------------------------------------------
+    // Someone clicked, pressed a key or a media key: they're awake.
+    let activeThisEpisode = false;
+    let stillAsk = $state<{ left: number } | { paused: true } | null>(null);
+    let stillTimer: ReturnType<typeof setInterval> | undefined;
+
+    function markActive() {
+        activeThisEpisode = true;
+        stillWatching.autoEpisodes = 0;
+        if (stillAsk) {
+            clearInterval(stillTimer);
+            stillAsk = null;
+        }
+    }
+
+    /** The next episode starting by itself (not you pressing Next). */
+    function autoPlayNext() {
+        stillWatching.autoEpisodes = activeThisEpisode ? 1 : stillWatching.autoEpisodes + 1;
+        playNext();
+    }
+
+    // Two episodes in a row started by themselves and nobody has touched anything
+    // through either one's intro: once this one's intro is over (or 3 minutes in,
+    // when its timing isn't known), ask, and pause if there's no answer in 15s.
+    $effect(() => {
+        if (!playerPrefs.askStillWatching || stillAsk || activeThisEpisode || stillWatching.autoEpisodes < 2) return;
+        if (!fileReady || mpv.paused || errorClip) return;
+        const intro = segments.find((s) => s.kind === 'intro');
+        if (mpv.time < (intro ? intro.end + 5 : 180)) return;
+        stillAsk = { left: 15 };
+        clearInterval(stillTimer);
+        stillTimer = setInterval(() => {
+            if (!stillAsk || !('left' in stillAsk)) return clearInterval(stillTimer);
+            if (stillAsk.left > 1) stillAsk = { left: stillAsk.left - 1 };
+            else {
+                clearInterval(stillTimer);
+                mpv.set('pause', true);
+                stillAsk = { paused: true };
+            }
+        }, 1000);
+    });
+
+    function keepWatching() {
+        const wasPaused = !!stillAsk && 'paused' in stillAsk;
+        markActive();
+        if (wasPaused) mpv.set('pause', false);
+    }
 
     async function playNext() {
         const next = model?.nextVideo;
@@ -815,6 +876,7 @@
         if (handled) {
             e.preventDefault();
             poke();
+            markActive();
         }
     }
 
@@ -835,7 +897,7 @@
 </script>
 
 <svelte:head><title>{heading} · Stremio</title></svelte:head>
-<svelte:window {onkeydown} onpointermove={poke} />
+<svelte:window {onkeydown} onpointermove={poke} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
 
 <div class="player" class:hidden={!controlsVisible} class:pip>
     <!-- Transparent surface over the video that takes clicks. -->
@@ -894,6 +956,18 @@
 
     {#if skipNote}
         <div class="switching" role="status">{skipNote}</div>
+    {/if}
+
+    {#if stillAsk}
+        <div class="still" role="alertdialog" aria-labelledby="still-title" aria-describedby="still-sub">
+            <p id="still-title" class="still-title">Are you still watching?</p>
+            <p id="still-sub" class="still-sub">
+                {#if 'left' in stillAsk}Pausing in {stillAsk.left}s{:else}Paused{/if}{#if subheading} · {heading} · {subheading}{/if}
+            </p>
+            <button class="still-button" onclick={keepWatching}>
+                <Icon name="play" size={14} filled /> Continue Watching
+            </button>
+        </div>
     {/if}
 
     {#if showNext && model?.nextVideo}
@@ -1332,6 +1406,52 @@
         background: linear-gradient(to right, white calc((1 - var(--left)) * 100%), rgb(255 255 255 / 0.72) 0);
     }
 
+    /* Still watching? */
+    .still {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        translate: -50% -50%;
+        z-index: 4;
+        width: min(420px, calc(100% - 48px));
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 26px 24px 22px;
+        border-radius: var(--radius-l);
+        background: rgb(24 24 32 / 0.9);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgb(255 255 255 / 0.1);
+        text-align: center;
+        animation: rise var(--slow) var(--ease);
+    }
+    .still-title {
+        margin: 0;
+        font-size: var(--text-title3);
+        font-weight: 600;
+    }
+    .still-sub {
+        margin: 0 0 12px;
+        font-size: 13px;
+        color: rgb(255 255 255 / 0.7);
+        font-variant-numeric: tabular-nums;
+    }
+    .still-button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 38px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 999px;
+        background: white;
+        color: black;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
     /* Reduce Motion: things fade in and out, but don't slide. */
     @media (prefers-reduced-motion: reduce) {
         .top,
@@ -1345,7 +1465,8 @@
         }
         .skip,
         .switching,
-        .next {
+        .next,
+        .still {
             animation: fade-in var(--slow) var(--ease);
         }
         .volume input {
