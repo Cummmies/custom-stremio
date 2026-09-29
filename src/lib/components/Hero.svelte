@@ -4,6 +4,7 @@
     import { backgroundOf, logoOf } from '$lib/core/art';
     import type { MetaItemPreview } from '$lib/core/types';
     import Icon from './Icon.svelte';
+    import { titleHref } from '$lib/links';
 
     let { items, badge }: { items: MetaItemPreview[]; badge: string } = $props();
 
@@ -116,10 +117,10 @@
                 {#if item.description}<p class="description">{item.description}</p>{/if}
 
                 <div class="actions">
-                    <button class="play" disabled title="Playback is coming next">
+                    <a class="play" href={titleHref(item.type, item.id, { play: '1' })}>
                         <Icon name="play" size={16} filled />
                         Play
-                    </button>
+                    </a>
                     <button
                         class="round"
                         class:on={saved}
@@ -129,9 +130,9 @@
                     >
                         <Icon name={saved ? 'check' : 'plus'} size={18} />
                     </button>
-                    <button class="round" disabled aria-label="Details" title="Details are coming next">
+                    <a class="round" href={titleHref(item.type, item.id)} aria-label={`More about ${item.name}`} title="More Info">
                         <Icon name="info" size={18} />
-                    </button>
+                    </a>
                 </div>
             </div>
         {/key}
@@ -280,6 +281,7 @@
         color: var(--bg);
         font-size: var(--text-callout);
         font-weight: 700;
+        text-decoration: none;
         cursor: pointer;
         transition: transform var(--fast) var(--ease), background var(--fast);
     }
@@ -300,6 +302,9 @@
         color: var(--label);
         cursor: pointer;
         transition: background var(--fast);
+    }
+    a.round {
+        text-decoration: none;
     }
     .round:hover:not(:disabled) {
         background: rgb(255 255 255 / 0.22);

@@ -63,3 +63,54 @@ export type Library = {
     catalog: LibraryItem[];
     selected: { request: { type: string | null; sort: string } } | null;
 };
+
+export type Link = { name: string; category: string; url: string };
+
+export type TrailerStream = { ytId?: string; description?: string };
+
+export type Stream = {
+    name?: string;
+    title?: string;
+    description?: string;
+    url?: string;
+    ytId?: string;
+    infoHash?: string;
+    fileIdx?: number;
+    externalUrl?: string;
+    behaviorHints?: { bingeGroup?: string; filename?: string; videoSize?: number };
+    deepLinks?: {
+        player: string | null;
+        externalPlayer: { streaming: string | null; download: string | null; playlist: string | null } | null;
+    };
+};
+
+export type Video = {
+    id: string;
+    title: string;
+    overview: string | null;
+    released: string | null;
+    thumbnail: string | null;
+    season?: number;
+    episode?: number;
+    watched: boolean;
+    progress: number | null;
+    upcoming: boolean;
+};
+
+export type MetaItem = MetaItemPreview & {
+    released: string | null;
+    links: Link[];
+    trailerStreams: TrailerStream[];
+    videos: Video[];
+    inLibrary: boolean;
+    watched: boolean;
+};
+
+export type Addon = { manifest: { id: string; name: string; logo?: string | null } };
+
+export type MetaDetails = {
+    metaItem: { addon: Addon; content: Loadable<MetaItem> } | null;
+    libraryItem: LibraryItem | null;
+    selected: { metaPath: { id: string; type: string }; streamPath: { id: string } | null } | null;
+    streams: { addon: Addon; content: Loadable<Stream[]> }[];
+};

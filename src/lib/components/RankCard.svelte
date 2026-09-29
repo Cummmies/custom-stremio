@@ -2,19 +2,20 @@
     // Top 10 card: an oversized rank numeral tucked behind the poster.
     import type { MetaItemPreview } from '$lib/core/types';
     import { arrowNav } from '$lib/keyboard';
+    import { titleHref } from '$lib/links';
 
     let { item, rank }: { item: MetaItemPreview; rank: number } = $props();
     let loaded = $state(false);
 </script>
 
-<button class="card" onkeydown={arrowNav} aria-label={`Number ${rank}: ${item.name}`}>
+<a class="card" href={titleHref(item.type, item.id)} onkeydown={arrowNav} aria-label={`Number ${rank}: ${item.name}`}>
     <span class="rank" aria-hidden="true">{rank}</span>
     <div class="poster" class:loaded>
         {#if item.poster}
             <img src={item.poster} alt="" loading="lazy" decoding="async" width="140" height="210" onload={() => (loaded = true)} />
         {/if}
     </div>
-</button>
+</a>
 
 <style>
     .card {

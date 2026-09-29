@@ -3,6 +3,7 @@
     import type { LibraryItem } from '$lib/core/types';
     import { episodeLabel, timeLeft } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
+    import { titleHref } from '$lib/links';
 
     let { item }: { item: LibraryItem } = $props();
 
@@ -15,7 +16,10 @@
     let failed = $state(false);
 </script>
 
-<button class="card" onkeydown={arrowNav} aria-label={[item.name, detail].filter(Boolean).join(', ')}>
+<a
+    class="card"
+    href={titleHref(item.type, item._id, item.state.video_id && item.type === 'series' ? { video: item.state.video_id } : undefined)}
+    onkeydown={arrowNav} aria-label={[item.name, detail].filter(Boolean).join(', ')}>
     <div class="art" class:loaded>
         {#if art && !failed}
             <img
@@ -37,7 +41,7 @@
     </div>
     <span class="name" aria-hidden="true">{item.name}</span>
     {#if detail}<span class="detail" aria-hidden="true">{detail}</span>{/if}
-</button>
+</a>
 
 <style>
     .card {
@@ -47,6 +51,7 @@
         flex-direction: column;
         min-width: 0;
         scroll-snap-align: start;
+        color: inherit;
     }
     .art {
         position: relative;

@@ -12,6 +12,7 @@
 
 <script lang="ts">
     import { arrowNav } from '$lib/keyboard';
+    import { titleHref } from '$lib/links';
 
     let { item }: { item: PosterItem } = $props();
 
@@ -20,8 +21,9 @@
 
 </script>
 
-<button
+<a
     class="card"
+    href={titleHref(item.type, item.id)}
     onkeydown={arrowNav}
     aria-label={[item.name, item.releaseInfo].filter(Boolean).join(', ')}
 >
@@ -47,7 +49,7 @@
     </div>
     <span class="name" aria-hidden="true">{item.name}</span>
     {#if item.releaseInfo}<span class="meta" aria-hidden="true">{item.releaseInfo}</span>{/if}
-</button>
+</a>
 
 <style>
     .card {
@@ -58,6 +60,7 @@
         min-width: 0;
         scroll-snap-align: start;
         border-radius: var(--radius);
+        color: inherit;
     }
     .card:focus-visible {
         outline: none;
