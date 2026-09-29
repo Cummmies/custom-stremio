@@ -1,6 +1,7 @@
 mod player;
 mod server;
 mod skips;
+mod storage;
 mod theme_icon;
 mod window_modes;
 
@@ -26,11 +27,13 @@ pub fn run() {
                 w.set_focus().ok();
             }
         }))
+        .plugin(storage::plugin())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(Arc::new(StreamingServer::new()))
+        .manage(storage::Storage::default())
         .manage(Player::default())
         .manage(player::Thumbnailer::default())
         .manage(WindowModes::default())
@@ -44,6 +47,8 @@ pub fn run() {
             player::thumb_frame,
             player::thumb_close,
             skips::skip_lookup,
+            storage::storage_set,
+            storage::storage_set_many,
             window_modes::set_fullscreen,
             window_modes::is_fullscreen,
             window_modes::set_pip,
@@ -59,6 +64,7 @@ pub fn run() {
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 player::shutdown(&app.state::<Player>());
+                app.state::<storage::Storage>().flush();
                 app.state::<Arc<StreamingServer>>().stop();
             }
         });
