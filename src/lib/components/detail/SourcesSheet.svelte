@@ -55,7 +55,7 @@
     const details = (s: Stream) => s.description ?? s.title ?? '';
     const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
 
-    // Which sources are in your audio language (dubs, dual audio), read from the release name.
+    // Which anime sources are in your audio language (dubs, dual audio), read from the release name.
     const audioPref = $derived((app.ctx?.profile.settings.audioLanguage as string | null | undefined) ?? playerPrefs.easyLanguage);
     const audioPrefName = $derived.by(() => {
         const code = langKey(audioPref);
@@ -66,7 +66,10 @@
             return null;
         }
     });
+    // Only for anime, where it's the difference between a dub and the Japanese original.
+    // Elsewhere sources are already in the original language, so a badge is just noise.
     function audioBadge(s: Stream): string | null {
+        if (!anime) return null;
         const p = parseStream(s, { anime });
         if (audioPref && audioPrefName && p.languages.some((l) => langKey(l) === langKey(audioPref))) {
             return p.multiAudio ? `Dual audio · ${audioPrefName}` : `${audioPrefName} audio`;
