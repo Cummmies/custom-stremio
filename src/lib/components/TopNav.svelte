@@ -79,7 +79,7 @@
             { label: 'Settings', icon: 'gear', shortcut: 'Ctrl+,', onselect: () => goto('/settings') },
             ...(app.user
                 ? ([
-                      { label: 'Switch Account…', icon: 'users', onselect: () => app.switchAccount() },
+                      { label: 'Switch Profile…', icon: 'users', onselect: () => app.openProfiles() },
                       { separator: true },
                       { label: 'Log Out', icon: 'logout', destructive: true, onselect: () => app.logout() },
                   ] as MenuEntry[])

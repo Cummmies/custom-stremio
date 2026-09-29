@@ -2,13 +2,14 @@
 import { core } from '$lib/core';
 import { watchServer } from '$lib/core/server';
 import type { Ctx, Library, MetaItemPreview, ServerStatus } from '$lib/core/types';
+import { profiles } from '$lib/profiles.svelte';
 
 class AppState {
     ctx = $state<Ctx | null>(null);
     server = $state<ServerStatus>({ state: 'starting' });
     library = $state<Library | null>(null);
     loginOpen = $state(false);
-    loginMode = $state<'login' | 'switch'>('login');
+    loginMode = $state<'login' | 'add'>('login');
 
     user = $derived(this.ctx?.profile.auth?.user ?? null);
     libraryIds = $derived(new Set(this.library?.catalog.map((i) => i._id) ?? []));
@@ -19,7 +20,13 @@ class AppState {
         if (this.#started) return;
         this.#started = true;
 
-        core.watch<Ctx>('ctx', (s) => (this.ctx = s));
+        core.watch<Ctx>('ctx', (s) => {
+            this.ctx = s;
+            // Every account you sign in to becomes a saved profile on this PC.
+            if (s.profile.auth) profiles.remember(s.profile.auth);
+        });
+        // "Ask who's watching" on launch, when there's more than one profile.
+        if (profiles.askOnLaunch && profiles.list.length > 1) profiles.pickerOpen = true;
         core.watch<Library>('library', (s) => (this.library = s));
         watchServer((s) => (this.server = s));
 
@@ -72,9 +79,15 @@ class AppState {
         else this.addToLibrary(item);
     }
 
-    /** Signing in again while signed in replaces the current account. */
-    switchAccount() {
-        this.loginMode = 'switch';
+    /** "Who's watching?" */
+    openProfiles() {
+        profiles.error = null;
+        profiles.pickerOpen = true;
+    }
+
+    /** Sign in to another account; it's saved as a new profile. */
+    addProfile() {
+        this.loginMode = 'add';
         this.loginOpen = true;
     }
 
@@ -83,7 +96,10 @@ class AppState {
         this.loginOpen = true;
     }
 
+    /** Logs out for real (ends the session) and forgets this profile on this PC. */
     logout() {
+        const uid = this.user?._id;
+        if (uid) profiles.forget(uid);
         core.dispatch({ action: 'Ctx', args: { action: 'Logout' } });
     }
 }

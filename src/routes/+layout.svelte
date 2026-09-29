@@ -12,6 +12,8 @@
     import MenuHost from '$lib/components/menu/MenuHost.svelte';
     import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
     import UpdateToast from '$lib/components/UpdateToast.svelte';
+    import ProfilePicker from '$lib/components/ProfilePicker.svelte';
+    import { profiles } from '$lib/profiles.svelte';
     import { updates } from '$lib/updates.svelte';
 
     let { children } = $props();
@@ -58,6 +60,10 @@
 
 {#if app.pendingAddonUrl}
     <InstallFromUrl initialUrl={app.pendingAddonUrl} onclose={() => (app.pendingAddonUrl = null)} />
+{/if}
+
+{#if profiles.pickerOpen && !inPlayer}
+    <ProfilePicker />
 {/if}
 
 {#if app.loginOpen}

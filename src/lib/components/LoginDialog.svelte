@@ -6,7 +6,7 @@
     let { onclose }: { onclose: () => void } = $props();
 
     // Captured once so the heading doesn't change mid-login.
-    const switching = app.loginMode === 'switch' && !!app.user;
+    const adding = app.loginMode === 'add' && !!app.user;
 
     let email = $state('');
     let password = $state('');
@@ -47,9 +47,9 @@
         <button type="button" class="close" onclick={() => dialog?.close()} aria-label="Close">
             <Icon name="close" size={16} />
         </button>
-        {#if switching}
-            <h2 id="login-title">Switch Account</h2>
-            <p class="hint">Log in with another Stremio account. You’ll be signed out of {app.user?.email ?? 'the current one'}.</p>
+        {#if adding}
+            <h2 id="login-title">Add a Profile</h2>
+            <p class="hint">Log in with another Stremio account. It’s saved on this PC, so you can switch between profiles anytime without logging in again.</p>
         {:else}
             <h2 id="login-title">Log In to Stremio</h2>
             <p class="hint">Your library, addons and watch progress stay in sync with your other Stremio apps.</p>

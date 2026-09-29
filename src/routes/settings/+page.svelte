@@ -89,7 +89,7 @@
                 </div>
                 <div class="buttons">
                     {#if app.user}
-                        <button class="btn" onclick={() => app.switchAccount()}>Switch Account…</button>
+                        <button class="btn" onclick={() => app.openProfiles()}>Switch Profile…</button>
                         <button class="btn destructive" onclick={() => app.logout()}>Log Out</button>
                     {:else}
                         <button class="btn primary" onclick={() => app.openLogin()}>Log In…</button>
