@@ -2,7 +2,10 @@
     // Side sheet listing every addon's streams for one movie or episode.
     // A focused, dismissible task: Esc, the close button or the backdrop all close it.
     import type { MetaDetails, Stream } from '$lib/core/types';
+    import { goto } from '$app/navigation';
     import { openExternal } from '$lib/links';
+    import { inTauri } from '$lib/player/mpv.svelte';
+    import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
     import Icon from '../Icon.svelte';
 
     let {
@@ -35,6 +38,14 @@
     const label = (s: Stream) => (s.name ?? '').split('\n').filter(Boolean);
     const details = (s: Stream) => s.description ?? s.title ?? '';
     const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
+
+    const playable = (s: Stream) => inTauri && !!s.deepLinks?.player && !s.ytId && !!linkOf(s);
+
+    function play(s: Stream) {
+        const link = parsePlayerDeepLink(s.deepLinks!.player!);
+        const url = linkOf(s);
+        if (link && url) goto(playerHref(link, url));
+    }
 
     async function copy(s: Stream, key: string) {
         const link = linkOf(s);
@@ -81,10 +92,22 @@
                                                 Open
                                             </button>
                                         {:else if linkOf(stream)}
-                                            <button class="action" onclick={() => copy(stream, key)} aria-live="polite">
-                                                <Icon name={copied === key ? 'check' : 'link'} size={15} />
-                                                {copied === key ? 'Copied' : 'Copy Link'}
-                                            </button>
+                                            <div class="buttons">
+                                                <button
+                                                    class="icon-action"
+                                                    onclick={() => copy(stream, key)}
+                                                    aria-label={copied === key ? 'Link copied' : 'Copy stream link'}
+                                                    title={copied === key ? 'Copied' : 'Copy Link'}
+                                                >
+                                                    <Icon name={copied === key ? 'check' : 'link'} size={15} />
+                                                </button>
+                                                {#if playable(stream)}
+                                                    <button class="action play" onclick={() => play(stream)}>
+                                                        <Icon name="play" size={13} filled />
+                                                        Play
+                                                    </button>
+                                                {/if}
+                                            </div>
                                         {/if}
                                     </li>
                                 {/each}
@@ -102,9 +125,9 @@
             {/if}
         </div>
 
-        <footer>
-            Built-in playback is coming next. Until then, copy a link into VLC or mpv, or open it in its service.
-        </footer>
+        {#if !inTauri}
+            <footer>Playback runs in the desktop app. Here you can copy a link into VLC or mpv.</footer>
+        {/if}
     </div>
 </dialog>
 
@@ -248,6 +271,33 @@
     .action:hover {
         background: var(--label);
         color: var(--bg);
+    }
+    .action.play {
+        background: var(--label);
+        color: var(--bg);
+    }
+    .action.play:hover {
+        background: white;
+    }
+    .buttons {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .icon-action {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--fill);
+        color: var(--label-2);
+        cursor: pointer;
+    }
+    .icon-action:hover {
+        background: var(--fill-hover);
+        color: var(--label);
     }
     .skeleton {
         height: 64px;

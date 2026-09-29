@@ -12,3 +12,6 @@ vite.config.ts.timestamp-*
 # streaming server binaries (not ours to redistribute)
 src-tauri/server/*
 !src-tauri/server/README.md
+
+# libmpv for bundling (copy libmpv-2.dll here; not committed)
+src-tauri/lib/*

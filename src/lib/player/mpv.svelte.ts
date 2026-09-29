@@ -1,0 +1,235 @@
+// Thin, reactive client for the embedded mpv (src-tauri/src/player.rs).
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { playerPrefs, type Upscaler } from './prefs.svelte';
+
+export type Track = {
+    id: number;
+    type: 'video' | 'audio' | 'sub';
+    title?: string;
+    lang?: string;
+    codec?: string;
+    selected: boolean;
+    external?: boolean;
+    'demux-channel-count'?: number;
+    'audio-channels'?: number;
+};
+
+type EndFile = { kind: 'end-file'; reason: 'eof' | 'stop' | 'quit' | 'error' | 'other'; error?: string };
+type MpvEvent = { kind: 'file-loaded' | 'playback-restart' | 'shutdown' } | EndFile;
+
+/** mpv's sharper, heavier scalers (what its built-in "high-quality" profile uses). */
+const HIGH_QUALITY: Record<string, string> = {
+    scale: 'ewa_lanczossharp',
+    cscale: 'ewa_lanczossharp',
+    dscale: 'mitchell',
+    deband: 'yes',
+};
+
+export const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+const num = (v: string | null) => (v == null || v === '' ? null : Number(v));
+const flag = (v: string | null) => v === 'yes';
+
+class Mpv {
+    running = $state(false);
+    loaded = $state(false);
+    time = $state(0);
+    duration = $state<number | null>(null);
+    paused = $state(false);
+    buffering = $state(true);
+    bufferingPercent = $state<number | null>(null);
+    cacheTime = $state<number | null>(null);
+    volume = $state(100);
+    muted = $state(false);
+    speed = $state(1);
+    tracks = $state<Track[]>([]);
+    aid = $state<string>('no');
+    sid = $state<string>('no');
+    gamma = $state<string | null>(null);
+    width = $state<number | null>(null);
+    height = $state<number | null>(null);
+    hwdec = $state<string | null>(null);
+    ended = $state(false);
+    error = $state<string | null>(null);
+
+    hdr = $derived(this.gamma === 'pq' || this.gamma === 'hlg');
+    audioTracks = $derived(this.tracks.filter((t) => t.type === 'audio'));
+    subTracks = $derived(this.tracks.filter((t) => t.type === 'sub'));
+
+    #unlisten: UnlistenFn[] = [];
+    #scalerDefaults: Record<string, string> | null = null;
+    #listeners = new Set<(e: MpvEvent) => void>();
+
+    onEvent(fn: (e: MpvEvent) => void) {
+        this.#listeners.add(fn);
+        return () => this.#listeners.delete(fn);
+    }
+
+    #apply(name: string, v: string | null) {
+        switch (name) {
+            case 'time-pos': this.time = num(v) ?? this.time; break;
+            case 'duration': this.duration = num(v); break;
+            case 'pause': this.paused = flag(v); break;
+            case 'paused-for-cache': this.buffering = flag(v); break;
+            case 'cache-buffering-state': this.bufferingPercent = num(v); break;
+            case 'demuxer-cache-time': this.cacheTime = num(v); break;
+            case 'volume': this.volume = num(v) ?? this.volume; break;
+            case 'mute': this.muted = flag(v); break;
+            case 'speed': this.speed = num(v) ?? 1; break;
+            case 'aid': this.aid = v ?? 'no'; break;
+            case 'sid': this.sid = v ?? 'no'; break;
+            case 'video-params/gamma': this.gamma = v; break;
+            case 'video-params/w': this.width = num(v); break;
+            case 'video-params/h': this.height = num(v); break;
+            case 'hwdec-current': this.hwdec = v; break;
+            case 'eof-reached': if (flag(v)) this.ended = true; break;
+            case 'track-list':
+                try {
+                    this.tracks = v ? JSON.parse(v) : [];
+                } catch {
+                    this.tracks = [];
+                }
+                break;
+        }
+    }
+
+    async start(options: Record<string, string>) {
+        if (!inTauri) throw new Error('Playback needs the desktop app.');
+        if (!this.#unlisten.length) {
+            this.#unlisten.push(
+                await listen<{ name: string; value: string | null }>('mpv://prop', (e) => this.#apply(e.payload.name, e.payload.value)),
+                await listen<MpvEvent>('mpv://event', (e) => {
+                    const ev = e.payload;
+                    if (ev.kind === 'file-loaded') {
+                        this.loaded = true;
+                        this.ended = false;
+                        this.error = null;
+                    } else if (ev.kind === 'playback-restart') {
+                        this.buffering = false;
+                    } else if (ev.kind === 'end-file' && ev.reason === 'error') {
+                        this.error = ev.error ?? 'This stream couldn’t be played.';
+                    } else if (ev.kind === 'shutdown') {
+                        this.running = false;
+                    }
+                    this.#listeners.forEach((fn) => fn(ev));
+                })
+            );
+        }
+        await invoke('mpv_start', { options });
+        this.running = true;
+    }
+
+    async load(url: string, startSeconds = 0) {
+        this.loaded = false;
+        this.buffering = true;
+        this.ended = false;
+        this.error = null;
+        this.time = startSeconds;
+        this.duration = null;
+        // Set `start` as a property so it works across mpv versions' loadfile syntax.
+        await this.set('start', startSeconds > 0 ? String(startSeconds) : 'none');
+        await this.command('loadfile', url, 'replace');
+    }
+
+    command(...args: string[]) {
+        return invoke<void>('mpv_command', { args });
+    }
+
+    set(name: string, value: string | number | boolean) {
+        const v = typeof value === 'boolean' ? (value ? 'yes' : 'no') : String(value);
+        return invoke<void>('mpv_set', { name, value: v });
+    }
+
+    get(name: string) {
+        return invoke<string | null>('mpv_get', { name });
+    }
+
+    togglePause() {
+        return this.set('pause', !this.paused);
+    }
+
+    seek(seconds: number) {
+        this.time = Math.max(0, seconds);
+        return this.command('seek', String(Math.max(0, seconds)), 'absolute');
+    }
+
+    seekBy(delta: number) {
+        return this.seek(this.time + delta);
+    }
+
+    setVolume(v: number) {
+        const clamped = Math.max(0, Math.min(130, Math.round(v)));
+        this.volume = clamped;
+        playerPrefs.volume = clamped;
+        return this.set('volume', clamped);
+    }
+
+    /** Applies (or clears) the chosen upscaler for the current video. */
+    async applyUpscaler(kind: Upscaler) {
+        const displayHeight = Math.round(screen.height * devicePixelRatio);
+        const factor = this.height ? displayHeight / this.height : 1;
+        // Only worth doing when the video is meaningfully smaller than the screen.
+        const needed = factor > 1.1;
+        try {
+            await this.set('vf', kind === 'rtx' && needed ? `d3d11vpp=scaling-mode=nvidia:scale=${Math.min(4, factor).toFixed(2)}` : '');
+
+            // Remember mpv's own defaults once so "Off" can put them back.
+            const keys = Object.keys(HIGH_QUALITY);
+            if (!this.#scalerDefaults) {
+                const values = await Promise.all(keys.map((k) => this.get(k)));
+                this.#scalerDefaults = Object.fromEntries(keys.map((k, i) => [k, values[i] ?? '']));
+            }
+            const target = kind === 'high-quality' ? HIGH_QUALITY : this.#scalerDefaults;
+            for (const k of keys) if (target[k]) await this.set(k, target[k]);
+        } catch (e) {
+            console.warn('Upscaler not applied:', e);
+        }
+    }
+
+    async stop() {
+        this.loaded = false;
+        await invoke('mpv_stop').catch(() => {});
+    }
+
+    reset() {
+        this.#unlisten.forEach((fn) => fn());
+        this.#unlisten = [];
+    }
+}
+
+export const mpv = new Mpv();
+
+/** mpv options from Stremio's synced settings plus this app's player prefs. */
+export function buildOptions(settings: {
+    hardwareDecoding?: boolean;
+    audioLanguage?: string | null;
+    subtitlesLanguage?: string | null;
+}): Record<string, string> {
+    const o: Record<string, string> = {
+        // libplacebo renderer: better HDR handling and scaling than the legacy one.
+        vo: 'gpu-next',
+        'gpu-api': 'd3d11',
+        // RTX VSR runs in the d3d11 video processor, which needs native (non-copy) d3d11 decoding.
+        hwdec: settings.hardwareDecoding === false ? 'no' : playerPrefs.upscaler === 'rtx' ? 'd3d11va' : 'auto-safe',
+        'target-colorspace-hint': playerPrefs.hdrPassthrough ? 'yes' : 'no',
+        'tone-mapping': 'auto',
+        cache: 'yes',
+        'demuxer-max-bytes': '300MiB',
+        'demuxer-max-back-bytes': '100MiB',
+        'demuxer-readahead-secs': '60',
+        'network-timeout': '30',
+        volume: String(playerPrefs.volume),
+        'volume-max': '130',
+        'sub-auto': 'fuzzy',
+        'sub-font-size': '44',
+        'sub-border-size': '2.5',
+        'sub-shadow-offset': '1',
+        'sub-shadow-color': '#80000000',
+        'sub-ass-override': 'scale',
+    };
+    if (settings.audioLanguage) o.alang = settings.audioLanguage;
+    if (settings.subtitlesLanguage) o.slang = settings.subtitlesLanguage;
+    if (playerPrefs.audioPassthrough) o['audio-spdif'] = 'ac3,eac3,dts,dts-hd,truehd';
+    return o;
+}

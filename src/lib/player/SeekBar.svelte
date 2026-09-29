@@ -1,0 +1,180 @@
+<script lang="ts">
+    import type { Snippet } from 'svelte';
+    import { fmtTime } from './format';
+
+    let {
+        time,
+        duration,
+        buffered,
+        onseek,
+        preview,
+    }: {
+        time: number;
+        duration: number | null;
+        buffered: number | null;
+        onseek: (seconds: number) => void;
+        /** Rendered above the hover position (e.g. a thumbnail). */
+        preview?: Snippet<[number]>;
+    } = $props();
+
+    let bar = $state<HTMLElement>();
+    let hoverX = $state<number | null>(null);
+    let dragging = $state<number | null>(null);
+
+    const d = $derived(duration && duration > 0 ? duration : null);
+    const shown = $derived(dragging ?? time);
+    const pct = (s: number) => (d ? Math.min(100, Math.max(0, (s / d) * 100)) : 0);
+    const hoverTime = $derived(hoverX != null && d && bar ? (hoverX / bar.clientWidth) * d : null);
+
+    const fmt = fmtTime;
+
+    function timeAt(clientX: number) {
+        if (!bar || !d) return 0;
+        const r = bar.getBoundingClientRect();
+        return Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * d;
+    }
+
+    function onpointerdown(e: PointerEvent) {
+        if (!d) return;
+        bar!.setPointerCapture(e.pointerId);
+        dragging = timeAt(e.clientX);
+    }
+    function onpointermove(e: PointerEvent) {
+        const r = bar!.getBoundingClientRect();
+        hoverX = Math.min(r.width, Math.max(0, e.clientX - r.left));
+        if (dragging != null) dragging = timeAt(e.clientX);
+    }
+    function onpointerup() {
+        if (dragging != null) onseek(dragging);
+        dragging = null;
+    }
+
+    function onkeydown(e: KeyboardEvent) {
+        if (!d) return;
+        const step = e.shiftKey ? 30 : 5;
+        if (e.key === 'ArrowRight') onseek(Math.min(d, time + step));
+        else if (e.key === 'ArrowLeft') onseek(Math.max(0, time - step));
+        else if (e.key === 'Home') onseek(0);
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+    }
+</script>
+
+<div
+    class="seek"
+    bind:this={bar}
+    class:active={dragging != null}
+    role="slider"
+    tabindex="0"
+    aria-label="Seek"
+    aria-valuemin={0}
+    aria-valuemax={d ?? 0}
+    aria-valuenow={Math.round(shown)}
+    aria-valuetext={d ? `${fmt(shown)} of ${fmt(d)}` : 'Live'}
+    {onpointerdown}
+    {onpointermove}
+    {onpointerup}
+    onpointerleave={() => dragging == null && (hoverX = null)}
+    {onkeydown}
+>
+    <div class="track">
+        {#if buffered != null && d}
+            <div class="buffered" style:left="{pct(shown)}%" style:width="{Math.max(0, pct(buffered) - pct(shown))}%"></div>
+        {/if}
+        <div class="played" style:width="{pct(shown)}%"></div>
+        {#if hoverX != null && d}<div class="hover-line" style:left="{hoverX}px"></div>{/if}
+    </div>
+    <div class="thumb" style:left="{pct(shown)}%"></div>
+
+    {#if hoverTime != null}
+        <div class="tip" style:left="{hoverX}px">
+            {#if preview}{@render preview(hoverTime)}{/if}
+            <span class="tip-time">{fmt(hoverTime)}</span>
+        </div>
+    {/if}
+</div>
+
+<style>
+    .seek {
+        position: relative;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        touch-action: none;
+        outline: none;
+    }
+    .track {
+        position: relative;
+        width: 100%;
+        height: 4px;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.22);
+        overflow: hidden;
+        transition: height var(--fast) var(--ease);
+    }
+    .seek:hover .track,
+    .seek.active .track,
+    .seek:focus-visible .track {
+        height: 6px;
+    }
+    .buffered {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: rgb(255 255 255 / 0.3);
+    }
+    .played {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: var(--label);
+    }
+    .hover-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        margin-left: -1px;
+        background: rgb(255 255 255 / 0.5);
+    }
+    .thumb {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        margin-left: -7px;
+        border-radius: 50%;
+        background: white;
+        box-shadow: 0 1px 6px rgb(0 0 0 / 0.5);
+        transform: scale(0);
+        transition: transform var(--fast) var(--ease);
+    }
+    .seek:hover .thumb,
+    .seek.active .thumb,
+    .seek:focus-visible .thumb {
+        transform: scale(1);
+    }
+    .seek:focus-visible {
+        outline: 2px solid var(--accent-hover);
+        outline-offset: 4px;
+        border-radius: 4px;
+    }
+    .tip {
+        position: absolute;
+        bottom: 24px;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        pointer-events: none;
+    }
+    .tip-time {
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: rgb(20 20 26 / 0.9);
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+</style>

@@ -38,6 +38,17 @@ export const core = {
         return bridge.call(['dispatch'], [action, model, location.hash]);
     },
 
+    /** Turns the encoded stream in a player deep link back into a Stream object. */
+    async decodeStream<T = any>(encoded: string): Promise<T> {
+        await ready;
+        return bridge.call(['decodeStream'], [encoded]);
+    },
+
+    async encodeStream(stream: object): Promise<string> {
+        await ready;
+        return bridge.call(['encodeStream'], [stream]);
+    },
+
     onEvent(listener: EventListener) {
         eventListeners.add(listener);
         return () => eventListeners.delete(listener);
