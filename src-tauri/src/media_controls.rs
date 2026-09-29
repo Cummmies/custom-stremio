@@ -106,6 +106,69 @@ mod imp {
         if let Some(icon) = icon_path {
             let _ = key.set_string("IconUri", icon.to_string_lossy().as_ref());
         }
+
+        // The media panel only takes the name and icon from a Start menu shortcut
+        // carrying the same AUMID. Keep one pointing at this .exe (rewritten only
+        // when the .exe moves, e.g. after an update or a new build location).
+        let Ok(exe) = std::env::current_exe() else { return };
+        let exe = exe.to_string_lossy().into_owned();
+        let Some(programs) = std::env::var_os("APPDATA").map(|d| {
+            std::path::PathBuf::from(d).join(r"Microsoft\Windows\Start Menu\Programs")
+        }) else {
+            return;
+        };
+        let lnk = programs.join(format!("{}.lnk", super::DISPLAY_NAME));
+        if lnk.exists() && key.get_string("Shortcut").is_ok_and(|s| s == exe) {
+            return;
+        }
+        let aumid = aumid.to_owned();
+        // Its own thread and COM apartment, so startup doesn't wait and the UI
+        // thread's COM setup is left alone.
+        std::thread::spawn(move || {
+            if write_shortcut(&lnk, &exe, &aumid).is_ok() {
+                if let Ok(key) = windows_registry::CURRENT_USER.create(format!(r"Software\Classes\AppUserModelId\{aumid}")) {
+                    let _ = key.set_string("Shortcut", &exe);
+                }
+            }
+        });
+    }
+
+    fn write_shortcut(lnk: &std::path::Path, exe: &str, aumid: &str) -> windows::core::Result<()> {
+        use windows::core::{Interface, PWSTR};
+        use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
+        use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+        use windows::Win32::System::Com::{
+            CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, VT_LPWSTR,
+        };
+        use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
+        use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+
+        unsafe {
+            CoInitializeEx(None, COINIT_MULTITHREADED)?;
+            let result = (|| {
+                let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+                link.SetPath(&HSTRING::from(exe))?;
+                link.SetIconLocation(&HSTRING::from(exe), 0)?;
+                if let Some(dir) = std::path::Path::new(exe).parent() {
+                    link.SetWorkingDirectory(&HSTRING::from(dir.as_os_str()))?;
+                }
+
+                // A VT_LPWSTR PROPVARIANT borrowing `id` (not freed with PropVariantClear).
+                let id: Vec<u16> = aumid.encode_utf16().chain(Some(0)).collect();
+                let mut value = PROPVARIANT::default();
+                let inner = &mut *value.Anonymous.Anonymous;
+                inner.vt = VT_LPWSTR;
+                inner.Anonymous.pwszVal = PWSTR(id.as_ptr() as *mut u16);
+                let store: IPropertyStore = link.cast()?;
+                store.SetValue(&PKEY_AppUserModel_ID, &value)?;
+                store.Commit()?;
+
+                let file: IPersistFile = link.cast()?;
+                file.Save(&HSTRING::from(lnk.as_os_str()), true)
+            })();
+            CoUninitialize();
+            result
+        }
     }
 
     pub fn hwnd(window: &WebviewWindow) -> Option<isize> {

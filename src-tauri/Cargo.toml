@@ -39,7 +39,7 @@ strip = true
 [target."cfg(windows)".dependencies]
 win32job = "2"
 windows-registry = "0.5"
-windows = { version = "0.44", features = ["Foundation", "Media", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_UI_Shell"] }
+windows = { version = "0.44", features = ["Foundation", "Media", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Storage_EnhancedStorage"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-process = "2"
