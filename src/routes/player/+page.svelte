@@ -396,16 +396,21 @@
         showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
-    // Easy Mode: past halfway, quietly find sources for the next episode so the
-    // Next button can start it straight away. (Not needed when core already
+    // Easy Mode: a minute before the "Up next" card appears, quietly find sources
+    // for the next episode so the Next button can start it straight away. (Not needed when core already
     // remembers a source for it.)
     let prefetched: { video: string; picks: Pick[] } | null = null;
     let prefetchFor: string | null = null;
+    const PREFETCH_LEAD = 60;
     $effect(() => {
         const next = model?.nextVideo;
         const d = mpv.duration;
         if (!next || !d || !fileReady || !type || !id || next.id === videoId) return;
-        if (!playerPrefs.easyMode || next.deepLinks?.player || prefetchFor === next.id || mpv.time < d / 2) return;
+        if (!playerPrefs.easyMode || next.deepLinks?.player || prefetchFor === next.id) return;
+        // The card shows at the credits (when known) or `nextThreshold` before the end.
+        const credits = segments.find((s) => s.kind === 'credits');
+        const cardAt = Math.min(credits?.start ?? d, d - nextThreshold);
+        if (mpv.time < cardAt - PREFETCH_LEAD) return;
         prefetchFor = next.id;
         prefetchPicks(type, id, next.id).then((picks) => {
             if (picks.length) prefetched = { video: next.id, picks };
