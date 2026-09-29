@@ -40,7 +40,19 @@
         } | null;
         subtitles: { id: string; lang: string; url?: string | null; label?: string | null }[];
         stream: { type: 'Ready'; content: { deepLinks?: { externalPlayer?: { streaming?: string | null } } } } | { type: string } | null;
-        metaItem: { type: 'Ready'; content: { name: string; logo?: string | null } } | { type: string } | null;
+        metaItem:
+            | {
+                  type: 'Ready';
+                  content: {
+                      name: string;
+                      logo?: string | null;
+                      poster?: string | null;
+                      background?: string | null;
+                      videos?: { id: string; title: string; thumbnail: string | null }[];
+                  };
+              }
+            | { type: string }
+            | null;
     };
 
     const params = $derived(page.url.searchParams);
@@ -62,12 +74,21 @@
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
     const seekStep = $derived(((settings?.seekTimeDuration as number | undefined) ?? 10000) / 1000);
-    const metaName = $derived(model?.metaItem?.type === 'Ready' ? (model.metaItem as any).content.name : null);
+    const meta = $derived(
+        model?.metaItem?.type === 'Ready' ? (model.metaItem as Extract<PlayerModel['metaItem'], { content: unknown }>).content : null
+    );
+    const metaName = $derived(meta?.name ?? null);
+    const episodeVideo = $derived(videoId ? (meta?.videos?.find((v) => v.id === videoId) ?? null) : null);
     const heading = $derived(metaName ?? model?.title ?? 'Loading…');
+    // The episode's own title from the show's episode list; the player's title can
+    // be the show name again, or "Show - S01E03 - …".
+    const episodeTitle = $derived.by(() => {
+        if (episodeVideo?.title) return episodeVideo.title;
+        const t = model?.title?.replace(/^.*?:\s*/, '');
+        return t && t !== metaName && !(metaName && t.startsWith(metaName)) ? t : null;
+    });
     const subheading = $derived(
-        model?.seriesInfo
-            ? `S${model.seriesInfo.season} · E${model.seriesInfo.episode}${model.title && model.title !== metaName ? ` · ${model.title.replace(/^.*?:\s*/, '')}` : ''}`
-            : null
+        model?.seriesInfo ? `S${model.seriesInfo.season} · E${model.seriesInfo.episode}${episodeTitle ? ` · ${episodeTitle}` : ''}` : null
     );
     const loadingVideo = $derived(!mpv.loaded || (mpv.buffering && !mpv.paused));
     const nextThreshold = $derived(((settings?.nextVideoNotificationDuration as number | undefined) ?? 35000) / 1000);
@@ -302,7 +323,8 @@
     // --- Windows media overlay: show name, "S1 · E3 · Episode", play/pause ---
     $effect(() => {
         if (!inTauri || !mpv.loaded || !model) return;
-        invoke('media_update', { title: heading, subtitle: subheading ?? '', paused: mpv.paused }).catch(() => {});
+        const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
+        invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: mpv.paused }).catch(() => {});
     });
 
     // --- report progress to Stremio (drives Continue Watching) --------------

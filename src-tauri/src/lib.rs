@@ -19,6 +19,10 @@ fn server_status(server: tauri::State<'_, Arc<StreamingServer>>) -> ServerStatus
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before any window: lets Windows' media panel show our name and icon.
+    #[cfg(windows)]
+    media_controls::register("com.sdola.customstremio");
+
     tauri::Builder::default()
         // Must be first: a second launch (e.g. from a stremio:// link) hands its
         // arguments to the running app instead of opening another window.
