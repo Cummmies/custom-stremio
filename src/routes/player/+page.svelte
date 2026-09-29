@@ -11,6 +11,7 @@
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue } from '$lib/player/easy';
+    import { sameLanguage } from '$lib/player/lang';
     import { fmtTime } from '$lib/player/format';
     import { titleHref } from '$lib/links';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -82,6 +83,8 @@
     async function begin() {
         startError = null;
         subtitlesAdded = false;
+        firstFrameSeen = false;
+        addedSubs.clear();
         nextDismissed = false;
         showNext = false;
         const encoded = params.get('stream');
@@ -136,6 +139,8 @@
     let watchdog: ReturnType<typeof setTimeout> | undefined;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
     let switching = $state<string | null>(null);
+    /** Reactive twin of firstFrame, for effects that wait on playback starting. */
+    let firstFrameSeen = $state(false);
 
     async function tryNextSource() {
         clearTimeout(watchdog);
@@ -182,16 +187,12 @@
     function onMpvEvent(e: { kind: string; reason?: string }) {
         if (e.kind === 'playback-restart') {
             firstFrame = true;
+            firstFrameSeen = true;
             clearTimeout(watchdog);
         }
         if (e.kind === 'file-loaded') {
-            addAddonSubtitles();
             mpv.applyUpscaler(playerPrefs.upscaler);
-            // Once playback has settled, start filling seek-bar thumbnails.
-            const t = thumbs;
-            setTimeout(() => {
-                if (t === thumbs && mpv.duration) t?.warmUp(mpv.duration);
-            }, 4000);
+            scheduleThumbnails();
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
@@ -199,19 +200,51 @@
         }
     }
 
-    // Subtitles from addons (OpenSubtitles etc.) join the embedded ones.
-    async function addAddonSubtitles() {
-        if (subtitlesAdded || !model?.subtitles.length) return;
-        subtitlesAdded = true;
-        for (const s of model.subtitles.slice(0, 40)) {
-            if (!s.url) continue;
-            await mpv.command('sub-add', s.url, 'auto', s.label ?? langName(s.lang), s.lang).catch(() => {});
-        }
+    // Seek-bar thumbnails open a second connection and decode frames, so they wait
+    // until playback has settled: 30s in, with a healthy buffer ahead.
+    function scheduleThumbnails() {
+        const t = thumbs;
+        const check = async () => {
+            if (t !== thumbs || !t) return;
+            const ahead = Number(await mpv.get('demuxer-cache-duration').catch(() => 0)) || 0;
+            if (mpv.duration && firstFrame && mpv.time > 30 && ahead >= 45 && !mpv.buffering) t.warmUp(mpv.duration);
+            else setTimeout(check, 5000);
+        };
+        setTimeout(check, 30000);
     }
 
-    // Addon subtitles can arrive after the file loads.
+    // --- addon subtitles: listed in the menu, downloaded only when needed ------
+    // Loading dozens of subtitle files at start stalls playback (mpv fetches each
+    // one before continuing), so only your preferred language is added, once the
+    // video is running; the rest download when you pick them.
+    const addedSubs = new Map<string, true>();
+
+    async function addAddonSubtitle(s: { url?: string | null; lang: string; label?: string | null }, select: boolean) {
+        if (!s.url) return;
+        if (addedSubs.has(s.url)) {
+            const track = mpv.subTracks.find((t) => t.external && t.title === subtitleTitle(s));
+            if (select && track) await mpv.set('sid', track.id);
+            return;
+        }
+        addedSubs.set(s.url, true);
+        await mpv.command('sub-add', s.url, select ? 'select' : 'auto', subtitleTitle(s), s.lang).catch(() => addedSubs.delete(s.url!));
+    }
+
+    const subtitleTitle = (s: { lang: string; label?: string | null }) => s.label || langName(s.lang);
+
+    // Preferred subtitle language: if the file has none built in, add the first
+    // matching addon subtitle a few seconds after playback starts.
     $effect(() => {
-        if (mpv.loaded && model?.subtitles.length) addAddonSubtitles();
+        const pref = settings?.subtitlesLanguage as string | null | undefined;
+        if (!pref || !firstFrameSeen || !model?.subtitles.length || subtitlesAdded) return;
+        subtitlesAdded = true;
+        const subs = model.subtitles;
+        // Decide after a short delay, once mpv has reported the file's own tracks.
+        setTimeout(() => {
+            const builtIn = mpv.subTracks.some((t) => !t.external && sameLanguage(t.lang, pref));
+            const match = subs.find((s) => sameLanguage(s.lang, pref) && s.url);
+            if (!builtIn && match) addAddonSubtitle(match, mpv.sid === 'no');
+        }, 3000);
     });
 
     // --- report progress to Stremio (drives Continue Watching) --------------
@@ -320,6 +353,35 @@
                 onselect: () => mpv.set('sid', t.id),
             })),
         ];
+
+        // Addon subtitles not loaded yet, grouped by language (preferred language first).
+        const pending = (model?.subtitles ?? []).filter((s) => s.url && !addedSubs.has(s.url));
+        if (pending.length) {
+            const pref = settings?.subtitlesLanguage as string | null | undefined;
+            const byLang = new Map<string, typeof pending>();
+            for (const s of pending) byLang.set(s.lang, [...(byLang.get(s.lang) ?? []), s]);
+            const langs = [...byLang.keys()].sort((a, b) =>
+                a === pref ? -1 : b === pref ? 1 : langName(a).localeCompare(langName(b))
+            );
+            entries.push(
+                { separator: true },
+                {
+                    label: 'From Addons',
+                    submenu: langs.map((lang) => {
+                        const subs = byLang.get(lang)!;
+                        return subs.length === 1
+                            ? { label: langName(lang), onselect: () => addAddonSubtitle(subs[0], true) }
+                            : {
+                                  label: `${langName(lang)} (${subs.length})`,
+                                  submenu: subs.map((s, i) => ({
+                                      label: s.label || `${langName(lang)} ${i + 1}`,
+                                      onselect: () => addAddonSubtitle(s, true),
+                                  })),
+                              };
+                    }),
+                }
+            );
+        }
         menu.toggleFor(el, entries, 'end');
     }
 
