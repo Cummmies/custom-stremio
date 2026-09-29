@@ -273,6 +273,8 @@
             scheduleThumbnails();
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
+            // An addon's error clip ending isn't the episode ending.
+            if (mpv.duration != null && mpv.duration < ERROR_CLIP_MAX_S) return;
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
             // Unless you cancelled the countdown on the Up next card.
             if (settings?.bingeWatching && model?.nextVideo && !nextDismissed && !autoplayFired) playNext();
@@ -340,13 +342,31 @@
         }, 3000);
     });
 
+    // Addons answer a debrid failure with a short video of the error (Torrentio's
+    // orange "An unexpected error occurred, please try again later"). It plays
+    // fine, so nothing else notices. No movie or episode is that short.
+    const ERROR_CLIP_MAX_S = 90;
+    const errorClip = $derived(fileReady && !!mpv.duration && mpv.duration < ERROR_CLIP_MAX_S);
+    let errorClipHandled: string | null = null;
+    $effect(() => {
+        const key = `${videoId}|${params.get('stream')}`;
+        if (!errorClip || errorClipHandled === key) return;
+        errorClipHandled = key;
+        if (easyQueue.activeFor(videoId)) {
+            mpv.set('pause', true);
+            tryNextSource();
+        } else {
+            note('This looks like an error message from the addon, not the video. Try another source.', 8000);
+        }
+    });
+
     // No audio in your language in this file (e.g. an anime episode with no dub yet).
     // If Easy Mode picked it, try other cached sources that look like they have that
     // language (dual audio, dubs), and come back here if none does. Otherwise say so.
     let audioChecked: string | null = null;
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
-        if (!fileReady || audioChecked === key || !mpv.audioTracks.length) return;
+        if (!fileReady || !mpv.duration || errorClip || audioChecked === key || !mpv.audioTracks.length) return;
         audioChecked = key;
         const auto = easyQueue.activeFor(videoId);
         const pref = (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
@@ -386,7 +406,8 @@
 
     $effect(() => {
         const t = mpv.time;
-        if (!mpv.loaded || Math.abs(t - lastReported) < 1) return;
+        // Not while an addon's error clip plays: it would overwrite where you left off.
+        if (!mpv.loaded || !mpv.duration || mpv.duration < ERROR_CLIP_MAX_S || Math.abs(t - lastReported) < 1) return;
         lastReported = t;
         core.dispatch(
             {
