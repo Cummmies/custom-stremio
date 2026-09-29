@@ -123,7 +123,7 @@
                                             {#if rest.length}<span class="sub">{rest.join(' ')}</span>{/if}
                                             {#if badge}<span class="badge">{badge}</span>{/if}
                                         </div>
-                                        <p class="details">{details(stream)}</p>
+                                        <p class="details" title={details(stream)}>{details(stream)}</p>
                                         {#if stream.externalUrl}
                                             <button class="action" onclick={() => openExternal(stream.externalUrl!)}>
                                                 <Icon name="external" size={15} />

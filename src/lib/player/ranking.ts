@@ -49,7 +49,7 @@ const WORDS: [RegExp, string][] = [
     [/\b(hin|hindi)\b/i, 'hin'],
 ];
 
-const SUBS = /\b(?:eng(?:lish)?|multi(?:ple)?|softs?)[ ._-]*(?:sub(?:s|bed|titles?)?|srt)\b|\bsub(?:s|bed|titles?)?[ ._-]*(?:eng(?:lish)?)\b|\besubs?\b/gi;
+const SUBS = /\b(?:eng(?:lish)?|multi(?:ple)?|softs?)[ ._-]*(?:sub(?:s|bed|titles?)?|srt)\b|\bsub(?:s|bed|titles?)?[ ._-]*(?:eng(?:lish)?)\b|\be?subs?\b|\bm[ ._-]?subs\b/gi;
 const DUAL_AUDIO = /\bdual\b/i; // "Dual Audio", "Dual-Audio", "[DUAL]", ".DUAL."
 const ENGLISH_DUB = /\beng(?:lish)?[ ._-]*dub(?:bed)?\b|\bdub(?:bed)?[ ._-]*eng(?:lish)?\b/i;
 const DUBBED = /\bdub(?:bed|s)?\b/i;
@@ -104,10 +104,14 @@ export function parseStream(s: Stream): Parsed {
     const seed = text.match(/👤\s*(\d+)/) ?? text.match(/(\d+)\s*seed/i);
 
     const languages = new Set<string>();
-    for (const [flag, code] of Object.entries(FLAGS)) if (text.includes(flag)) languages.add(code);
     // Subtitle languages ("Eng Subs", "English Subtitles", "ESub") aren't audio: an
     // anime release "with English subs" is Japanese audio.
     const audioText = text.replace(SUBS, ' ');
+    // Torrentio's flag line lists every language in the torrent name, subtitles
+    // included, so when the name talks about subtitles the flags can't be trusted
+    // for audio ("(Multi-Subs)" + 🇬🇧 is Japanese audio with English subs).
+    const mentionsSubs = audioText !== text;
+    if (!mentionsSubs) for (const [flag, code] of Object.entries(FLAGS)) if (text.includes(flag)) languages.add(code);
     for (const [re, code] of WORDS) if (re.test(audioText)) languages.add(code);
     // Dubs: "Dual Audio" is the original plus English (anime: Japanese + English);
     // "English Dub" / "Dubbed" with no other language named is English too.
