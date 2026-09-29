@@ -4,16 +4,22 @@
     import Icon from '../Icon.svelte';
     import type { AddonDescriptor } from './AddonCard.svelte';
 
-    let { onclose }: { onclose: () => void } = $props();
+    let { onclose, initialUrl = '' }: { onclose: () => void; initialUrl?: string } = $props();
 
     let dialog = $state<HTMLDialogElement>();
-    let url = $state('');
+    // svelte-ignore state_referenced_locally
+    let url = $state(initialUrl);
     let error = $state('');
     let busy = $state(false);
     let found = $state<AddonDescriptor | null>(null);
 
     $effect(() => {
         dialog?.showModal();
+    });
+
+    // Opened from a link on an addon's website: look it up right away.
+    $effect(() => {
+        if (initialUrl) check();
     });
 
     function normalize(raw: string) {
@@ -23,9 +29,13 @@
         return u;
     }
 
-    async function lookUp(e: SubmitEvent) {
+    function lookUp(e: SubmitEvent) {
         e.preventDefault();
-        if (found) return install();
+        if (found) install();
+        else check();
+    }
+
+    async function check() {
         error = '';
         busy = true;
         try {

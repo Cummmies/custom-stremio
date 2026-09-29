@@ -38,6 +38,21 @@ class AppState {
         };
         sync();
         window.addEventListener('focus', sync);
+        this.#listenForAddonLinks();
+    }
+
+    /** A stremio://…/manifest.json link was opened: offer to install that addon. */
+    pendingAddonUrl = $state<string | null>(null);
+
+    async #listenForAddonLinks() {
+        if (!('__TAURI_INTERNALS__' in window)) return;
+        const { getCurrent, onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+        const handle = (urls: string[] | null) => {
+            const link = urls?.find((u) => /^stremio:\/\/.+manifest\.json/i.test(u));
+            if (link) this.pendingAddonUrl = link.replace(/^stremio:\/\//i, 'https://');
+        };
+        handle(await getCurrent().catch(() => null));
+        await onOpenUrl(handle);
     }
 
     inLibrary(id: string) {

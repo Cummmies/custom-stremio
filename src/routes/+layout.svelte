@@ -10,6 +10,7 @@
     import TopNav from '$lib/components/TopNav.svelte';
     import LoginDialog from '$lib/components/LoginDialog.svelte';
     import MenuHost from '$lib/components/menu/MenuHost.svelte';
+    import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
 
     let { children } = $props();
 
@@ -50,6 +51,10 @@
 <main>
     {@render children()}
 </main>
+
+{#if app.pendingAddonUrl}
+    <InstallFromUrl initialUrl={app.pendingAddonUrl} onclose={() => (app.pendingAddonUrl = null)} />
+{/if}
 
 {#if app.loginOpen}
     <LoginDialog onclose={() => (app.loginOpen = false)} />

@@ -16,6 +16,15 @@ fn server_status(server: tauri::State<'_, Arc<StreamingServer>>) -> ServerStatus
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be first: a second launch (e.g. from a stremio:// link) hands its
+        // arguments to the running app instead of opening another window.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                w.unminimize().ok();
+                w.set_focus().ok();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::new(StreamingServer::new()))
         .manage(Player::default())

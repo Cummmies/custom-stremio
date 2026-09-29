@@ -5,8 +5,28 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
+    import { inTauri } from '$lib/player/mpv.svelte';
+    import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
+
+    // stremio:// link handling (registered per user in Windows, not synced).
+    let handlesLinks = $state(false);
+    $effect(() => {
+        if (!inTauri) return;
+        import('@tauri-apps/plugin-deep-link').then(async ({ isRegistered }) => {
+            handlesLinks = await isRegistered('stremio').catch(() => false);
+        });
+    });
+    async function setLinkHandling(on: boolean) {
+        const { register, unregister } = await import('@tauri-apps/plugin-deep-link');
+        try {
+            await (on ? register('stremio') : unregister('stremio'));
+            handlesLinks = on;
+        } catch {
+            handlesLinks = !on;
+        }
+    }
 
     // Settings live in the Stremio profile, so they sync with the official apps.
     function update(patch: Partial<Settings>) {
@@ -112,6 +132,59 @@
                 </div>
             </div>
         </section>
+
+        <section>
+            <h2>Video</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">Upscaling</div>
+                        <div class="sub">
+                            Sharpens video that’s smaller than your screen. RTX Video Super Resolution needs an
+                            NVIDIA RTX card and uses its AI upscaler.
+                        </div>
+                    </div>
+                    <PopupButton
+                        label="Upscaling"
+                        value={playerPrefs.upscaler}
+                        options={(Object.keys(upscalerLabels) as Upscaler[]).map((u) => ({ value: u, label: upscalerLabels[u] }))}
+                        onchange={(v) => (playerPrefs.upscaler = v)}
+                    />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">HDR passthrough</div>
+                        <div class="sub">Sends HDR to your display when Windows HDR is on. Otherwise HDR is tone-mapped to look right on SDR.</div>
+                    </div>
+                    <Toggle label="HDR passthrough" checked={playerPrefs.hdrPassthrough} onchange={(v) => (playerPrefs.hdrPassthrough = v)} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Audio passthrough (Dolby Atmos, DTS)</div>
+                        <div class="sub">For a receiver or soundbar over HDMI. Leave off for headphones and PC speakers.</div>
+                    </div>
+                    <Toggle label="Audio passthrough" checked={playerPrefs.audioPassthrough} onchange={(v) => (playerPrefs.audioPassthrough = v)} />
+                </div>
+            </div>
+        </section>
+
+        {#if inTauri}
+            <section>
+                <h2>Integrations</h2>
+                <div class="group">
+                    <div class="row">
+                        <div>
+                            <div class="title">Open addon install links in this app</div>
+                            <div class="sub">
+                                Makes “Install” buttons on addon websites open here. Windows lets only one app handle
+                                these links, so this takes them over from the official Stremio app.
+                            </div>
+                        </div>
+                        <Toggle label="Open addon install links in this app" checked={handlesLinks} onchange={setLinkHandling} />
+                    </div>
+                </div>
+            </section>
+        {/if}
 
         <section>
             <h2>Streaming Server</h2>
