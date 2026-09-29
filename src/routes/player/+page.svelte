@@ -11,6 +11,8 @@
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue } from '$lib/player/easy';
+    import { parseStream } from '$lib/player/ranking';
+    import type { Stream } from '$lib/core/types';
     import { sameLanguage } from '$lib/player/lang';
     import { fromChapters, lookupSegments, skipLabel, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
@@ -100,6 +102,7 @@
 
         const stream = await core.decodeStream(encoded).catch(() => null);
         if (!stream) return (startError = 'This stream link is broken.');
+        playingStream = stream;
 
         const st = params.get('st');
         const mt = params.get('mt');
@@ -149,6 +152,7 @@
     let switching = $state<string | null>(null);
     /** Reactive twin of firstFrame, for effects that wait on playback starting. */
     let firstFrameSeen = $state(false);
+    let playingStream: Stream | null = null;
 
     async function tryNextSource() {
         clearTimeout(watchdog);
@@ -370,6 +374,9 @@
             return note(null);
         }
         if (currentSegment) return skip(currentSegment);
+        // Known timings beat guessing: an intro or recap coming up next skips straight past it.
+        const upcoming = segments.find((s) => (s.kind === 'intro' || s.kind === 'recap') && s.start > mpv.time);
+        if (upcoming) return skip(upcoming);
         silenceSearching = true;
         note('Looking for the end of the intro… Press Tab to cancel', 60000);
         startSilenceSkip((at) => {
@@ -395,11 +402,16 @@
             await goto(playerHref(link), { replaceState: true });
             return begin();
         }
-        // No remembered source for the next episode: Easy Mode picks one, otherwise you do.
+        // Stremio found no source for the next episode in the same "binge group" as this one
+        // (many addons don't tag them). Like Stremio, don't make you choose again: pick the
+        // best source, preferring the addon and quality you were just watching.
         if (type && id) {
-            const params: Record<string, string> = { video: next.id };
-            if (playerPrefs.easyMode) params.auto = '1';
-            goto(titleHref(type, id, params), { replaceState: true });
+            const q: Record<string, string> = { video: next.id, auto: '1' };
+            const st = params.get('st');
+            if (st) q.likeAddon = st;
+            const res = playingStream ? parseStream(playingStream).resolution : null;
+            if (res) q.likeRes = String(res);
+            goto(titleHref(type, id, q), { replaceState: true });
         }
     }
 

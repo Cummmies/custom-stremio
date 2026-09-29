@@ -129,7 +129,7 @@ export type MetaItem = MetaItemPreview & {
     watched: boolean;
 };
 
-export type Addon = { manifest: { id: string; name: string; logo?: string | null } };
+export type Addon = { transportUrl?: string; manifest: { id: string; name: string; logo?: string | null } };
 
 export type MetaDetails = {
     metaItem: { addon: Addon; content: Loadable<MetaItem> } | null;
