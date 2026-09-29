@@ -9,6 +9,8 @@
     "deep-link:default",
     "deep-link:allow-register",
     "deep-link:allow-unregister",
-    "deep-link:allow-is-registered"
+    "deep-link:allow-is-registered",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

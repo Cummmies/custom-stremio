@@ -6,6 +6,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
+    import { updates } from '$lib/updates.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
@@ -222,7 +223,38 @@
         </div>
     </section>
 
-    <p class="about">Custom Stremio 0.1.0 · stremio-core-web 0.63.2</p>
+    {#if updates.supported}
+        <section>
+            <h2>Updates</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">
+                            {#if updates.phase === 'ready'}Version {updates.version} is ready
+                            {:else if updates.phase === 'downloading'}Downloading version {updates.version}…{#if updates.progress != null} {Math.round(updates.progress * 100)}%{/if}
+                            {:else if updates.phase === 'checking'}Checking for updates…
+                            {:else if updates.phase === 'up-to-date'}You’re up to date
+                            {:else if updates.phase === 'error'}Couldn’t check for updates
+                            {:else}Automatic updates{/if}
+                        </div>
+                        <div class="sub">
+                            {#if updates.phase === 'error'}Check your connection and try again.
+                            {:else}Updates download in the background and install when you restart.{/if}
+                        </div>
+                    </div>
+                    {#if updates.phase === 'ready'}
+                        <button class="btn primary" onclick={() => updates.restartToUpdate()}>Restart to Update</button>
+                    {:else}
+                        <button class="btn" disabled={updates.phase === 'checking' || updates.phase === 'downloading'} onclick={() => updates.check()}>
+                            Check for Updates
+                        </button>
+                    {/if}
+                </div>
+            </div>
+        </section>
+    {/if}
+
+    <p class="about">Custom Stremio {updates.current ?? '0.1.0'} · stremio-core-web 0.63.2</p>
 </div>
 
 <style>

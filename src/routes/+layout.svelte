@@ -11,6 +11,8 @@
     import LoginDialog from '$lib/components/LoginDialog.svelte';
     import MenuHost from '$lib/components/menu/MenuHost.svelte';
     import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
+    import UpdateToast from '$lib/components/UpdateToast.svelte';
+    import { updates } from '$lib/updates.svelte';
 
     let { children } = $props();
 
@@ -22,6 +24,8 @@
         app.start();
         // A reload skips the player's cleanup; make sure no video keeps playing unseen.
         if (!inPlayer && inTauri) invoke('mpv_stop').catch(() => {});
+        // Release builds look for updates shortly after launch.
+        if (import.meta.env.PROD) setTimeout(() => updates.check({ quiet: true }), 8000);
         return installContextMenu();
     });
 
@@ -58,6 +62,10 @@
 
 {#if app.loginOpen}
     <LoginDialog onclose={() => (app.loginOpen = false)} />
+{/if}
+
+{#if !inPlayer}
+    <UpdateToast />
 {/if}
 
 <MenuHost />

@@ -17,7 +17,9 @@
     "@stremio/stremio-core-web": "^0.63.2",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.5.0",
-    "@tauri-apps/plugin-opener": "^2"
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

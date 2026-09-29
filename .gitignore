@@ -15,3 +15,4 @@ src-tauri/server/*
 
 # libmpv for bundling (copy libmpv-2.dll here; not committed)
 src-tauri/lib/*
+!src-tauri/lib/README.md

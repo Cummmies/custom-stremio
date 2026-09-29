@@ -37,13 +37,24 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "server/*"
-    ]
+      "server/*",
+      "lib/*"
+    ],
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "deep-link": {
       "desktop": {
         "schemes": []
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE1OEEyQjBFQ0Q5QTk1NTcKUldSWGxack5EaXVLcGVCejA3L3RCd2I3bDV3Z2xPTFdMeWFQTm5Xbk4vNnFWTWJSaVFvWlorV2oK",
+      "endpoints": [
+        "https://github.com/Cummmies/custom-stremio/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }
