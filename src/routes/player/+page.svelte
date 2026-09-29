@@ -332,9 +332,9 @@
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
     const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);
 
-    // The Skip button shows for 5s when a section starts, then gets out of the way
+    // The Skip button shows for 10s when a section starts, then gets out of the way
     // (it comes back while the controls are up, and Tab works throughout).
-    const SKIP_PROMPT_MS = 5000;
+    const SKIP_PROMPT_MS = 10000;
     const segmentKey = $derived(currentSegment ? `${currentSegment.kind}:${currentSegment.start}` : null);
     let skipPromptExpired = $state<string | null>(null);
     $effect(() => {
@@ -650,8 +650,6 @@
     {#if currentSegment && (skipPrompting || controlsVisible) && !(currentSegment.kind === 'credits' && showNext) && !silenceSearching}
         <button
             class="skip"
-            class:counting={skipPrompting}
-            style:--skip-ms={`${SKIP_PROMPT_MS}ms`}
             onclick={() => skip(currentSegment!)}
             title={`${skipLabel[currentSegment.kind]} (Tab)`}
             out:fade={{ duration: 200 }}
@@ -915,7 +913,7 @@
         gap: 8px;
         height: 44px;
         padding: 0 18px 0 22px;
-        border: 1px solid rgb(255 255 255 / 0.5);
+        border: none;
         border-radius: 999px;
         background: rgb(20 20 26 / 0.72);
         backdrop-filter: blur(16px);
@@ -933,30 +931,6 @@
     .skip:hover {
         background: white;
         color: black;
-    }
-    /* A thin line that drains while the button is offered, so its leaving isn't a surprise. */
-    .skip {
-        overflow: hidden;
-    }
-    .skip.counting::after {
-        content: '';
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        height: 3px;
-        background: rgb(255 255 255 / 0.85);
-        transform-origin: left;
-        animation: skip-drain var(--skip-ms) linear forwards;
-        pointer-events: none;
-    }
-    .skip.counting:hover::after {
-        background: rgb(0 0 0 / 0.35);
-    }
-    @keyframes skip-drain {
-        to {
-            transform: scaleX(0);
-        }
     }
     .hidden .skip {
         bottom: 40px;
