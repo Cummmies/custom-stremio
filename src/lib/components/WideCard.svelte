@@ -1,7 +1,7 @@
 <script lang="ts">
     // Continue Watching card: 16:9 artwork, progress, and where you are.
     import type { LibraryItem } from '$lib/core/types';
-    import { episodeLabel } from '$lib/library';
+    import { episodeLabel, libraryItemPreview } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
@@ -28,7 +28,7 @@
 <a
     class="card"
     {href}
-    use:titleContext={{ type: item.type, id: item._id, name: item.name }}
+    use:titleContext={{ type: item.type, id: item._id, name: item.name, preview: libraryItemPreview(item) }}
     onkeydown={arrowNav}
     aria-label={[item.name, detail].filter(Boolean).join(', ')}>
     <div class="art" class:loaded>

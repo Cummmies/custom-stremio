@@ -12,6 +12,29 @@ export function libraryToPoster(item: LibraryItem): PosterItem {
     };
 }
 
+/**
+ * A minimal meta preview from a library entry, enough for "Add to Library"
+ * (Continue Watching items can be watch-history-only, not saved to the library).
+ */
+export function libraryItemPreview(item: LibraryItem) {
+    return {
+        id: item._id,
+        type: item.type,
+        name: item.name,
+        poster: item.poster,
+        posterShape: item.posterShape ?? 'poster',
+        background: null,
+        logo: null,
+        description: null,
+        releaseInfo: null,
+        runtime: null,
+        released: null,
+        links: [],
+        trailerStreams: [],
+        behaviorHints: {},
+    };
+}
+
 /** "S2 · E4" for a series' resume episode, from a video id like "tt0903747:2:4". */
 export function episodeLabel(item: LibraryItem): string | null {
     const parts = cleanVideoId(item.state?.videoId)?.split(':');
