@@ -434,10 +434,17 @@
                     <Icon name={mpv.paused ? 'play' : 'pause'} size={24} filled={mpv.paused} />
                 </button>
                 {#if !pip}
-                    <button class="icon" onclick={() => mpv.seekBy(-seekStep)} aria-label={`Back ${seekStep} seconds`} title="Back (←)"><Icon name="replay10" size={21} /></button>
-                    <button class="icon" onclick={() => mpv.seekBy(seekStep)} aria-label={`Forward ${seekStep} seconds`} title="Forward (→)"><Icon name="forward10" size={21} /></button>
-                    {#if model?.nextVideo}
-                        <button class="icon" onclick={playNext} aria-label="Next episode" title="Next Episode (N)"><Icon name="next" size={20} /></button>
+                    <!-- Skipping by seconds lives on ←/→; the bar keeps the episode control. -->
+                    {#if type === 'series'}
+                        <button
+                            class="icon"
+                            onclick={playNext}
+                            disabled={!model?.nextVideo}
+                            aria-label="Next episode"
+                            title={model?.nextVideo ? 'Next Episode (N)' : 'No next episode'}
+                        >
+                            <Icon name="next" size={20} />
+                        </button>
                     {/if}
                     <div class="volume">
                         <button class="icon" onclick={() => mpv.set('mute', !mpv.muted)} aria-label={mpv.muted ? 'Unmute' : 'Mute'} title="Mute (M)">
@@ -593,8 +600,12 @@
         cursor: pointer;
         transition: background var(--fast);
     }
-    .icon:hover {
+    .icon:hover:not(:disabled) {
         background: rgb(255 255 255 / 0.14);
+    }
+    .icon:disabled {
+        opacity: 0.35;
+        cursor: default;
     }
     .icon.big {
         width: 46px;

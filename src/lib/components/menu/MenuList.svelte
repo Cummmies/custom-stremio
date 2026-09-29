@@ -42,7 +42,9 @@
         if (!el) return;
         // Top layer, so menus also appear above open dialogs (which live there too).
         el.showPopover?.();
-        const { width, height } = el.getBoundingClientRect();
+        // Layout size, unaffected by the opening scale animation.
+        const width = el.offsetWidth;
+        const height = el.offsetHeight;
         const vw = innerWidth;
         const vh = innerHeight;
         const pad = 8;
@@ -189,6 +191,8 @@
 {#if sub}
     {@const parent = entries[sub.index]}
     {#if isAction(parent) && parent.submenu}
+        <!-- Keyed so each submenu mounts fresh and measures/positions itself. -->
+        {#key sub.index}
         <MenuList
             entries={parent.submenu}
             x={sub.x}
@@ -202,6 +206,7 @@
                 el?.querySelector<HTMLElement>(`[data-index="${idx}"]`)?.focus();
             }}
         />
+        {/key}
     {/if}
 {/if}
 

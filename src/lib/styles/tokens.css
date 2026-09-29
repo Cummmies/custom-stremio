@@ -102,10 +102,13 @@ input {
     color: white;
 }
 
-/* Thin, quiet scrollbars */
+/* No visible scrollbars anywhere (wheel, touchpad, keyboard and drag still scroll).
+   Because they take no space, nothing shifts when a page starts or stops scrolling. */
 * {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+    scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+    display: none;
 }
 
 .sr-only {

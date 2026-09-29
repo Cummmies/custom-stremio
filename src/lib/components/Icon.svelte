@@ -1,5 +1,20 @@
 <script lang="ts" module>
     // One icon language: 24px grid, 1.75 stroke, round caps. Weight matches 14px text.
+
+    /** A gear built from geometry so it's perfectly centered on (12, 12). */
+    function gearPath() {
+        const teeth = 8;
+        const [outer, inner, hub] = [10, 7.4, 3];
+        const step = (Math.PI * 2) / teeth;
+        const pt = (r: number, a: number) => `${(12 + r * Math.cos(a)).toFixed(2)} ${(12 + r * Math.sin(a)).toFixed(2)}`;
+        let d = '';
+        for (let i = 0; i < teeth; i++) {
+            const c = i * step - Math.PI / 2;
+            d += `${i ? 'L' : 'M'}${pt(inner, c - step * 0.34)}L${pt(outer, c - step * 0.2)}L${pt(outer, c + step * 0.2)}L${pt(inner, c + step * 0.34)}`;
+        }
+        return `${d}Z M${12 + hub} 12a${hub} ${hub} 0 1 1-${hub * 2} 0a${hub} ${hub} 0 1 1 ${hub * 2} 0z`;
+    }
+
     const paths = {
         home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
         search: 'M11 4a7 7 0 1 1 0 14 7 7 0 0 1 0-14zM20 20l-4-4',
@@ -18,7 +33,7 @@
         link: 'M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1',
         external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
         puzzle: 'M10 4.5a2 2 0 0 1 4 0V6h4a1 1 0 0 1 1 1v4h-1.5a2 2 0 0 0 0 4H19v4a1 1 0 0 1-1 1h-4v-1.5a2 2 0 0 0-4 0V20H6a1 1 0 0 1-1-1v-4h1.5a2 2 0 0 0 0-4H5V7a1 1 0 0 1 1-1h4z',
-        gear: 'M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.5 7.5 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.5 7.5 0 0 0-1.7 1l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9a7.5 7.5 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 1.7-1l2.3.9 2-3.4z',
+        gear: gearPath(),
         users: 'M9 4a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zM2.5 20c1-3.2 3.6-5 6.5-5s5.5 1.8 6.5 5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 15.2c1.7.7 2.9 2.4 3.5 4.8',
         logout: 'M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3M10 16l-4-4 4-4M6 12h10',
         trash: 'M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13',
@@ -31,8 +46,6 @@
         pip: 'M3 5h18v14H3zM12.5 12h6v5h-6z',
         fullscreen: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
         exitFullscreen: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
-        replay10: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9M4.5 4.5V9H9',
-        forward10: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3L19.5 9M19.5 4.5V9H15',
         next: 'M6 5.5v13l9.5-6.5zM18 5v14',
         close: 'M6 6l12 12M18 6 6 18',
     } as const;
