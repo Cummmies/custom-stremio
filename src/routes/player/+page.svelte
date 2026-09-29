@@ -25,7 +25,7 @@
     import { parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
-    import { fromChapters, lookupSegments, skipLabel, type Segment } from '$lib/player/skips';
+    import { chaptersFromSegments, fromChapters, lookupSegments, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
     import { fmtTime } from '$lib/player/format';
@@ -507,6 +507,25 @@
         if (import.meta.env.DEV) console.info('[skip] segments', { id, season, episode, duration, found });
         if (forVideo === videoId) segments = found;
     }
+
+    // Chapter marks on the seek bar: the file's own chapters, or else the known
+    // intro / recap / credits sections.
+    let fileChapters = $state<Chapter[]>([]);
+    let chaptersFor: string | null = null;
+    $effect(() => {
+        const key = `${videoId}|${params.get('stream')}`;
+        if (!fileReady || chaptersFor === key) return;
+        chaptersFor = key;
+        fileChapters = [];
+        mpv.get('chapter-list')
+            .then((json) => {
+                if (chaptersFor === key) fileChapters = parseChapters(json as string | null);
+            })
+            .catch(() => {});
+    });
+    const seekChapters = $derived(
+        fileChapters.length >= 2 ? fileChapters : mpv.duration ? chaptersFromSegments(segments, mpv.duration) : []
+    );
 
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
     const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);
@@ -999,7 +1018,7 @@
     {/if}
 
     <footer class="bottom">
-        <SeekBar time={mpv.time} duration={mpv.duration} buffered={mpv.cacheTime} onseek={(s) => mpv.seek(s)}>
+        <SeekBar time={mpv.time} duration={mpv.duration} buffered={mpv.cacheTime} chapters={seekChapters} onseek={(s) => mpv.seek(s)}>
             {#snippet preview(t: number)}
                 {#if thumbs && !pip}<SeekPreview {thumbs} time={t} />{/if}
             {/snippet}

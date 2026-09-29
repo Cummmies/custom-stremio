@@ -72,6 +72,33 @@ const CHAPTER_KINDS: [RegExp, SkipKind][] = [
     [/\b(preview|next episode|next time)\b/i, 'preview'],
 ];
 
+/** A chapter mark for the seek bar. */
+export type Chapter = { time: number; title: string };
+
+/** The file's chapters (mpv's `chapter-list` property JSON), in order. */
+export function parseChapters(chapterListJson: string | null): Chapter[] {
+    try {
+        const list: { title?: string; time: number }[] = chapterListJson ? JSON.parse(chapterListJson) : [];
+        return list
+            .filter((c) => Number.isFinite(c.time))
+            .map((c) => ({ time: c.time, title: (c.title ?? '').trim() }))
+            .sort((a, b) => a.time - b.time);
+    } catch {
+        return [];
+    }
+}
+
+/** Seek-bar marks from known sections, for files without chapters of their own. */
+export function chaptersFromSegments(segments: Segment[], duration: number): Chapter[] {
+    const name: Record<SkipKind, string> = { intro: 'Intro', recap: 'Recap', credits: 'Credits', preview: 'Preview' };
+    const out: Chapter[] = [];
+    for (const s of [...segments].sort((a, b) => a.start - b.start)) {
+        out.push({ time: s.start, title: name[s.kind] });
+        if (s.end < duration - 1) out.push({ time: s.end, title: '' });
+    }
+    return out;
+}
+
 /** Segments from the file's chapter list (mpv's `chapter-list` property JSON). */
 export function fromChapters(chapterListJson: string | null, duration: number): Segment[] {
     let chapters: { title?: string; time: number }[] = [];

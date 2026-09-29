@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { Snippet } from 'svelte';
     import { fmtTime } from './format';
+    import type { Chapter } from './skips';
 
     let {
         time,
@@ -8,6 +9,7 @@
         buffered,
         onseek,
         preview,
+        chapters = [],
     }: {
         time: number;
         duration: number | null;
@@ -15,6 +17,8 @@
         onseek: (seconds: number) => void;
         /** Rendered above the hover position (e.g. a thumbnail). */
         preview?: Snippet<[number]>;
+        /** Chapter starts: drawn as gaps in the bar, named in the hover tip. */
+        chapters?: Chapter[];
     } = $props();
 
     let bar = $state<HTMLElement>();
@@ -27,6 +31,15 @@
     const hoverTime = $derived(hoverX != null && d && bar ? (hoverX / bar.clientWidth) * d : null);
 
     const fmt = fmtTime;
+
+    // Marks inside the bar (not at the very start or end), and the chapter under the pointer.
+    const marks = $derived(d ? chapters.filter((c) => c.time > 0.5 && c.time < d - 0.5) : []);
+    const hoverChapter = $derived.by(() => {
+        if (hoverTime == null || !chapters.length) return null;
+        let title: string | null = null;
+        for (const c of chapters) if (c.time <= hoverTime) title = c.title || null;
+        return title;
+    });
 
     function timeAt(clientX: number) {
         if (!bar || !d) return 0;
@@ -84,13 +97,14 @@
         {/if}
         <div class="played" style:width="{pct(shown)}%"></div>
         {#if hoverX != null && d}<div class="hover-line" style:left="{hoverX}px"></div>{/if}
+        {#each marks as m (m.time)}<div class="mark" style:left="{pct(m.time)}%"></div>{/each}
     </div>
     <div class="thumb" style:left="{pct(shown)}%"></div>
 
     {#if hoverTime != null}
         <div class="tip" style:left="{hoverX}px">
             {#if preview}{@render preview(hoverTime)}{/if}
-            <span class="tip-time">{fmt(hoverTime)}</span>
+            <span class="tip-time">{#if hoverChapter}<span class="tip-chapter">{hoverChapter}</span>{/if}{fmt(hoverTime)}</span>
         </div>
     {/if}
 </div>
@@ -138,6 +152,15 @@
         margin-left: -1px;
         background: rgb(255 255 255 / 0.5);
     }
+    /* A chapter start: a small gap cut into the bar. */
+    .mark {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        margin-left: -1.5px;
+        background: rgb(0 0 0 / 0.75);
+    }
     .thumb {
         position: absolute;
         width: 14px;
@@ -169,7 +192,13 @@
         gap: 6px;
         pointer-events: none;
     }
+    .tip-chapter {
+        margin-right: 6px;
+        color: rgb(255 255 255 / 0.7);
+        font-weight: 500;
+    }
     .tip-time {
+        white-space: nowrap;
         padding: 3px 8px;
         border-radius: 6px;
         background: rgb(20 20 26 / 0.9);
