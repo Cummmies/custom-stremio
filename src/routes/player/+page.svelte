@@ -110,7 +110,8 @@
         if (!inTauri) return (startError = 'Playback runs in the desktop app.');
 
         thumbs?.close();
-        thumbs = new Thumbnails(url);
+        // Background thumbnail work steps aside whenever the main video is buffering.
+        thumbs = new Thumbnails(url, () => mpv.buffering || !mpv.loaded);
         try {
             await mpv.start(buildOptions(settings ?? {}));
             await mpv.load(url, await resumeFrom());
@@ -135,6 +136,11 @@
         if (e.kind === 'file-loaded') {
             addAddonSubtitles();
             mpv.applyUpscaler(playerPrefs.upscaler);
+            // Once playback has settled, start filling seek-bar thumbnails.
+            const t = thumbs;
+            setTimeout(() => {
+                if (t === thumbs && mpv.duration) t?.warmUp(mpv.duration);
+            }, 4000);
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');

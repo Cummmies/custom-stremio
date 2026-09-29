@@ -473,6 +473,8 @@ impl Thumb {
             // A small cache so hovering back over a spot doesn't refetch it.
             ("cache", "yes"),
             ("demuxer-readahead-secs", "0"),
+            // Don't sit waiting to build a buffer after each seek; one frame is all we need.
+            ("cache-pause", "no"),
             ("demuxer-max-bytes", "48MiB"),
             ("demuxer-max-back-bytes", "48MiB"),
             ("vd-lavc-skiploopfilter", "all"),

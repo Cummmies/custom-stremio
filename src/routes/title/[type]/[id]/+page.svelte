@@ -174,6 +174,8 @@
         <div class="scrim"></div>
     </div>
 
+    <!-- The page fits the window; only the episode list (and details) scroll. -->
+    <div class="screen">
     <header class="hero">
         <button class="back" onclick={back} aria-label="Back" title="Back">
             <Icon name="back" size={20} />
@@ -283,9 +285,10 @@
                 </section>
             {/if}
 
-            <DetailsPanel {meta} />
+            <div class="side"><DetailsPanel {meta} /></div>
         </div>
     {/if}
+    </div>
 {/if}
 
 {#if sheetOpen && meta && details}
@@ -326,13 +329,22 @@
             linear-gradient(to top, var(--bg) 6%, rgb(13 13 18 / 0.6) 42%, transparent 72%),
             linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 20%);
     }
+    /* Window-height layout: header on top, body takes the rest. Very short
+       windows get a sensible minimum instead of a squashed list. */
+    .screen {
+        position: relative;
+        height: 100vh;
+        min-height: 620px;
+        display: flex;
+        flex-direction: column;
+    }
     .hero {
         position: relative;
-        min-height: min(72vh, 640px);
+        flex: none;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
-        padding: calc(var(--nav-h) + 16px) var(--gutter) 36px;
+        padding: calc(var(--nav-h) + clamp(48px, 7vh, 96px)) var(--gutter) clamp(16px, 3vh, 28px);
     }
     .back {
         position: absolute;
@@ -367,10 +379,11 @@
     .logo {
         display: block;
         max-width: min(440px, 80%);
-        max-height: 150px;
+        /* Shrinks on shorter windows so the episode list keeps its room. */
+        max-height: clamp(64px, 14vh, 150px);
         object-fit: contain;
         object-position: left bottom;
-        margin-bottom: 18px;
+        margin-bottom: clamp(10px, 2vh, 18px);
         filter: drop-shadow(0 4px 20px rgb(0 0 0 / 0.55));
     }
     h1 {
@@ -490,18 +503,35 @@
     }
     .body {
         position: relative;
+        flex: 1;
+        min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr) 340px;
+        grid-template-rows: minmax(0, 1fr);
         gap: 40px;
-        align-items: start;
-        padding: 8px var(--gutter) 64px;
+        padding: 0 var(--gutter);
     }
     .body.single {
         grid-template-columns: minmax(0, 720px);
     }
+    /* Each column fills the remaining height and scrolls inside itself. */
+    .main {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    .side {
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-bottom: 24px;
+    }
     @media (max-width: 1000px) {
         .body {
             grid-template-columns: minmax(0, 1fr);
+        }
+        .side {
+            display: none;
         }
     }
     .tabs {
@@ -545,7 +575,12 @@
     .extras {
         list-style: none;
         margin: 0;
-        padding: 0;
+        padding: 0 0 24px;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        align-content: start;
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 16px;

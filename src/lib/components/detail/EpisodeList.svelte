@@ -72,7 +72,15 @@
             <button class="main" onclick={() => onselect(ep)} disabled={ep.upcoming} aria-label={`Episode ${ep.episode}: ${ep.title}${ep.watched ? ', watched' : ''}`}>
                 <div class="thumb">
                     {#if ep.thumbnail}
-                        <img src={ep.thumbnail} alt="" loading="lazy" decoding="async" width="176" height="99" />
+                        <img
+                            src={ep.thumbnail}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            width="176"
+                            height="99"
+                            onerror={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = 'hidden')}
+                        />
                     {/if}
                     {#if !ep.upcoming}<span class="play-hint" aria-hidden="true"><Icon name="play" size={18} filled /></span>{/if}
                     {#if progress > 0 && !ep.watched}
@@ -129,7 +137,9 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        max-height: calc(100vh - var(--nav-h) - 96px);
+        /* Fills whatever height the page layout leaves, down to the window's bottom edge. */
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
         overscroll-behavior: contain;
         --fade-top: 0px;
