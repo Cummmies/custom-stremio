@@ -1,5 +1,6 @@
 <script lang="ts">
     import { core } from '$lib/core';
+    import Icon from './Icon.svelte';
 
     let { onclose }: { onclose: () => void } = $props();
 
@@ -7,12 +8,18 @@
     let password = $state('');
     let error = $state('');
     let busy = $state(false);
+    let dialog = $state<HTMLDialogElement>();
+
+    // Native <dialog> gives focus trapping, Escape to close and a top layer for free.
+    $effect(() => {
+        dialog?.showModal();
+    });
 
     $effect(() =>
         core.onEvent((event, args) => {
             if (event === 'UserAuthenticated') onclose();
             if (event === 'Error' && args?.source?.event === 'UserAuthenticated') {
-                error = args.error?.message ?? 'Login failed';
+                error = args.error?.message ?? 'Couldn’t log in. Check your email and password.';
                 busy = false;
             }
         })
@@ -26,72 +33,152 @@
     }
 </script>
 
-<div class="backdrop" role="presentation" onclick={(e) => e.target === e.currentTarget && onclose()}>
-    <form class="dialog" onsubmit={submit}>
-        <h2>Log in to Stremio</h2>
-        <p class="hint">Your library, addons and watch progress sync with the official apps.</p>
-        <input type="email" placeholder="Email" autocomplete="email" bind:value={email} required />
-        <input type="password" placeholder="Password" autocomplete="current-password" bind:value={password} required />
-        {#if error}<p class="error">{error}</p>{/if}
-        <button type="submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
+<dialog
+    bind:this={dialog}
+    aria-labelledby="login-title"
+    onclose={onclose}
+    onclick={(e) => e.target === dialog && dialog?.close()}
+>
+    <form onsubmit={submit}>
+        <button type="button" class="close" onclick={() => dialog?.close()} aria-label="Close">
+            <Icon name="close" size={16} />
+        </button>
+        <h2 id="login-title">Log In to Stremio</h2>
+        <p class="hint">Your library, addons and watch progress stay in sync with your other Stremio apps.</p>
+
+        <label>
+            <span>Email</span>
+            <input type="email" autocomplete="email" bind:value={email} required disabled={busy} />
+        </label>
+        <label>
+            <span>Password</span>
+            <input type="password" autocomplete="current-password" bind:value={password} required disabled={busy} />
+        </label>
+
+        {#if error}<p class="error" role="alert">{error}</p>{/if}
+
+        <div class="actions">
+            <button type="button" class="secondary" onclick={() => dialog?.close()}>Cancel</button>
+            <button type="submit" class="primary" disabled={busy || !email || !password}>
+                {busy ? 'Logging In…' : 'Log In'}
+            </button>
+        </div>
     </form>
-</div>
+</dialog>
 
 <style>
-    .backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgb(0 0 0 / 0.6);
-        display: grid;
-        place-items: center;
-        z-index: 10;
+    dialog {
+        width: min(400px, calc(100vw - 32px));
+        padding: 0;
+        border: 1px solid var(--separator);
+        border-radius: var(--radius-l);
+        background: var(--elevated-2);
+        color: var(--label);
+        box-shadow: 0 24px 64px rgb(0 0 0 / 0.6);
     }
-    .dialog {
-        width: min(380px, calc(100vw - 32px));
-        background: var(--surface-2);
-        border-radius: 16px;
-        padding: 28px;
+    dialog[open] {
+        animation: rise var(--slow) var(--ease);
+    }
+    dialog::backdrop {
+        background: rgb(0 0 0 / 0.55);
+    }
+    @keyframes rise {
+        from {
+            opacity: 0;
+            transform: translateY(8px) scale(0.98);
+        }
+    }
+    form {
+        position: relative;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 14px;
+        padding: 28px;
+    }
+    .close {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--fill);
+        color: var(--label-2);
+        cursor: pointer;
+    }
+    .close:hover {
+        background: var(--fill-hover);
+        color: var(--label);
     }
     h2 {
         margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-title2);
+        font-weight: 600;
     }
     .hint {
-        margin: 0 0 8px;
-        color: var(--text-dim);
-        font-size: 0.9rem;
+        margin: -4px 0 6px;
+        color: var(--label-2);
+    }
+    label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--label-2);
     }
     input {
-        background: var(--surface);
-        border: 1px solid transparent;
-        border-radius: 10px;
-        padding: 12px 14px;
-        color: var(--text);
-        font: inherit;
+        height: 40px;
+        padding: 0 12px;
+        border-radius: var(--radius);
+        border: 1px solid var(--separator);
+        background: var(--bg);
+        color: var(--label);
+        font-size: var(--text-body);
     }
     input:focus {
         outline: none;
-        border-color: var(--accent);
+        border-color: var(--accent-hover);
+        box-shadow: 0 0 0 3px rgb(109 74 240 / 0.35);
     }
-    button {
-        margin-top: 4px;
-        padding: 12px;
+    .error {
+        margin: 0;
+        color: var(--bad);
+        font-size: 13px;
+    }
+    .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 6px;
+    }
+    .actions button {
+        height: 36px;
+        padding: 0 18px;
         border: 0;
-        border-radius: 10px;
-        background: var(--accent);
-        color: white;
-        font: inherit;
+        border-radius: var(--radius);
         font-weight: 600;
         cursor: pointer;
     }
-    button:disabled {
-        opacity: 0.6;
+    .secondary {
+        background: var(--fill);
     }
-    .error {
-        color: #ff7a7a;
-        margin: 0;
-        font-size: 0.9rem;
+    .secondary:hover {
+        background: var(--fill-hover);
+    }
+    .primary {
+        background: var(--accent);
+        color: white;
+    }
+    .primary:hover:not(:disabled) {
+        background: var(--accent-hover);
+    }
+    .primary:disabled {
+        opacity: 0.5;
+        cursor: default;
     }
 </style>

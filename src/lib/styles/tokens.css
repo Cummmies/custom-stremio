@@ -1,0 +1,119 @@
+/*
+ * Design tokens. Dark only, on purpose: HIG allows a permanently dark interface
+ * for immersive media so the UI recedes behind the artwork (dark-mode.md).
+ * Contrast figures are against --bg (#0D0D12).
+ */
+:root {
+    color-scheme: dark;
+
+    /* Surfaces, from back to front */
+    --bg: #0d0d12;
+    --elevated: #16161d;
+    --elevated-2: #1f1f28;
+    --fill: rgb(255 255 255 / 0.06);
+    --fill-hover: rgb(255 255 255 / 0.1);
+    --separator: rgb(255 255 255 / 0.08);
+
+    /* Labels */
+    --label: #f4f4f6; /* 17.7:1 */
+    --label-2: #a1a1ad; /* 7.6:1, secondary text */
+    --label-3: #6e6e7a; /* 3.9:1, only for large or non-essential text */
+
+    /* Accent: Stremio's violet, deepened so white text on it passes (5.4:1) */
+    --accent: #6d4af0;
+    --accent-hover: #7b5bf5;
+    --accent-text: #a48dff; /* 7.2:1, for accent-colored text on --bg */
+
+    /* Signal, always paired with a text label */
+    --ok: #30d158;
+    --warn: #ff9f0a;
+    --bad: #ff453a;
+
+    /* Type: Segoe UI Variable is Windows 11's system face, with optical sizes */
+    --font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --text-caption: 12px;
+    --text-body: 14px;
+    --text-callout: 15px;
+    --text-title3: 17px;
+    --text-title2: 22px;
+    --text-large: clamp(28px, 3.2vw, 40px);
+
+    /* Space, radius, motion */
+    --gutter: clamp(20px, 3vw, 40px);
+    --radius-s: 6px;
+    --radius: 10px;
+    --radius-l: 16px;
+    --poster-w: clamp(132px, 11vw, 168px);
+    --sidebar-w: 224px;
+    --toolbar-h: 56px;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --fast: 140ms;
+    --slow: 420ms;
+}
+
+@media (prefers-contrast: more) {
+    :root {
+        --label-2: #c7c7d0;
+        --label-3: #a1a1ad;
+        --separator: rgb(255 255 255 / 0.24);
+        --fill: rgb(255 255 255 / 0.14);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --fast: 0ms;
+        --slow: 0ms;
+    }
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--label);
+    font-family: var(--font);
+    font-size: var(--text-body);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+    font: inherit;
+    color: inherit;
+}
+
+/* Visible keyboard focus everywhere, never on mouse click. */
+:focus-visible {
+    outline: 2px solid var(--accent-hover);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: var(--accent);
+    color: white;
+}
+
+/* Thin, quiet scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}

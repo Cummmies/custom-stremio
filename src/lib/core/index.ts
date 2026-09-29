@@ -45,8 +45,9 @@ export const core = {
 
     /**
      * Calls `onChange` with the model's state now and whenever the core says it
-     * changed. Updates are coalesced to at most one per animation frame, so a
-     * burst of catalog responses causes one re-render instead of dozens.
+     * changed. Updates are coalesced (~one per frame), so a burst of catalog
+     * responses causes one re-render instead of dozens. setTimeout rather than
+     * requestAnimationFrame so state still arrives while the window is hidden.
      */
     watch<T = any>(model: string, onChange: (state: T) => void): () => void {
         let active = true;
@@ -62,7 +63,7 @@ export const core = {
         const listener: StateListener = (models) => {
             if (!scheduled && models.includes(model)) {
                 scheduled = true;
-                requestAnimationFrame(refresh);
+                setTimeout(refresh, 16);
             }
         };
 
@@ -74,3 +75,5 @@ export const core = {
         };
     },
 };
+
+if (import.meta.env.DEV) (window as any).__core = core;

@@ -17,6 +17,7 @@ export type MetaItemPreview = {
     logo: string | null;
     posterShape: PosterShape;
     releaseInfo: string | null;
+    runtime?: string | null;
 };
 
 export type Catalog = {
@@ -41,3 +42,21 @@ export type ServerStatus =
     | { state: 'ready'; url: string; source: 'external' | 'managed' }
     | { state: 'missing'; message: string }
     | { state: 'failed'; message: string };
+
+export type LibraryItem = {
+    _id: string;
+    name: string;
+    type: string;
+    poster: string | null;
+    posterShape: PosterShape;
+    state: { timeOffset: number; duration: number; lastWatched: string | null };
+};
+
+export type ContinueWatchingPreview = {
+    items: LibraryItem[];
+};
+
+export type Library = {
+    catalog: LibraryItem[];
+    selected: { request: { type: string | null; sort: string } } | null;
+};
