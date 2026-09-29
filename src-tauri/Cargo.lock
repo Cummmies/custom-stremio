@@ -3877,6 +3877,7 @@ dependencies = [
  "tauri-plugin-updater",
  "ureq",
  "win32job",
+ "windows 0.44.0",
  "windows-registry",
 ]
 
@@ -4943,6 +4944,15 @@ dependencies = [
  "raw-window-handle",
  "windows-sys 0.61.2",
  "windows-version",
+]
+
+[[package]]
+name = "windows"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e745dab35a0c4c77aa3ce42d595e13d2003d6902d6b08c9ef5fc326d08da12b"
+dependencies = [
+ "windows-targets 0.42.2",
 ]
 
 [[package]]

@@ -1,3 +1,4 @@
+mod media_controls;
 mod player;
 mod server;
 mod skips;
@@ -53,6 +54,8 @@ pub fn run() {
             window_modes::is_fullscreen,
             window_modes::set_pip,
             window_modes::start_dragging,
+            media_controls::media_update,
+            media_controls::media_clear,
         ])
         .setup(|app| {
             server::start(app.handle().clone());

@@ -5,6 +5,7 @@
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { invoke } from '@tauri-apps/api/core';
+    import { listen } from '@tauri-apps/api/event';
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
@@ -77,10 +78,16 @@
         document.documentElement.classList.add('player-active');
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
         const offEvents = mpv.onEvent(onMpvEvent);
+        // Play/pause from the Windows media overlay or the keyboard's media keys.
+        const offMedia = inTauri
+            ? listen<string>('media://button', (e) => mpv.set('pause', e.payload === 'pause'))
+            : Promise.resolve(() => {});
         begin();
         return () => {
             unwatch();
             offEvents();
+            offMedia.then((off) => off());
+            if (inTauri) invoke('media_clear').catch(() => {});
             document.documentElement.classList.remove('player-active', 'player-idle');
             clearTimeout(idleTimer);
             clearTimeout(watchdog);
@@ -290,6 +297,12 @@
             const match = subs.find((s) => sameLanguage(s.lang, pref) && s.url);
             if (!builtIn && match) addAddonSubtitle(match, mpv.sid === 'no');
         }, 3000);
+    });
+
+    // --- Windows media overlay: show name, "S1 · E3 · Episode", play/pause ---
+    $effect(() => {
+        if (!inTauri || !mpv.loaded || !model) return;
+        invoke('media_update', { title: heading, subtitle: subheading ?? '', paused: mpv.paused }).catch(() => {});
     });
 
     // --- report progress to Stremio (drives Continue Watching) --------------
