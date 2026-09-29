@@ -2,6 +2,7 @@
 // so "Next Episode" can start right away instead of waiting on the addons.
 import { core } from '$lib/core';
 import type { MetaDetails } from '$lib/core/types';
+import { anime } from '$lib/anime.svelte';
 import { rankedPicks, type Like, type Pick } from './easy';
 
 const GIVE_UP_MS = 20000;
@@ -11,10 +12,15 @@ const GIVE_UP_MS = 20000;
  * playing) MetaDetails model and resolves with the ranked picks once they've
  * all answered, or with whatever has arrived after 20s.
  */
-export function prefetchPicks(type: string, id: string, videoId: string, like?: Like | null): Promise<Pick[]> {
+export function prefetchPicks(
+    type: string,
+    id: string,
+    videoId: string,
+    like?: Like | null
+): Promise<{ picks: Pick[]; anime: boolean }> {
     return new Promise((resolve) => {
         let done = false;
-        let latest: Pick[] = [];
+        let latest: { picks: Pick[]; anime: boolean } = { picks: [], anime: false };
         const finish = () => {
             if (done) return;
             done = true;
@@ -25,7 +31,8 @@ export function prefetchPicks(type: string, id: string, videoId: string, like?: 
         const timer = setTimeout(finish, GIVE_UP_MS);
         const unwatch = core.watch<MetaDetails>('meta_details', (details) => {
             if (done || details?.selected?.streamPath?.id !== videoId) return;
-            latest = rankedPicks(details.streams, like).picks;
+            const { picks, anime: isAnime } = rankedPicks(details.streams, like, anime.isAnime(id));
+            latest = { picks, anime: isAnime };
             if (!details.streams.some((g) => g.content.type === 'Loading')) finish();
         });
         core.dispatch(

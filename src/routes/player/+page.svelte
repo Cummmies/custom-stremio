@@ -14,6 +14,7 @@
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
     import { prefetchPicks } from '$lib/player/prefetch';
+    import { anime } from '$lib/anime.svelte';
     import { parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
@@ -233,13 +234,13 @@
         adopting = true;
         switching = 'Finding another source…';
         const forVideo = videoId;
-        const picks = await prefetchPicks(type, id, forVideo, likeThis()).catch(() => []);
+        const { picks, anime: isAnime } = await prefetchPicks(type, id, forVideo, likeThis()).catch(() => ({ picks: [], anime: false }));
         adopting = false;
         if (forVideo !== videoId || !picks.length) {
             switching = null;
             return false;
         }
-        easyQueue.adopt(forVideo, picks, location.pathname + location.search);
+        easyQueue.adopt(forVideo, picks, location.pathname + location.search, isAnime);
         return true;
     }
 
@@ -399,7 +400,8 @@
         const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
         // An untagged track could be anything: don't guess.
         if (mpv.audioTracks.some((t) => inPref(t) || !t.lang)) return;
-        if (auto) {
+        // Only anime: elsewhere the original audio is what you want (a Korean film stays Korean).
+        if (auto && anime.isAnime(id) !== false) {
             findLanguage(name);
             return;
         }
@@ -407,7 +409,7 @@
     });
 
     async function findLanguage(name: string) {
-        const step = (await adoptQueue()) ? easyQueue.nextForLanguage() : null;
+        const step = (await adoptQueue()) && easyQueue.anime ? easyQueue.nextForLanguage() : null;
         if (step) return switchForLanguage(step.pick.href, step.returning, name);
         switching = null;
         note(`No ${name} audio in this source`, 5000);
@@ -580,7 +582,7 @@
     // A minute before the "Up next" card appears, quietly find sources for the next
     // episode so the Next button can start it straight away. (Not needed when core
     // already remembers a source for it.)
-    let prefetched: { video: string; picks: Pick[] } | null = null;
+    let prefetched: { video: string; picks: Pick[]; anime: boolean } | null = null;
     let prefetchFor: string | null = null;
     const PREFETCH_LEAD = 60;
     $effect(() => {
@@ -593,8 +595,8 @@
         const cardAt = Math.min(credits?.start ?? d, d - nextThreshold);
         if (mpv.time < cardAt - PREFETCH_LEAD) return;
         prefetchFor = next.id;
-        prefetchPicks(type, id, next.id, likeThis()).then((picks) => {
-            if (picks.length) prefetched = { video: next.id, picks };
+        prefetchPicks(type, id, next.id, likeThis()).then(({ picks, anime: isAnime }) => {
+            if (picks.length) prefetched = { video: next.id, picks, anime: isAnime };
         });
     });
 
@@ -612,9 +614,9 @@
         // best source, preferring the addon and quality you were just watching. Usually
         // that's already been done in the background (above).
         if (prefetched?.video === next.id) {
-            const { picks } = prefetched;
+            const { picks, anime: isAnime } = prefetched;
             prefetched = null;
-            easyQueue.start(next.id, picks);
+            easyQueue.start(next.id, picks, isAnime);
             await goto(picks[0].href, { replaceState: true });
             return begin();
         }

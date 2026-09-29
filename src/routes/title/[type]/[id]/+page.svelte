@@ -8,6 +8,8 @@
     import { titleContext } from '$lib/contextmenu';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { easyQueue, rankedPicks, type Like, type Pick } from '$lib/player/easy';
+    import { looksLikeAnime } from '$lib/player/ranking';
+    import { anime } from '$lib/anime.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
@@ -68,7 +70,14 @@
     const trailers = $derived((meta?.trailerStreams ?? []).filter((t) => t.ytId));
     const rating = $derived(meta?.links.find((l) => l.category === 'imdb')?.name ?? null);
     const genres = $derived(meta?.links.filter((l) => l.category === 'Genres').map((l) => l.name) ?? []);
-    const chips = $derived([rating ? `★ ${rating}` : null, meta?.releaseInfo, meta?.runtime, ...genres.slice(0, 3)].filter(Boolean));
+    // Anime, from the anime list (or, when that can't tell, from the sources).
+    const listSaysAnime = $derived(anime.isAnime(id));
+    const isAnime = $derived(
+        listSaysAnime ?? looksLikeAnime(details?.streams.flatMap((g) => (g.content.type === 'Ready' ? g.content.content : [])) ?? [])
+    );
+    const chips = $derived(
+        [rating ? `★ ${rating}` : null, meta?.releaseInfo, meta?.runtime, listSaysAnime ? 'Anime' : null, ...genres.slice(0, 3)].filter(Boolean)
+    );
 
     // Where "Play" goes: the episode you were on, else the first released episode.
     const resumeVideo = $derived.by((): Video | null => {
@@ -152,7 +161,7 @@
 
         const streams = details.streams;
         const pending = streams.some((g) => g.content.type === 'Loading');
-        const { picks, top } = rankedPicks(streams, like);
+        const { picks, top, anime: pickedAnime } = rankedPicks(streams, like, listSaysAnime);
         const elapsed = performance.now() - autoStarted;
 
         // A cached debrid source at your preferred quality is as good as it gets: go now.
@@ -161,7 +170,7 @@
         const great = top && top.parsed.kind === 'debrid' && likeAddonDone && (!like?.addonUrl || top.addonUrl === like.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl));
         clearTimeout(autoTimer);
         if (picks.length && (great || !pending || elapsed > 7000)) {
-            startEasy(picks);
+            startEasy(picks, pickedAnime);
         } else if (!pending && !picks.length) {
             autoStarted = 0;
             goto(titleHref(type, id, { video: videoId, nomatch: '1' }), { noScroll: true, keepFocus: true, replaceState: true });
@@ -171,9 +180,9 @@
         }
     });
 
-    function startEasy(picks: Pick[]) {
+    function startEasy(picks: Pick[], isAnimeTitle: boolean) {
         autoStarted = 0;
-        easyQueue.start(videoId!, picks);
+        easyQueue.start(videoId!, picks, isAnimeTitle);
         goto(picks[0].href, { replaceState: true });
     }
 
@@ -383,7 +392,7 @@
 {/if}
 
 {#if sheetOpen && meta && details}
-    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} notice={easyNotice} onclose={closeSources} />
+    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} anime={isAnime} notice={easyNotice} onclose={closeSources} />
 {/if}
 
 {#if auto && meta}

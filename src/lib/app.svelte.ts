@@ -3,6 +3,7 @@ import { core } from '$lib/core';
 import { watchServer } from '$lib/core/server';
 import type { Ctx, Library, MetaItemPreview, ServerStatus } from '$lib/core/types';
 import { profiles } from '$lib/profiles.svelte';
+import { anime } from '$lib/anime.svelte';
 
 class AppState {
     ctx = $state<Ctx | null>(null);
@@ -46,6 +47,8 @@ class AppState {
         sync();
         window.addEventListener('focus', sync);
         this.#listenForAddonLinks();
+        // Which titles are anime (for Easy Mode's dub handling); refreshed weekly.
+        anime.start();
     }
 
     /** A stremio://…/manifest.json link was opened: offer to install that addon. */

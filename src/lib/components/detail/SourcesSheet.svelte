@@ -18,6 +18,7 @@
         subtitle,
         streams,
         notice = null,
+        anime = false,
         onclose,
     }: {
         title: string;
@@ -25,6 +26,8 @@
         streams: MetaDetails['streams'];
         /** Shown at the top, e.g. why Easy Mode handed the choice back to you. */
         notice?: string | null;
+        /** Anime reads "Dubbed" / "Dual Audio" as an English dub. */
+        anime?: boolean;
         onclose: () => void;
     } = $props();
 
@@ -64,7 +67,7 @@
         }
     });
     function audioBadge(s: Stream): string | null {
-        const p = parseStream(s);
+        const p = parseStream(s, { anime });
         if (audioPref && audioPrefName && p.languages.some((l) => langKey(l) === langKey(audioPref))) {
             return p.multiAudio ? `Dual audio · ${audioPrefName}` : `${audioPrefName} audio`;
         }

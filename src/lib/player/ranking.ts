@@ -28,7 +28,13 @@ export type Parsed = {
 
 export type Candidate = { stream: Stream; addon: string; addonUrl?: string | null; addonIndex: number; parsed: Parsed };
 
-export type EasyPrefs = { maxResolution: number; language: string | null; allowTorrents: boolean };
+export type EasyPrefs = {
+    maxResolution: number;
+    language: string | null;
+    allowTorrents: boolean;
+    /** Anime: sources that don't name a language are Japanese, and your language comes first. */
+    anime: boolean;
+};
 
 const FLAGS: Record<string, string> = {
     '🇬🇧': 'eng', '🇺🇸': 'eng', '🇪🇸': 'spa', '🇲🇽': 'spa', '🇫🇷': 'fre', '🇩🇪': 'ger', '🇮🇹': 'ita',
@@ -77,7 +83,12 @@ function parseSize(text: string, hint?: number): number | null {
     return n * (unit === 'TB' ? 1024 ** 4 : unit === 'GB' ? 1024 ** 3 : 1024 ** 2);
 }
 
-export function parseStream(s: Stream): Parsed {
+/**
+ * `anime` changes how dubs read: in anime, "Dubbed" / "Dual Audio" mean an
+ * English dub; elsewhere they're usually a dub into another language
+ * ("English | Dubbed | Russian" is English original plus a Russian dub).
+ */
+export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = {}): Parsed {
     const text = [s.name, s.title, s.description, s.behaviorHints?.filename].filter(Boolean).join('\n');
 
     let kind: Kind;
@@ -115,16 +126,17 @@ export function parseStream(s: Stream): Parsed {
     const mentionsSubs = audioText !== text;
     if (!mentionsSubs) for (const [flag, code] of Object.entries(FLAGS)) if (text.includes(flag)) languages.add(code);
     for (const [re, code] of WORDS) if (re.test(audioText)) languages.add(code);
-    // Dubs: "Dual Audio" is the original plus English (anime: Japanese + English);
-    // "English Dub" / "Dubbed" with no other language named is English too.
+    // Always English: "English Dub", "English Audio" / "ENG AAC", "JPN+ENG", dub groups.
+    // Anime only: "Dual Audio" (Japanese + English) and "Dubbed" with no other language.
     const dualAudio = DUAL_AUDIO.test(text) || JP_AND_EN.test(audioText);
-    const dub = ENGLISH_DUB.test(text) || DUB_GROUP.test(text) || DUBBED.test(text);
+    const dub = ENGLISH_DUB.test(text) || DUB_GROUP.test(text) || (anime && DUBBED.test(text));
     if (
-        dualAudio ||
         ENGLISH_DUB.test(text) ||
         ENGLISH_AUDIO.test(audioText) ||
+        JP_AND_EN.test(audioText) ||
         DUB_GROUP.test(text) ||
-        (DUBBED.test(text) && [...languages].every((l) => l === 'jpn' || l === 'eng'))
+        (anime && DUAL_AUDIO.test(text)) ||
+        (anime && DUBBED.test(text) && [...languages].every((l) => l === 'jpn' || l === 'eng'))
     )
         languages.add('eng');
     if (JP_AND_EN.test(audioText)) languages.add('jpn');
@@ -171,31 +183,35 @@ export function audioMatch(p: Parsed, language: string | null): AudioMatch {
     return p.languages.length ? 'other' : 'unknown';
 }
 
+// Anime release groups and trackers, for guessing when the anime list isn't available.
+const ANIME_SOURCE = /\bnyaa(?:si)?\b|^\s*\[(?:Judas|EMBER|DB|Anime Time|Cytox|Kametsu|Yameii|Doomdos|NanDesuKa)\]/im;
+
+/** A guess from the sources alone: several of them come from anime trackers or groups. */
+export function looksLikeAnime(streams: Stream[]): boolean {
+    const text = (s: Stream) => [s.name, s.title, s.description, s.behaviorHints?.filename].filter(Boolean).join('\n');
+    return streams.filter((s) => ANIME_SOURCE.test(text(s)) || SUB_ONLY_GROUP.test(text(s))).length >= 2;
+}
+
 const KIND_RANK: Record<Kind, number> = { debrid: 0, 'debrid-uncached': 1, torrent: 2, skip: 9 };
 
 /**
  * Orders candidates best-first. Priorities, in order:
- * cached debrid > uncached debrid > torrent · language match (the other way
- * round when the original audio isn't your language) · not Dolby-Vision-only ·
+ * cached debrid > uncached debrid > torrent · language (the other way round
+ * for anime) · not Dolby-Vision-only ·
  * highest resolution within the cap · release quality · seeders · smaller size ·
  * the addon order you set.
  */
 export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidate[] {
-    // Is the original audio in another language (anime, K-dramas…)? Then the
-    // sources that don't name a language are that original, and the language
-    // matters more than speed: an English torrent beats a cached Japanese one.
-    // Otherwise untagged sources are already in the original (usually your)
-    // language, and speed comes first as before.
-    const foreignOriginal =
-        !!prefs.language &&
-        candidates.some(
-            (c) => c.parsed.dub || c.parsed.languages.some((l) => l !== prefs.language && ['jpn', 'kor', 'chi'].includes(l))
-        );
+    // Anime: sources that don't name a language are Japanese, so your language
+    // comes first, even before speed (an English torrent beats a cached Japanese
+    // release). Anything else: unnamed means the original, usually your language,
+    // so language only sets apart sources that are clearly in another language,
+    // and speed and quality decide the rest.
     const langRank = (p: Parsed) => {
         if (!prefs.language) return 0;
         if (p.languages.includes(prefs.language)) return 0;
+        if (!prefs.anime) return p.languages.length && !p.multiAudio ? 1 : 0;
         if (p.multiAudio || p.maybeMultiAudio) return 1;
-        if (p.languages.length === 0) return foreignOriginal ? 2 : 1; // unknown: the original audio
         return 2;
     };
     const kindRank = (p: Parsed) => KIND_RANK[p.kind];
@@ -212,7 +228,7 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
             const pa = a.parsed;
             const pb = b.parsed;
             return (
-                (foreignOriginal
+                (prefs.anime
                     ? langRank(pa) - langRank(pb) || kindRank(pa) - kindRank(pb)
                     : kindRank(pa) - kindRank(pb) || langRank(pa) - langRank(pb)) ||
                 // DV-only files show wrong colours without a DV display; a clean lower

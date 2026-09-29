@@ -3,7 +3,7 @@
 import type { MetaDetails, Stream } from '$lib/core/types';
 import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
-import { audioMatch, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
+import { audioMatch, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
 const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
 
@@ -20,13 +20,29 @@ export type Pick = {
 /** "More like what you were watching": the addon and resolution of the previous episode's source. */
 export type Like = { addonUrl: string | null; resolution: number | null };
 
-/** Ranked, playable choices from whatever the addons have returned so far. */
-export function rankedPicks(streams: MetaDetails['streams'], like?: Like | null): { picks: Pick[]; top: Candidate | null } {
+/**
+ * Ranked, playable choices from whatever the addons have returned so far.
+ * `isAnime` comes from the anime list; when that can't tell (null), the
+ * sources themselves decide.
+ */
+export function rankedPicks(
+    streams: MetaDetails['streams'],
+    like?: Like | null,
+    isAnime: boolean | null = null
+): { picks: Pick[]; top: Candidate | null; anime: boolean } {
+    const ready = streams.flatMap((g) => (g.content.type === 'Ready' ? g.content.content : []));
+    const anime = isAnime ?? looksLikeAnime(ready);
     const candidates: Candidate[] = [];
     streams.forEach((group, addonIndex) => {
         if (group.content.type !== 'Ready') return;
         for (const stream of group.content.content) {
-            candidates.push({ stream, addon: group.addon.manifest.name, addonUrl: group.addon.transportUrl ?? null, addonIndex, parsed: parseStream(stream) });
+            candidates.push({
+                stream,
+                addon: group.addon.manifest.name,
+                addonUrl: group.addon.transportUrl ?? null,
+                addonIndex,
+                parsed: parseStream(stream, { anime }),
+            });
         }
     });
     let ranked = rankStreams(candidates, {
@@ -34,6 +50,7 @@ export function rankedPicks(streams: MetaDetails['streams'], like?: Like | null)
         maxResolution: Math.max(playerPrefs.maxResolution, like?.resolution ?? 0),
         language: playerPrefs.easyLanguage,
         allowTorrents: playerPrefs.allowTorrents,
+        anime,
     });
     if (like?.addonUrl) {
         // Same addon at the same quality first, then the same addon, then everything else (each still in rank order).
@@ -55,7 +72,7 @@ export function rankedPicks(streams: MetaDetails['streams'], like?: Like | null)
             audio: audioMatch(c.parsed, playerPrefs.easyLanguage),
         });
     }
-    return { picks, top: ranked[0] ?? null };
+    return { picks, top: ranked[0] ?? null, anime };
 }
 
 /** The fallback queue for the video being auto-played (survives page changes). */
@@ -72,9 +89,12 @@ class EasyQueue {
     languageSearchDone = false;
     /** A video whose source you chose yourself: Easy Mode leaves it alone. */
     handPicked: string | null = null;
+    /** The title is anime: worth searching other sources for your audio language. */
+    anime = false;
 
-    start(videoId: string, picks: Pick[]) {
+    start(videoId: string, picks: Pick[], anime = false) {
         this.videoId = videoId;
+        this.anime = anime;
         this.handPicked = null;
         this.#all = picks;
         this.current = picks[0] ?? null;
@@ -97,7 +117,7 @@ class EasyQueue {
      * Easy Mode is on but didn't pick what's playing (a remembered stream, e.g.
      * resuming): take over with fresh picks, leaving out the source playing now.
      */
-    adopt(videoId: string, picks: Pick[], currentHref: string) {
+    adopt(videoId: string, picks: Pick[], currentHref: string, anime = false) {
         const streamOf = (href: string) => new URL(href, 'http://x').searchParams.get('stream');
         const playing = streamOf(currentHref);
         const others = picks.filter((p) => streamOf(p.href) !== playing);
@@ -108,7 +128,7 @@ class EasyQueue {
             cached: true,
             audio: 'unknown',
         };
-        this.start(videoId, [current, ...others]);
+        this.start(videoId, [current, ...others], anime);
     }
 
     /** Next choice after a failure, or null when we should ask the person. */
@@ -163,6 +183,7 @@ class EasyQueue {
         this.current = null;
         this.#fallback = null;
         this.languageSearchDone = false;
+        this.anime = false;
     }
 }
 
