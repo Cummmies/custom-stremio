@@ -340,16 +340,40 @@
         }, 3000);
     });
 
-    // No audio in your language in this file (e.g. an anime episode with no dub yet): say so.
+    // No audio in your language in this file (e.g. an anime episode with no dub yet).
+    // If Easy Mode picked it, try other cached sources that look like they have that
+    // language (dual audio, dubs), and come back here if none does. Otherwise say so.
     let audioChecked: string | null = null;
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
-        const pref = settings?.audioLanguage as string | null | undefined;
-        if (!pref || !firstFrameSeen || audioChecked === key || !mpv.audioTracks.length) return;
+        if (!fileReady || audioChecked === key || !mpv.audioTracks.length) return;
         audioChecked = key;
-        if (mpv.audioTracks.some((t) => !t.lang || sameLanguage(t.lang, pref))) return;
-        note(`No ${langName(langKey(pref) ?? pref)} audio in this source`, 5000);
+        const auto = easyQueue.activeFor(videoId);
+        const pref = (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
+        if (!pref) return;
+        const name = langName(langKey(pref) ?? pref);
+        const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
+        // An untagged track could be anything: don't guess.
+        if (mpv.audioTracks.some((t) => inPref(t) || !t.lang)) return;
+        if (auto && easyQueue.current?.cached) {
+            const step = easyQueue.nextForLanguage();
+            if (step) {
+                switchForLanguage(step.pick.href, step.returning, name);
+                return;
+            }
+        }
+        note(`No ${name} audio in this source`, 5000);
     });
+
+    async function switchForLanguage(href: string, returning: boolean, name: string) {
+        clearTimeout(watchdog);
+        switching = returning
+            ? `Couldn’t find ${name} audio for this one. Going back to the first source…`
+            : `No ${name} audio in this source. Trying another…`;
+        await goto(href, { replaceState: true });
+        await begin();
+        setTimeout(() => (switching = null), 3000);
+    }
 
     // --- Windows media overlay: show name, "S1 · E3 · Episode", play/pause ---
     $effect(() => {

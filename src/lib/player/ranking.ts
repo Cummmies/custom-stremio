@@ -16,6 +16,9 @@ export type Parsed = {
     sizeBytes: number | null;
     languages: string[]; // ISO 639-2; empty when the name doesn't say
     multiAudio: boolean;
+    /** No audio language named, but from a service whose releases often carry
+     *  several audio tracks (Netflix, Amazon, Disney+…): worth trying for a dub. */
+    maybeMultiAudio: boolean;
     tier: number; // release quality: remux 5 … hdtv 1
     junk: boolean; // cam/ts/screener/sample/3D/hardcoded subs
     dolbyVisionOnly: boolean; // DV without an HDR10 fallback layer
@@ -50,6 +53,16 @@ const SUBS = /\b(?:eng(?:lish)?|multi(?:ple)?|softs?)[ ._-]*(?:sub(?:s|bed|title
 const DUAL_AUDIO = /\bdual\b/i; // "Dual Audio", "Dual-Audio", "[DUAL]", ".DUAL."
 const ENGLISH_DUB = /\beng(?:lish)?[ ._-]*dub(?:bed)?\b|\bdub(?:bed)?[ ._-]*eng(?:lish)?\b/i;
 const DUBBED = /\bdub(?:bed|s)?\b/i;
+// "English audio", "Eng AAC", "ENG DDP5.1"…
+const ENGLISH_AUDIO = /\beng(?:lish)?[ ._-]*(?:audio|aac|ac-?3|e-?ac-?3|ddp?|dts|flac|opus|truehd)/i;
+// Both languages named together: "JPN+ENG", "Jap-Eng", "JP/EN", "English + Japanese".
+const JP_AND_EN = /\b(?:jpn?|jap(?:anese)?)[ ._+&/-]+(?:en|eng(?:lish)?)\b|\b(?:en|eng(?:lish)?)[ ._+&/-]+(?:jpn?|jap(?:anese)?)\b/i;
+// Anime release groups that only put out the original audio with subtitles (or raws).
+const SUB_ONLY_GROUP = /^\s*\[(?:SubsPlease|Erai-raws|HorribleSubs|ASW|Tsundere-Raws|SubsPlus\+?|Ohys-Raws|Lilith-Raws|NanakoRaws|Skymoon-Raws|Moozzi2|Leopard-Raws)\]/im;
+// Anime release groups that put out English dubs.
+const DUB_GROUP = /^\s*\[(?:Yameii)\]/im;
+// Streaming-service WEB releases, which often keep every audio track.
+const MULTI_AUDIO_SERVICE = /\b(?:NF|AMZN|DSNP|HMAX|MAX|ATVP|HULU|PCOK)[ ._-]+WEB/i;
 
 const DEBRID_TAG = /\[(RD|AD|PM|DL|TB|OC|ED|PK|DB|EN|TRD|DLS)(\+| ?download)?\]/i;
 
@@ -98,9 +111,18 @@ export function parseStream(s: Stream): Parsed {
     for (const [re, code] of WORDS) if (re.test(audioText)) languages.add(code);
     // Dubs: "Dual Audio" is the original plus English (anime: Japanese + English);
     // "English Dub" / "Dubbed" with no other language named is English too.
-    const dualAudio = DUAL_AUDIO.test(text);
-    if (dualAudio || ENGLISH_DUB.test(text) || (DUBBED.test(text) && [...languages].every((l) => l === 'jpn' || l === 'eng')))
+    const dualAudio = DUAL_AUDIO.test(text) || JP_AND_EN.test(audioText);
+    if (
+        dualAudio ||
+        ENGLISH_DUB.test(text) ||
+        ENGLISH_AUDIO.test(audioText) ||
+        DUB_GROUP.test(text) ||
+        (DUBBED.test(text) && [...languages].every((l) => l === 'jpn' || l === 'eng'))
+    )
         languages.add('eng');
+    if (JP_AND_EN.test(audioText)) languages.add('jpn');
+    // A sub-only group with nothing saying otherwise: Japanese audio.
+    if (!languages.size && SUB_ONLY_GROUP.test(text)) languages.add('jpn');
 
     const tier = /\bremux\b/i.test(text)
         ? 5
@@ -121,6 +143,7 @@ export function parseStream(s: Stream): Parsed {
         sizeBytes: parseSize(text, s.behaviorHints?.videoSize),
         languages: [...languages],
         multiAudio: dualAudio || /\bmulti[ .-]?(audio|lang)?\b/i.test(audioText),
+        maybeMultiAudio: !languages.size && MULTI_AUDIO_SERVICE.test(text),
         tier,
         junk:
             /\b(cam|camrip|hdcam|telesync|hdts|telecine|hdtc|screener|scr|dvdscr)\b/i.test(text) ||
@@ -130,6 +153,14 @@ export function parseStream(s: Stream): Parsed {
             /\b(hc|hardsub|hardcoded)\b/i.test(text),
         dolbyVisionOnly: /\b(dv|dovi|dolby[ .]?vision)\b/i.test(text) && !/\bhdr(10)?\+?\b/i.test(text),
     };
+}
+
+/** How likely a source is to have audio in `language`, from its name alone. */
+export type AudioMatch = 'match' | 'maybe' | 'unknown' | 'other';
+export function audioMatch(p: Parsed, language: string | null): AudioMatch {
+    if (!language || p.languages.includes(language)) return 'match';
+    if (p.multiAudio || p.maybeMultiAudio) return 'maybe';
+    return p.languages.length ? 'other' : 'unknown';
 }
 
 const KIND_RANK: Record<Kind, number> = { debrid: 0, 'debrid-uncached': 1, torrent: 2, skip: 9 };

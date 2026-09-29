@@ -3,11 +3,19 @@
 import type { MetaDetails, Stream } from '$lib/core/types';
 import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
-import { parseStream, rankStreams, type Candidate } from './ranking';
+import { audioMatch, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
 const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
 
-export type Pick = { href: string; label: string; torrent: boolean };
+export type Pick = {
+    href: string;
+    label: string;
+    torrent: boolean;
+    /** Plays instantly (cached on a debrid service, or a direct link). */
+    cached: boolean;
+    /** How likely it is to have audio in the Easy Mode language, from its name. */
+    audio: AudioMatch;
+};
 
 /** "More like what you were watching": the addon and resolution of the previous episode's source. */
 export type Like = { addonUrl: string | null; resolution: number | null };
@@ -39,7 +47,13 @@ export function rankedPicks(streams: MetaDetails['streams'], like?: Like | null)
         const url = linkOf(c.stream);
         if (!link || !url) continue;
         const firstLine = (c.stream.title ?? c.stream.description ?? '').split('\n')[0];
-        picks.push({ href: playerHref(link, url), label: `${c.addon} · ${firstLine}`.slice(0, 120), torrent: c.parsed.kind === 'torrent' });
+        picks.push({
+            href: playerHref(link, url),
+            label: `${c.addon} · ${firstLine}`.slice(0, 120),
+            torrent: c.parsed.kind === 'torrent',
+            cached: c.parsed.kind === 'debrid',
+            audio: audioMatch(c.parsed, playerPrefs.easyLanguage),
+        });
     }
     return { picks, top: ranked[0] ?? null };
 }
@@ -48,10 +62,22 @@ export function rankedPicks(streams: MetaDetails['streams'], like?: Like | null)
 class EasyQueue {
     videoId: string | null = null;
     #rest: Pick[] = [];
+    #all: Pick[] = [];
     tried: Pick[] = [];
+    /** The source playing now. */
+    current: Pick | null = null;
+    /** Language search: the first source that played (to return to), and how many we've tried. */
+    #fallback: Pick | null = null;
+    #languageTries = 0;
+    languageSearchDone = false;
 
     start(videoId: string, picks: Pick[]) {
         this.videoId = videoId;
+        this.#all = picks;
+        this.current = picks[0] ?? null;
+        this.#fallback = null;
+        this.#languageTries = 0;
+        this.languageSearchDone = false;
         this.tried = picks.slice(0, 1);
         // Try a handful of the best (debrid first) before asking, and keep the best
         // plain torrent as the last resort even when many debrid options rank above it.
@@ -64,8 +90,40 @@ class EasyQueue {
     /** Next choice after a failure, or null when we should ask the person. */
     next(): Pick | null {
         const n = this.#rest.shift() ?? null;
-        if (n) this.tried.push(n);
+        if (n) {
+            this.tried.push(n);
+            this.current = n;
+        }
         return n;
+    }
+
+    /**
+     * The playing source has no audio in your language: the next cached source
+     * whose name says it has (or might have) that language, up to 3 tries. When
+     * none is left, the first source that played, to go back to; null when
+     * there's nothing to do.
+     */
+    nextForLanguage(): { pick: Pick; returning: boolean } | null {
+        if (this.languageSearchDone || !this.current) return null;
+        this.#fallback ??= this.current;
+        const tried = new Set(this.tried.map((p) => p.href));
+        const candidate =
+            this.#languageTries < 3
+                ? (this.#all.find((p) => p.cached && p.audio === 'match' && !tried.has(p.href)) ??
+                  this.#all.find((p) => p.cached && p.audio === 'maybe' && !tried.has(p.href)))
+                : undefined;
+        if (candidate) {
+            this.#languageTries++;
+            this.tried.push(candidate);
+            this.#rest = this.#rest.filter((p) => p !== candidate);
+            this.current = candidate;
+            return { pick: candidate, returning: false };
+        }
+        this.languageSearchDone = true;
+        const back = this.#fallback;
+        if (back.href === this.current.href) return null;
+        this.current = back;
+        return { pick: back, returning: true };
     }
 
     activeFor(videoId: string | null) {
@@ -75,7 +133,11 @@ class EasyQueue {
     clear() {
         this.videoId = null;
         this.#rest = [];
+        this.#all = [];
         this.tried = [];
+        this.current = null;
+        this.#fallback = null;
+        this.languageSearchDone = false;
     }
 }
 
