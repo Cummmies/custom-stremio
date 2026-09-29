@@ -10,7 +10,8 @@
     import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
-    import { easyQueue } from '$lib/player/easy';
+    import { easyQueue, type Like, type Pick } from '$lib/player/easy';
+    import { prefetchPicks } from '$lib/player/prefetch';
     import { parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { sameLanguage } from '$lib/player/lang';
@@ -88,6 +89,7 @@
 
     async function begin() {
         startError = null;
+        fileFor = null;
         subtitlesAdded = false;
         firstFrameSeen = false;
         segments = [];
@@ -139,7 +141,11 @@
         }
         try {
             await mpv.start(buildOptions(settings ?? {}));
-            await mpv.load(url, await resumeFrom());
+            const start = await resumeFrom();
+            // mpv.load clears the old file's state in the same tick, so `fileFor`
+            // never pairs this video with the previous file's length or position.
+            fileFor = `${id}|${videoId}`;
+            await mpv.load(url, start);
         } catch (e) {
             startError = String(e);
         }
@@ -152,6 +158,10 @@
     let switching = $state<string | null>(null);
     /** Reactive twin of firstFrame, for effects that wait on playback starting. */
     let firstFrameSeen = $state(false);
+    /** Which video mpv's current file belongs to. The URL changes first when moving to
+     *  the next episode, while mpv still reports the previous file's length and time. */
+    let fileFor = $state<string | null>(null);
+    const fileReady = $derived(mpv.loaded && fileFor === `${id}|${videoId}`);
     let playingStream: Stream | null = null;
 
     async function tryNextSource() {
@@ -309,7 +319,7 @@
     let segmentsFor: string | null = null;
     $effect(() => {
         const key = `${id}|${videoId}`;
-        if (!mpv.loaded || !mpv.duration || !id || segmentsFor === key) return;
+        if (!fileReady || !mpv.duration || !id || segmentsFor === key) return;
         segmentsFor = key;
         loadSegments();
     });
@@ -393,6 +403,27 @@
         showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
+    // A minute before the "Up next" card appears, quietly find sources for the next
+    // episode so the Next button can start it straight away. (Not needed when core
+    // already remembers a source for it.)
+    let prefetched: { video: string; picks: Pick[] } | null = null;
+    let prefetchFor: string | null = null;
+    const PREFETCH_LEAD = 60;
+    $effect(() => {
+        const next = model?.nextVideo;
+        const d = mpv.duration;
+        if (!next || !d || !fileReady || !type || !id || next.id === videoId) return;
+        if (next.deepLinks?.player || prefetchFor === next.id) return;
+        // The card shows at the credits (when known) or `nextThreshold` before the end.
+        const credits = segments.find((s) => s.kind === 'credits');
+        const cardAt = Math.min(credits?.start ?? d, d - nextThreshold);
+        if (mpv.time < cardAt - PREFETCH_LEAD) return;
+        prefetchFor = next.id;
+        prefetchPicks(type, id, next.id, likeThis()).then((picks) => {
+            if (picks.length) prefetched = { video: next.id, picks };
+        });
+    });
+
     async function playNext() {
         const next = model?.nextVideo;
         if (!next) return;
@@ -404,15 +435,27 @@
         }
         // Stremio found no source for the next episode in the same "binge group" as this one
         // (many addons don't tag them). Like Stremio, don't make you choose again: pick the
-        // best source, preferring the addon and quality you were just watching.
+        // best source, preferring the addon and quality you were just watching. Usually
+        // that's already been done in the background (above).
+        if (prefetched?.video === next.id) {
+            const { picks } = prefetched;
+            prefetched = null;
+            easyQueue.start(next.id, picks);
+            await goto(picks[0].href, { replaceState: true });
+            return begin();
+        }
         if (type && id) {
             const q: Record<string, string> = { video: next.id, auto: '1' };
-            const st = params.get('st');
-            if (st) q.likeAddon = st;
-            const res = playingStream ? parseStream(playingStream).resolution : null;
-            if (res) q.likeRes = String(res);
+            const like = likeThis();
+            if (like.addonUrl) q.likeAddon = like.addonUrl;
+            if (like.resolution) q.likeRes = String(like.resolution);
             goto(titleHref(type, id, q), { replaceState: true });
         }
+    }
+
+    /** The addon and quality of what's playing, for choosing the next episode's source. */
+    function likeThis(): Like {
+        return { addonUrl: params.get('st'), resolution: playingStream ? parseStream(playingStream).resolution : null };
     }
 
     function changeSource() {
