@@ -1,5 +1,6 @@
 mod player;
 mod server;
+mod theme_icon;
 mod window_modes;
 
 use player::Player;
@@ -48,6 +49,7 @@ pub fn run() {
         ])
         .setup(|app| {
             server::start(app.handle().clone());
+            theme_icon::start(app.handle().clone());
             Ok(())
         })
         .build(tauri::generate_context!())
