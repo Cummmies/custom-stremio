@@ -908,6 +908,8 @@
         position: absolute;
         right: 24px;
         bottom: 118px;
+        /* Above the controls' gradient, which otherwise covers it and eats the hover. */
+        z-index: 3;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -923,17 +925,14 @@
         font-weight: 700;
         cursor: pointer;
         animation: rise var(--slow) var(--ease);
+        /* Never moves: sliding it when the controls appear pulled it out from under the cursor. */
         transition:
             background var(--fast),
-            color var(--fast),
-            bottom 240ms var(--ease);
+            color var(--fast);
     }
     .skip:hover {
         background: white;
         color: black;
-    }
-    .hidden .skip {
-        bottom: 40px;
     }
     .pip .skip {
         right: 10px;
