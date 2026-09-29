@@ -407,7 +407,7 @@
     });
 
     async function findLanguage(name: string) {
-        const step = (await adoptQueue()) && easyQueue.current?.cached ? easyQueue.nextForLanguage() : null;
+        const step = (await adoptQueue()) ? easyQueue.nextForLanguage() : null;
         if (step) return switchForLanguage(step.pick.href, step.returning, name);
         switching = null;
         note(`No ${name} audio in this source`, 5000);

@@ -19,6 +19,8 @@ export type Parsed = {
     /** No audio language named, but from a service whose releases often carry
      *  several audio tracks (Netflix, Amazon, Disney+…): worth trying for a dub. */
     maybeMultiAudio: boolean;
+    /** Says it's an English dub ("English Dub", "Dubbed", a dub group). */
+    dub: boolean;
     tier: number; // release quality: remux 5 … hdtv 1
     junk: boolean; // cam/ts/screener/sample/3D/hardcoded subs
     dolbyVisionOnly: boolean; // DV without an HDR10 fallback layer
@@ -116,6 +118,7 @@ export function parseStream(s: Stream): Parsed {
     // Dubs: "Dual Audio" is the original plus English (anime: Japanese + English);
     // "English Dub" / "Dubbed" with no other language named is English too.
     const dualAudio = DUAL_AUDIO.test(text) || JP_AND_EN.test(audioText);
+    const dub = ENGLISH_DUB.test(text) || DUB_GROUP.test(text) || DUBBED.test(text);
     if (
         dualAudio ||
         ENGLISH_DUB.test(text) ||
@@ -148,6 +151,7 @@ export function parseStream(s: Stream): Parsed {
         languages: [...languages],
         multiAudio: dualAudio || /\bmulti[ .-]?(audio|lang)?\b/i.test(audioText),
         maybeMultiAudio: !languages.size && MULTI_AUDIO_SERVICE.test(text),
+        dub,
         tier,
         junk:
             /\b(cam|camrip|hdcam|telesync|hdts|telecine|hdtc|screener|scr|dvdscr)\b/i.test(text) ||
@@ -171,17 +175,30 @@ const KIND_RANK: Record<Kind, number> = { debrid: 0, 'debrid-uncached': 1, torre
 
 /**
  * Orders candidates best-first. Priorities, in order:
- * cached debrid > uncached debrid > torrent · language match · not Dolby-Vision-only ·
+ * cached debrid > uncached debrid > torrent · language match (the other way
+ * round when the original audio isn't your language) · not Dolby-Vision-only ·
  * highest resolution within the cap · release quality · seeders · smaller size ·
  * the addon order you set.
  */
 export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidate[] {
+    // Is the original audio in another language (anime, K-dramas…)? Then the
+    // sources that don't name a language are that original, and the language
+    // matters more than speed: an English torrent beats a cached Japanese one.
+    // Otherwise untagged sources are already in the original (usually your)
+    // language, and speed comes first as before.
+    const foreignOriginal =
+        !!prefs.language &&
+        candidates.some(
+            (c) => c.parsed.dub || c.parsed.languages.some((l) => l !== prefs.language && ['jpn', 'kor', 'chi'].includes(l))
+        );
     const langRank = (p: Parsed) => {
         if (!prefs.language) return 0;
         if (p.languages.includes(prefs.language)) return 0;
-        if (p.multiAudio || p.languages.length === 0) return 1; // unknown: usually the original audio
+        if (p.multiAudio || p.maybeMultiAudio) return 1;
+        if (p.languages.length === 0) return foreignOriginal ? 2 : 1; // unknown: the original audio
         return 2;
     };
+    const kindRank = (p: Parsed) => KIND_RANK[p.kind];
 
     return candidates
         .filter((c) => {
@@ -195,8 +212,9 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
             const pa = a.parsed;
             const pb = b.parsed;
             return (
-                KIND_RANK[pa.kind] - KIND_RANK[pb.kind] ||
-                langRank(pa) - langRank(pb) ||
+                (foreignOriginal
+                    ? langRank(pa) - langRank(pb) || kindRank(pa) - kindRank(pb)
+                    : kindRank(pa) - kindRank(pb) || langRank(pa) - langRank(pb)) ||
                 // DV-only files show wrong colours without a DV display; a clean lower
                 // resolution beats that.
                 Number(pa.dolbyVisionOnly) - Number(pb.dolbyVisionOnly) ||

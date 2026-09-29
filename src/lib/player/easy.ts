@@ -82,11 +82,14 @@ class EasyQueue {
         this.#languageTries = 0;
         this.languageSearchDone = false;
         this.tried = picks.slice(0, 1);
-        // Try a handful of the best (debrid first) before asking, and keep the best
+        // Try up to 10 of the best before asking, and keep the best
         // plain torrent as the last resort even when many debrid options rank above it.
-        const rest = picks.slice(1, 4);
+        const rest = picks.slice(1, 10);
         const torrent = picks.find((p) => p.torrent);
-        if (torrent && !rest.includes(torrent) && picks[0] !== torrent) rest.push(torrent);
+        if (torrent && !rest.includes(torrent) && picks[0] !== torrent) {
+            if (rest.length === 9) rest.pop();
+            rest.push(torrent);
+        }
         this.#rest = rest;
     }
 
@@ -119,10 +122,10 @@ class EasyQueue {
     }
 
     /**
-     * The playing source has no audio in your language: the next cached source
-     * whose name says it has (or might have) that language, up to 3 tries. When
-     * none is left, the first source that played, to go back to; null when
-     * there's nothing to do.
+     * The playing source has no audio in your language: the next source whose
+     * name says it has that language (cached first), then cached ones that might
+     * have it, up to 3 tries. When none is left, the first source that played,
+     * to go back to; null when there's nothing to do.
      */
     nextForLanguage(): { pick: Pick; returning: boolean } | null {
         if (this.languageSearchDone || !this.current) return null;
@@ -131,6 +134,7 @@ class EasyQueue {
         const candidate =
             this.#languageTries < 3
                 ? (this.#all.find((p) => p.cached && p.audio === 'match' && !tried.has(p.href)) ??
+                  this.#all.find((p) => p.audio === 'match' && !tried.has(p.href)) ??
                   this.#all.find((p) => p.cached && p.audio === 'maybe' && !tried.has(p.href)))
                 : undefined;
         if (candidate) {
