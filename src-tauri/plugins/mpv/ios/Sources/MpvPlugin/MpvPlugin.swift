@@ -74,17 +74,6 @@ final class MpvMetalLayer: CAMetalLayer {
         }
     }
 
-    // EDR (HDR) mode can only be switched on the main thread.
-    override var wantsExtendedDynamicRangeContent: Bool {
-        get { super.wantsExtendedDynamicRangeContent }
-        set {
-            if Thread.isMainThread {
-                super.wantsExtendedDynamicRangeContent = newValue
-            } else {
-                DispatchQueue.main.sync { super.wantsExtendedDynamicRangeContent = newValue }
-            }
-        }
-    }
 }
 
 final class VideoView: UIView {
