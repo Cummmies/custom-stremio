@@ -64,7 +64,23 @@ jobs:
             find src-tauri/gen/apple/build -maxdepth 4 | head -50 || true
             exit 1
           fi
-          cp "$IPA" CustomStremio.ipa
+          rm -rf ipa && mkdir ipa && unzip -q "$IPA" -d ipa
+          APP=$(ls -d ipa/Payload/*.app | head -1)
+          echo "Signature as built:"; codesign -dv "$APP" 2>&1 || true
+
+          # --no-sign leaves the executable with no code signature section at
+          # all, and some re-signers (zsign, which LiveContainer uses) can't sign
+          # such a file: "code signature invalid". An ad-hoc signature adds
+          # that section; your certificate replaces it when the app is installed.
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" \( -name '*.framework' -o -name '*.dylib' \) -maxdepth 1 \
+              -exec codesign --force --sign - --timestamp=none {} \;
+          fi
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | grep -E "Identifier|Format|Signature"
+
+          (cd ipa && zip -qry ../CustomStremio.ipa Payload)
           ls -lh CustomStremio.ipa
 
       - uses: actions/upload-artifact@v4
