@@ -935,13 +935,72 @@
         }
     }
 
+    // Touch screens (no hover): tap shows/hides the controls, double-tap a side
+    // skips 10s (keep tapping to skip more), big buttons sit in the middle.
+    let touchUI = $state(false);
+    $effect(() => {
+        const mq = matchMedia('(hover: none) and (pointer: coarse)');
+        touchUI = mq.matches;
+        const on = () => (touchUI = mq.matches);
+        mq.addEventListener('change', on);
+        return () => mq.removeEventListener('change', on);
+    });
+    const TAP_MS = 280;
+    let lastTap: { at: number; side: -1 | 0 | 1 } | null = null;
+    let tapTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Seconds skipped by the current run of double-taps, for the side indicator. */
+    let tapSkip = $state<{ side: -1 | 1; total: number; key: number } | null>(null);
+    let tapSkipTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastPointerType = '';
+
+    function onsurfaceup(e: PointerEvent) {
+        lastPointerType = e.pointerType;
+        if (e.pointerType !== 'touch' || pip) return;
+        const w = window.innerWidth;
+        const side = e.clientX < w / 3 ? -1 : e.clientX > (w * 2) / 3 ? 1 : 0;
+        const now = performance.now();
+        const again = lastTap && now - lastTap.at < TAP_MS && lastTap.side === side;
+        // Already skipping on this side: every tap adds 10s more.
+        const skipping = tapSkip && side === tapSkip.side;
+        if ((again || skipping) && side !== 0) {
+            clearTimeout(tapTimer);
+            lastTap = { at: now, side };
+            tapBy(side as -1 | 1);
+            return;
+        }
+        lastTap = { at: now, side };
+        clearTimeout(tapTimer);
+        tapTimer = setTimeout(() => {
+            lastTap = null;
+            toggleControls();
+        }, TAP_MS);
+    }
+    function tapBy(side: -1 | 1) {
+        player.seekBy(side * 10);
+        const total = tapSkip?.side === side ? tapSkip.total + 10 : 10;
+        tapSkip = { side, total, key: Date.now() };
+        clearTimeout(tapSkipTimer);
+        tapSkipTimer = setTimeout(() => (tapSkip = null), 700);
+    }
+    function toggleControls() {
+        if (controlsVisible && !player.paused) {
+            clearTimeout(idleTimer);
+            controlsVisible = false;
+            document.documentElement.classList.add('player-idle');
+        } else {
+            poke();
+        }
+    }
+
     // Clicking empty video area toggles play; double-click toggles fullscreen.
     let clickTimer: ReturnType<typeof setTimeout> | undefined;
     function onsurfaceclick() {
+        if (lastPointerType === 'touch') return; // handled in onsurfaceup
         clearTimeout(clickTimer);
         clickTimer = setTimeout(() => player.togglePause(), 220);
     }
     function onsurfacedblclick() {
+        if (lastPointerType === 'touch') return;
         clearTimeout(clickTimer);
         toggleFullscreen();
     }
@@ -952,9 +1011,9 @@
 </script>
 
 <svelte:head><title>{heading} · Stremio</title></svelte:head>
-<svelte:window {onkeydown} onpointermove={poke} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
+<svelte:window {onkeydown} onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
 
-<div class="player" class:hidden={!controlsVisible} class:pip>
+<div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI}>
     <!-- Transparent surface over the video that takes clicks. -->
     <button
         class="surface"
@@ -962,7 +1021,31 @@
         onclick={onsurfaceclick}
         ondblclick={onsurfacedblclick}
         onpointerdown={onsurfacedown}
+        onpointerup={onsurfaceup}
     ></button>
+
+    {#if tapSkip}
+        {#key tapSkip.key}
+            <div class="tap-skip" class:right={tapSkip.side > 0} aria-hidden="true">
+                <Icon name={tapSkip.side > 0 ? 'forward' : 'replay'} size={26} />
+                <span>{tapSkip.total}s</span>
+            </div>
+        {/key}
+    {/if}
+
+    {#if touchUI && !pip && !loadingVideo && !startError && !player.error}
+        <div class="center-controls">
+            <button class="icon ten" onclick={() => (player.seekBy(-10), poke())} aria-label="Back 10 seconds">
+                <Icon name="replay" size={30} /><span>10</span>
+            </button>
+            <button class="icon huge" onclick={() => (player.togglePause(), poke())} aria-label={player.paused ? 'Play' : 'Pause'}>
+                <Icon name={player.paused ? 'play' : 'pause'} size={38} filled />
+            </button>
+            <button class="icon ten" onclick={() => (player.seekBy(10), poke())} aria-label="Forward 10 seconds">
+                <Icon name="forward" size={30} /><span>10</span>
+            </button>
+        </div>
+    {/if}
 
     {#if switching}
         <div class="switching" role="status">{switching}</div>
@@ -1562,5 +1645,100 @@
     .pip .icon {
         width: 32px;
         height: 32px;
+    }
+
+    /* Touch screens: big middle controls, slimmer bottom bar, notch-safe edges. */
+    .center-controls {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        translate: -50% -50%;
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        transition: opacity 240ms var(--ease);
+    }
+    .hidden .center-controls {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .center-controls .huge {
+        width: 76px;
+        height: 76px;
+        background: rgb(0 0 0 / 0.35);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .center-controls .ten {
+        position: relative;
+        width: 56px;
+        height: 56px;
+    }
+    .center-controls .ten span {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding-top: 3px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .tap-skip {
+        position: absolute;
+        top: 50%;
+        left: 12%;
+        translate: -50% -50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 96px;
+        height: 96px;
+        justify-content: center;
+        border-radius: 50%;
+        background: rgb(255 255 255 / 0.14);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        font-size: 13px;
+        font-weight: 700;
+        pointer-events: none;
+        animation: tap-pop 700ms var(--ease) forwards;
+    }
+    .tap-skip.right {
+        left: 88%;
+    }
+    @keyframes tap-pop {
+        0% {
+            opacity: 0;
+            scale: 0.8;
+        }
+        15% {
+            opacity: 1;
+            scale: 1;
+        }
+        75% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 0;
+        }
+    }
+    .touch .top {
+        padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left));
+    }
+    .touch .bottom {
+        padding: 48px max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    }
+    /* The middle has play/pause and ±10s; the phone's buttons do volume. */
+    .touch .bar .big,
+    .touch .volume {
+        display: none;
+    }
+    .touch .time {
+        margin-left: 4px;
+    }
+    .touch .icon {
+        width: 44px;
+        height: 44px;
     }
 </style>
