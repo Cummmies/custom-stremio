@@ -32,8 +32,16 @@
 
     const fmt = fmtTime;
 
-    // Marks inside the bar (not at the very start or end), and the chapter under the pointer.
-    const marks = $derived(d ? chapters.filter((c) => c.time > 0.5 && c.time < d - 0.5) : []);
+    // One rounded bar per chapter, with a small gap between them (a single bar
+    // without chapters). Each sits at its true position, the gap taken from its end.
+    const GAP_PX = 3;
+    const parts = $derived.by(() => {
+        if (!d) return [{ start: 0, end: 1, last: true }];
+        const cuts = chapters.map((c) => c.time).filter((t) => t > 1 && t < d - 1);
+        const edges = [0, ...new Set(cuts), d];
+        return edges.slice(0, -1).map((start, i) => ({ start, end: edges[i + 1], last: i === edges.length - 2 }));
+    });
+    const within = (t: number, p: { start: number; end: number }) => Math.min(1, Math.max(0, (t - p.start) / (p.end - p.start)));
     const hoverChapter = $derived.by(() => {
         if (hoverTime == null || !chapters.length) return null;
         let title: string | null = null;
@@ -92,12 +100,23 @@
     {onkeydown}
 >
     <div class="track">
-        {#if buffered != null && d}
-            <div class="buffered" style:left="{pct(shown)}%" style:width="{Math.max(0, pct(buffered) - pct(shown))}%"></div>
-        {/if}
-        <div class="played" style:width="{pct(shown)}%"></div>
+        {#each parts as part (part.start)}
+            <div
+                class="part"
+                style:left="{d ? pct(part.start) : 0}%"
+                style:width="calc({d ? pct(part.end) - pct(part.start) : 100}% - {part.last ? 0 : GAP_PX}px)"
+            >
+                {#if buffered != null && d && buffered > shown && buffered > part.start && shown < part.end}
+                    <div
+                        class="buffered"
+                        style:left="{within(shown, part) * 100}%"
+                        style:width="{(within(buffered, part) - within(shown, part)) * 100}%"
+                    ></div>
+                {/if}
+                {#if d}<div class="played" style:width="{within(shown, part) * 100}%"></div>{/if}
+            </div>
+        {/each}
         {#if hoverX != null && d}<div class="hover-line" style:left="{hoverX}px"></div>{/if}
-        {#each marks as m (m.time)}<div class="mark" style:left="{pct(m.time)}%"></div>{/each}
     </div>
     <div class="thumb" style:left="{pct(shown)}%"></div>
 
@@ -123,10 +142,16 @@
         position: relative;
         width: 100%;
         height: 4px;
+        transition: height var(--fast) var(--ease);
+    }
+    /* One per chapter: each its own rounded bar. */
+    .part {
+        position: absolute;
+        top: 0;
+        bottom: 0;
         border-radius: 999px;
         background: rgb(255 255 255 / 0.22);
         overflow: hidden;
-        transition: height var(--fast) var(--ease);
     }
     .seek:hover .track,
     .seek.active .track,
@@ -151,15 +176,6 @@
         width: 2px;
         margin-left: -1px;
         background: rgb(255 255 255 / 0.5);
-    }
-    /* A chapter start: a small gap cut into the bar. */
-    .mark {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 3px;
-        margin-left: -1.5px;
-        background: rgb(0 0 0 / 0.75);
     }
     .thumb {
         position: absolute;

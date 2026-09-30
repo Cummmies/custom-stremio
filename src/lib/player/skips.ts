@@ -89,14 +89,32 @@ export function parseChapters(chapterListJson: string | null): Chapter[] {
 }
 
 /** Seek-bar marks from known sections, for files without chapters of their own. */
+const SECTION_NAME: Record<SkipKind, string> = { intro: 'Intro', recap: 'Recap', credits: 'Outro', preview: 'Preview' };
+
 export function chaptersFromSegments(segments: Segment[], duration: number): Chapter[] {
-    const name: Record<SkipKind, string> = { intro: 'Intro', recap: 'Recap', credits: 'Credits', preview: 'Preview' };
+    const name = SECTION_NAME;
     const out: Chapter[] = [];
     for (const s of [...segments].sort((a, b) => a.start - b.start)) {
         out.push({ time: s.start, title: name[s.kind] });
         if (s.end < duration - 1) out.push({ time: s.end, title: '' });
     }
     return out;
+}
+
+/**
+ * Files often name their chapters "Chapter 1", "Chapter 2"… Rename those from the
+ * known sections: a chapter mostly covered by the intro becomes "Intro", and so on;
+ * the rest go nameless (the time alone is shown). Real names are kept.
+ */
+export function nameChapters(chapters: Chapter[], segments: Segment[], duration: number): Chapter[] {
+    const generic = (t: string) => !t || /^(chapter|ch\.?|part|kapitel|chapitre|cap[ií]tulo)\s*\d+$/i.test(t) || /^\d+$/.test(t);
+    return chapters.map((c, i) => {
+        if (!generic(c.title)) return c;
+        const end = chapters[i + 1]?.time ?? duration;
+        const len = Math.max(1, end - c.time);
+        const match = segments.find((s) => (Math.min(end, s.end) - Math.max(c.time, s.start)) / len >= 0.6);
+        return { time: c.time, title: match ? SECTION_NAME[match.kind] : '' };
+    });
 }
 
 /** Segments from the file's chapter list (mpv's `chapter-list` property JSON). */

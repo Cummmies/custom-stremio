@@ -25,7 +25,7 @@
     import { parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
-    import { chaptersFromSegments, fromChapters, lookupSegments, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
+    import { chaptersFromSegments, fromChapters, lookupSegments, nameChapters, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
     import { fmtTime } from '$lib/player/format';
@@ -549,7 +549,11 @@
             .catch(() => {});
     });
     const seekChapters = $derived(
-        fileChapters.length >= 2 ? fileChapters : mpv.duration ? chaptersFromSegments(segments, mpv.duration) : []
+        !mpv.duration
+            ? []
+            : fileChapters.length >= 2
+              ? nameChapters(fileChapters, segments, mpv.duration)
+              : chaptersFromSegments(segments, mpv.duration)
     );
 
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
