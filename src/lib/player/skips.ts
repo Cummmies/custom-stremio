@@ -174,17 +174,37 @@ export async function lookupSegments(opts: {
     episode: number | null;
     duration: number;
     chapters: Segment[];
+    /** Movies: only the end credits. Their "intros" are opening credits or a title
+     *  sequence (from chapter names or the databases), not something to skip. */
+    movie?: boolean;
 }): Promise<Segment[]> {
-    const { imdb, season, episode, duration, chapters } = opts;
+    const { imdb, season, episode, duration, chapters, movie = false } = opts;
     const [a, b] = imdb && /^tt\d+$/.test(imdb)
         ? await Promise.all([fromTheIntroDB(imdb, season, episode, duration), fromIntroDB(imdb, season, episode, duration)])
         : [[], []];
     const merged: Segment[] = [];
-    for (const s of [...chapters, ...a, ...b]) {
+    for (const s of [...chapters, ...a, ...b].filter((s) => plausible(s, duration, movie))) {
         const clash = merged.some((m) => m.kind === s.kind && s.start < m.end && m.start < s.end);
         if (!clash) merged.push(s);
     }
     return merged.sort((x, y) => x.start - y.start);
+}
+
+/** Leaves out sections that can't be what they claim (bad chapter names, bad submissions). */
+function plausible(s: Segment, duration: number, movie: boolean): boolean {
+    const len = s.end - s.start;
+    if (movie) return s.kind === 'credits' && s.start >= duration * 0.6;
+    switch (s.kind) {
+        // A TV intro is a short opening, somewhere in the first part of the episode.
+        case 'intro':
+            return len <= 180 && s.start <= Math.max(600, duration * 0.35);
+        case 'recap':
+            return len <= 300 && s.start <= Math.max(300, duration * 0.25);
+        // Credits and previews come at the end.
+        case 'credits':
+        case 'preview':
+            return s.start >= duration * 0.6;
+    }
 }
 
 export const skipLabel: Record<SkipKind, string> = {

@@ -528,6 +528,7 @@
             episode: type === 'series' ? episode : null,
             duration,
             chapters,
+            movie: type === 'movie',
         });
         if (import.meta.env.DEV) console.info('[skip] segments', { id, season, episode, duration, found });
         if (forVideo === videoId) segments = found;
