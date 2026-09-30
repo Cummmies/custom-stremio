@@ -1,5 +1,7 @@
 # Builds a signed Windows installer and publishes a GitHub Release with the
-# update manifest (latest.json) that the in-app updater reads.
+# update manifest (latest.json) that the in-app updater reads. Releases go to
+# the public Cummmies/custom-stremio-updates repo (this one is private, and
+# the app downloads updates without signing in).
 #
 # To release: bump "version" in src-tauri/tauri.conf.json and package.json,
 # commit, then push a tag like v0.2.0.
@@ -7,6 +9,7 @@
 # Needs repository secrets:
 #   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/custom-stremio.key
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  empty unless you set one
+#   UPDATES_REPO_TOKEN                  Contents: read and write on the updates repo
 name: Release
 
 on:
@@ -50,10 +53,13 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          owner: Cummmies
+          repo: custom-stremio-updates
+          releaseCommitish: main
           tagName: ${{ github.ref_name }}
           releaseName: Custom Stremio ${{ github.ref_name }}
           releaseBody: See the commits since the last release for what changed.

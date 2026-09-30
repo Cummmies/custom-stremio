@@ -29,7 +29,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{utils::assets::AssetKey, Assets, Runtime};
 
-const BASE_URL: &str = "https://github.com/Cummmies/custom-stremio/releases/download/web";
+/// A public repo that holds only signed update files (the source repo is private).
+const BASE_URL: &str = "https://github.com/Cummmies/custom-stremio-updates/releases/download/web";
 
 /// Bumped whenever the web side needs native commands an older app lacks.
 pub const NATIVE_API: u32 = parse_u32(include_str!("../native-api.txt"));
