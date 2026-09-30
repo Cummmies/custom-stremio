@@ -13,8 +13,7 @@ fn main() {
 /// libraries. Swift Package Manager downloads them while the plugin's Swift
 /// package builds, but nothing links them into the app. So copy each one's
 /// iOS slice here as lib<Name>.a and have rustc bundle it into the app's
-/// static library. (System libraries they need are added in the Xcode build;
-/// see .github/workflows/ios.yml.)
+/// static library, along with the system libraries they need.
 fn bundle_mpvkit() {
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("mpvkit");
     fs::create_dir_all(&out).unwrap();
@@ -31,7 +30,9 @@ fn bundle_mpvkit() {
     for xc in xcframeworks {
         let Some(slice) = fs::read_dir(&xc).ok().into_iter().flatten().flatten().map(|e| e.path()).find(|p| {
             let n = p.file_name().unwrap().to_string_lossy().to_string();
-            n.starts_with("ios-") && n.contains("simulator") == simulator
+            // e.g. "ios-arm64" (iPhone), "ios-arm64_x86_64-simulator"; not
+            // "ios-arm64_x86_64-maccatalyst" (iPad apps on a Mac).
+            n.starts_with("ios-") && !n.contains("maccatalyst") && n.contains("simulator") == simulator
         }) else {
             continue;
         };
@@ -54,6 +55,13 @@ fn bundle_mpvkit() {
         }
     }
     println!("cargo:rustc-link-search=native={}", out.display());
+    // What MPVKit's libraries need from the system (its Package.swift linker settings).
+    for fw in ["AVFoundation", "AudioToolbox", "CoreAudio", "CoreFoundation", "CoreMedia", "CoreVideo", "Metal", "VideoToolbox", "QuartzCore", "IOSurface"] {
+        println!("cargo:rustc-link-lib=framework={fw}");
+    }
+    for lib in ["bz2", "c++", "expat", "iconv", "resolv", "xml2", "z"] {
+        println!("cargo:rustc-link-lib=dylib={lib}");
+    }
     if linked.is_empty() {
         println!("cargo:warning=MPVKit's libraries weren't found; the app won't link libmpv.");
     }
