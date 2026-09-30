@@ -7,9 +7,13 @@
     <aside class="toast" role="status" aria-live="polite">
         <div class="text">
             <strong>Update ready</strong>
-            <span>Version {updates.version} installs when you restart.</span>
+            {#if updates.reloads}
+                <span>{updates.version ? `The ${updates.version} update` : 'It'} is downloaded.</span>
+            {:else}
+                <span>Version {updates.version} installs when you restart.</span>
+            {/if}
         </div>
-        <button class="primary" onclick={() => updates.restartToUpdate()}>Restart</button>
+        <button class="primary" onclick={() => updates.restartToUpdate()}>{updates.reloads ? 'Reload' : 'Restart'}</button>
         <button class="close" onclick={() => (updates.dismissed = true)} aria-label="Later"><Icon name="close" size={14} /></button>
     </aside>
 {/if}

@@ -11,6 +11,10 @@ mod player;
 mod server;
 mod skips;
 mod storage;
+// Wired up on iOS only (the desktop app has the full updater); compiled
+// everywhere so desktop builds catch mistakes in it.
+#[cfg_attr(desktop, allow(dead_code))]
+mod web_update;
 #[cfg(desktop)]
 mod window_modes;
 
@@ -44,19 +48,25 @@ pub fn run() {
 
 #[cfg(mobile)]
 fn run_mobile() {
+    let mut context = tauri::generate_context!();
+    let web = web_update::install(&mut context);
     tauri::Builder::default()
         .plugin(storage::plugin())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_mpv::init())
         .manage(storage::Storage::default())
+        .manage(web)
         .invoke_handler(tauri::generate_handler![
             server_status,
             skips::skip_lookup,
             storage::storage_set,
             storage::storage_set_many,
+            web_update::web_update_check,
+            web_update::web_update_apply,
+            web_update::web_update_confirm,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             use tauri::Manager;

@@ -1,0 +1,69 @@
+# Publishes the app's web side (everything under src/) as a signed bundle the
+# iOS app downloads by itself (src-tauri/src/web_update.rs), so most changes
+# reach the phone without re-sideloading.
+#
+# The files go to a pre-release named "web" (never "latest", which the desktop
+# updater reads). Signed with the updater key:
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+name: Web update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'static/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'svelte.config.js'
+      - 'vite.config.js'
+      - 'src-tauri/native-api.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-update
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Package and sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # The commit's time orders bundles; the iOS build from the same
+          # commit has the same number built in, so it won't re-download itself.
+          VERSION=$(git log -1 --format=%ct)
+          LABEL="$(date -u -d @"$VERSION" '+%b %-d') · ${GITHUB_SHA::7}"
+          NATIVE_API=$(tr -dc '0-9' < src-tauri/native-api.txt)
+          (cd build && zip -qr ../web.zip .)
+          npx tauri signer sign web.zip
+          printf '{"version":%s,"nativeApi":%s,"label":"%s"}\n' "$VERSION" "$NATIVE_API" "$LABEL" > web.json
+          cat web.json
+          ls -lh web.zip web.zip.sig
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view web >/dev/null 2>&1 || gh release create web --prerelease --latest=false \
+            --title "Web updates (iOS)" \
+            --notes "The iOS app downloads its screens from here. Not an installable release."
+          # web.json last, so an app never sees a version whose files aren't up yet.
+          gh release upload web web.zip web.zip.sig --clobber
+          gh release upload web web.json --clobber

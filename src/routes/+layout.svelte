@@ -13,7 +13,8 @@
     import UpdateToast from '$lib/components/UpdateToast.svelte';
     import ProfilePicker from '$lib/components/ProfilePicker.svelte';
     import { profiles } from '$lib/profiles.svelte';
-    import { updates } from '$lib/updates.svelte';
+    import { confirmWebBundle, updates } from '$lib/updates.svelte';
+    import { isIOS } from '$lib/platform';
 
     let { children } = $props();
 
@@ -25,9 +26,23 @@
         app.start();
         // A reload skips the player's cleanup; make sure no video keeps playing unseen.
         if (!inPlayer && canPlay) player.stop();
+        // The page came up, so a freshly applied iOS web update is good to keep.
+        setTimeout(confirmWebBundle, 3000);
         // Release builds look for updates shortly after launch.
         if (import.meta.env.PROD) setTimeout(() => updates.check({ quiet: true }), 8000);
-        return installContextMenu();
+        // Phones rarely relaunch apps: look again when it comes back to the front.
+        let lastCheck = Date.now();
+        const onVisible = () => {
+            if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 30 * 60_000) return;
+            lastCheck = Date.now();
+            updates.check({ quiet: true });
+        };
+        if (isIOS && import.meta.env.PROD) document.addEventListener('visibilitychange', onVisible);
+        const offMenu = installContextMenu();
+        return () => {
+            offMenu?.();
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     });
 
     function onkeydown(e: KeyboardEvent) {

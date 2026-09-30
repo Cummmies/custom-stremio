@@ -47,6 +47,8 @@ jobs:
         env:
           XCODE_XCCONFIG_FILE: ${{ github.workspace }}/unsigned.xcconfig
         run: |
+          # Which web build is inside the app (see src-tauri/src/web_update.rs).
+          export WEB_BUILD_VERSION=$(git log -1 --format=%ct)
           cat > unsigned.xcconfig <<'EOF'
           CODE_SIGNING_ALLOWED = NO
           CODE_SIGNING_REQUIRED = NO
