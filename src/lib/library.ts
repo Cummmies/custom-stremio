@@ -1,13 +1,23 @@
 import type { PosterItem } from '$lib/components/PosterCard.svelte';
 import type { LibraryItem } from '$lib/core/types';
 import { cleanVideoId } from '$lib/player/deeplink';
+import { tmdb } from '$lib/tmdb.svelte';
+
+/** The season a series entry is on, from its resume episode ("tt…:3:12" → 3). */
+export function currentSeason(item: LibraryItem): number | null {
+    const parts = cleanVideoId(item.state?.videoId)?.split(':');
+    if (item.type !== 'series' || !parts || parts.length < 3) return null;
+    const n = Number(parts[parts.length - 2]);
+    return Number.isFinite(n) ? n : null;
+}
 
 export function libraryToPoster(item: LibraryItem): PosterItem {
     return {
         id: item._id,
         type: item.type,
         name: item.name,
-        poster: item.poster,
+        // With TMDB set up, a series shows the poster of the season you're on.
+        poster: (item.type === 'series' ? tmdb.seasonPoster(item._id, currentSeason(item)) : null) ?? item.poster,
         progress: item.progress > 0 ? item.progress / 100 : null,
     };
 }

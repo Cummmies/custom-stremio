@@ -10,6 +10,7 @@
     import { easyQueue, rankedPicks, type Like, type Pick } from '$lib/player/easy';
     import { looksLikeAnime } from '$lib/player/ranking';
     import { anime } from '$lib/anime.svelte';
+    import { tmdb } from '$lib/tmdb.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
@@ -52,6 +53,11 @@
             },
             'meta_details'
         );
+    });
+
+    $effect(() => {
+        art;
+        artReady = false;
     });
 
     // Reset per-title UI when moving to another title.
@@ -239,7 +245,7 @@
     );
 
     const back = () => (history.length > 1 ? history.back() : goto('/'));
-    const art = $derived(meta ? backgroundOf(meta) : null);
+    const art = $derived(meta ? (tmdb.backdrop(meta.id) ?? backgroundOf(meta)) : null);
     const logo = $derived(meta && !logoFailed ? logoOf(meta) : null);
 </script>
 
@@ -255,7 +261,10 @@
 {:else}
     <div class="art" aria-hidden="true">
         {#if art}
-            <img src={art} alt="" decoding="async" class:show={artReady} onload={() => (artReady = true)} />
+            <!-- Keyed, so TMDB's backdrop arriving after the default one fades in too. -->
+            {#key art}
+                <img src={art} alt="" decoding="async" class:show={artReady} onload={() => (artReady = true)} />
+            {/key}
         {/if}
         <div class="scrim"></div>
     </div>

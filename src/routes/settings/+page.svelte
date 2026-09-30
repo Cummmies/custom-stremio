@@ -11,6 +11,7 @@
     import Avatar from '$lib/components/Avatar.svelte';
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
+    import { tmdb } from '$lib/tmdb.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
     const myProfile = $derived(profiles.get(app.user?._id));
@@ -57,6 +58,18 @@
         if (settings) serverUrl = settings.streamingServerUrl;
     });
     const serverUrlChanged = $derived(!!settings && serverUrl.trim() !== settings.streamingServerUrl);
+
+    // TMDB artwork: paste a Read Access Token (or API Key), then it's checked.
+    let tmdbInput = $state(tmdb.credential);
+    let tmdbStatus = $state<'idle' | 'checking' | 'ok' | 'bad'>(tmdb.enabled ? 'ok' : 'idle');
+    const tmdbChanged = $derived(tmdbInput.trim() !== tmdb.credential);
+    async function saveTmdb(e: SubmitEvent) {
+        e.preventDefault();
+        tmdb.setCredential(tmdbInput);
+        if (!tmdb.enabled) return (tmdbStatus = 'idle');
+        tmdbStatus = 'checking';
+        tmdbStatus = (await tmdb.test()) ? 'ok' : 'bad';
+    }
 
     function saveServerUrl(e: SubmitEvent) {
         e.preventDefault();
@@ -365,6 +378,34 @@
             </div>
         </section>
     {/if}
+
+    <section>
+        <h2>Artwork</h2>
+        <div class="group">
+            <form class="row" onsubmit={saveTmdb}>
+                <div>
+                    <label class="title" for="tmdb-token">TMDB</label>
+                    <div class="sub">
+                        {#if tmdbStatus === 'checking'}Checking…
+                        {:else if tmdbStatus === 'ok'}Connected. Series show the poster of the season you’re on, and backgrounds come from TMDB.
+                        {:else if tmdbStatus === 'bad'}TMDB didn’t accept that. Paste the API Read Access Token (or API Key) from themoviedb.org → Settings → API.
+                        {:else}Paste your API Read Access Token (or API Key) from themoviedb.org → Settings → API for season posters and TMDB backgrounds.{/if}
+                    </div>
+                </div>
+                <div class="url">
+                    <input
+                        id="tmdb-token"
+                        type="password"
+                        bind:value={tmdbInput}
+                        spellcheck="false"
+                        autocomplete="off"
+                        placeholder="Read Access Token or API Key"
+                    />
+                    {#if tmdbChanged}<button class="btn primary" type="submit">{tmdbInput.trim() ? 'Save' : 'Remove'}</button>{/if}
+                </div>
+            </form>
+        </div>
+    </section>
 
     <section>
         <h2>Keyboard Shortcuts</h2>

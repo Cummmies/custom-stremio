@@ -8,11 +8,14 @@
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
+    import { tmdb } from '$lib/tmdb.svelte';
 
     let { item }: { item: LibraryItem } = $props();
 
     const isImdb = $derived(/^tt\d+$/.test(item._id));
-    const art = $derived(isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster);
+    const art = $derived(
+        tmdb.backdrop(item._id, 'w780') ?? (isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster)
+    );
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
     const detail = $derived(episodeLabel(item) ?? '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
