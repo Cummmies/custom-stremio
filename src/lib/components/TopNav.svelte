@@ -19,7 +19,7 @@
         { href: '/series', label: 'Series' },
         { href: '/library', label: 'Library' },
     ];
-    const isActive = (href: string) => (href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href));
+    const isActive = (href: string) => (href === '/' ? page.url.pathname === '/' || page.url.pathname === '/customize' : page.url.pathname.startsWith(href));
 
     let input = $state<HTMLInputElement>();
     let query = $state('');

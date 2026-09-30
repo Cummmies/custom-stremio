@@ -54,9 +54,10 @@
         return c?.content?.type === 'Ready' ? c.content.content : [];
     }
     /** A few posters to recognize the row by. */
+    /** One poster per row it's made of: a combined row of two shows two. */
     function posters(r: ResolvedRow): (string | null)[] {
-        if (r.kind === 'special') return (cw?.items ?? []).slice(0, 3).map((i) => i.poster);
-        return interleave(r.parts.map(itemsOf)).slice(0, 3).map((i) => i.poster);
+        if (r.kind === 'special') return [cw?.items?.[0]?.poster ?? null];
+        return r.parts.slice(0, 3).map((p) => itemsOf(p)[0]?.poster ?? null);
     }
     /** The plain-language line under a row's name. */
     function detail(r: ResolvedRow): string {
@@ -238,15 +239,12 @@
 <svelte:window onpointermove={dragMove} onpointerup={dragEnd} />
 
 <div class="page" class:is-dragging={!!dragKey}>
+    <a class="back" href="/"><Icon name="back" size={16} />Home</a>
     <header class="top">
-        <div>
-            <h1>Customize Home</h1>
-            <p class="tip">
-                Switch rows on or off, drag to reorder, and drop one row onto another to combine them.
-            </p>
-        </div>
+        <h1>Customize Home</h1>
         <button class="pill primary" onclick={() => goto('/')}>Done</button>
     </header>
+    <p class="tip">Switch rows on or off, drag to reorder, and drop one row onto another to combine them.</p>
 
     {#if suggestion}
         <div class="suggest" role="region" aria-label="Suggestion">
@@ -292,8 +290,8 @@
         </span>
 
         <div class="art" aria-hidden="true">
-            {#each [0, 1, 2] as i (i)}
-                {#if pics[i]}<img src={pics[i]} alt="" loading="lazy" />{:else}<span></span>{/if}
+            {#each pics as pic, i (i)}
+                {#if pic}<img src={pic} alt="" loading="lazy" />{:else}<span></span>{/if}
             {/each}
         </div>
 
@@ -375,23 +373,38 @@
         user-select: none;
         cursor: grabbing;
     }
+    .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        margin: 0 0 10px -4px;
+        padding: 4px 8px 4px 4px;
+        border-radius: 8px;
+        color: var(--label-2);
+        font-size: var(--text-callout);
+        font-weight: 500;
+        text-decoration: none;
+    }
+    .back:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
     .top {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
-        gap: 20px;
-        margin-bottom: 24px;
+        gap: 16px;
     }
+    /* Same title style as Library and Settings. */
     h1 {
         margin: 0;
         font-family: var(--font-display);
-        font-size: clamp(30px, 4vw, 40px);
-        font-weight: 700;
-        letter-spacing: -0.02em;
+        font-size: var(--text-title2);
+        font-weight: 600;
     }
     .tip {
-        max-width: 46ch;
-        margin: 8px 0 0;
+        max-width: 60ch;
+        margin: 6px 0 24px;
         color: var(--label-2);
         font-size: var(--text-callout);
     }
@@ -534,7 +547,9 @@
 
     .art {
         display: flex;
+        justify-content: center;
         flex: none;
+        width: 50px;
     }
     .art img,
     .art span {
