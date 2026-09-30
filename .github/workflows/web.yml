@@ -46,6 +46,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Add the repository secret TAURI_SIGNING_PRIVATE_KEY (the contents of ~/.tauri/custom-stremio.key on your PC). Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
           # The commit's time orders bundles; the iOS build from the same
           # commit has the same number built in, so it won't re-download itself.
           VERSION=$(git log -1 --format=%ct)
