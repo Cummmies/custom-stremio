@@ -47,8 +47,10 @@ fn bundle_mpvkit() {
             if !binary.is_file() || !linked.insert(name.clone()) {
                 continue;
             }
-            thin(&binary, &out.join(format!("lib{name}.a")), arch);
-            println!("cargo:rustc-link-lib=static={name}");
+            // Prefixed so rustc can't pick up a same-named universal copy that
+            // SwiftPM leaves in its own build folder (also on the search path).
+            thin(&binary, &out.join(format!("libmpvkit_{name}.a")), arch);
+            println!("cargo:rustc-link-lib=static=mpvkit_{name}");
         }
     }
     println!("cargo:rustc-link-search=native={}", out.display());
