@@ -67,12 +67,45 @@
         core.dispatch({ action: 'StreamingServer', args: { action: 'Reload' } });
     }
 
-    const shortcuts = [
-        ['Search', 'Ctrl K'],
-        ['Settings', 'Ctrl ,'],
-        ['Move between titles in a row', '← →'],
-        ['Open the menu for the focused item', 'Shift F10'],
-    ];
+    // Every shortcut in the app. Keep in step with the key handlers in
+    // routes/+layout.svelte, routes/player/+page.svelte and SeekBar.svelte.
+    const seekStep = $derived(Math.round(((settings?.seekTimeDuration as number | undefined) ?? 10000) / 1000));
+    const fineStep = $derived(Math.max(1, Math.round(seekStep / 3)));
+    const shortcutGroups = $derived<{ title: string; items: [string, string[]][] }[]>([
+        {
+            title: 'Browsing',
+            items: [
+                ['Search', ['Ctrl K', 'Ctrl F', '/']],
+                ['Settings', ['Ctrl ,']],
+                ['Move between titles in a row, or the banner', ['← →']],
+                ['Open the menu for the focused item', ['Shift F10']],
+            ],
+        },
+        {
+            title: 'While Watching',
+            items: [
+                ['Play / Pause', ['Space', 'K']],
+                [`Back / Forward ${seekStep} seconds`, ['← →']],
+                [`Back / Forward ${fineStep} seconds`, ['Shift ← →']],
+                ['Volume up / down', ['↑ ↓']],
+                ['Mute', ['M']],
+                ['Skip intro, recap or credits (or find where the intro ends)', ['S']],
+                ['Skip, while the Skip button shows', ['Tab']],
+                ['Next episode', ['N']],
+                ['Full screen', ['F']],
+                ['Picture in picture', ['P']],
+                ['Exit full screen or picture in picture, then leave', ['Esc']],
+            ],
+        },
+        {
+            title: 'Seek Bar (After Clicking or Tabbing to It)',
+            items: [
+                ['Back / Forward 5 seconds', ['← →']],
+                ['Back / Forward 30 seconds', ['Shift ← →']],
+                ['Back to the start', ['Home']],
+            ],
+        },
+    ]);
 </script>
 
 <svelte:head><title>Settings · Stremio</title></svelte:head>
@@ -335,14 +368,19 @@
 
     <section>
         <h2>Keyboard Shortcuts</h2>
-        <div class="group">
-            {#each shortcuts as [label, keys] (label)}
-                <div class="row compact">
-                    <span>{label}</span>
-                    <kbd>{keys}</kbd>
-                </div>
-            {/each}
-        </div>
+        {#each shortcutGroups as g (g.title)}
+            <h3 class="subhead">{g.title}</h3>
+            <div class="group">
+                {#each g.items as [label, keys] (label)}
+                    <div class="row compact">
+                        <span>{label}</span>
+                        <span class="keys">
+                            {#each keys as key, i (key)}{#if i}<span class="or">or</span>{/if}<kbd>{key}</kbd>{/each}
+                        </span>
+                    </div>
+                {/each}
+            </div>
+        {/each}
     </section>
 
     {#if updates.supported}
@@ -512,6 +550,25 @@
     .url input:focus {
         outline: none;
         border-color: var(--accent-hover);
+    }
+    .subhead {
+        margin: 14px 0 8px 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--label-2);
+    }
+    h2 + .subhead {
+        margin-top: 0;
+    }
+    .keys {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+    }
+    .or {
+        font-size: 12px;
+        color: var(--label-3);
     }
     kbd {
         font-family: var(--font);
