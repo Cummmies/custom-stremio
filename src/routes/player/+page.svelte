@@ -18,7 +18,7 @@
     import { app } from '$lib/app.svelte';
     import { player, type Track } from '$lib/player/player';
     import { inTauri } from '$lib/player/mpv.svelte';
-    import { isDesktop } from '$lib/platform';
+    import { isDesktop, isIOS } from '$lib/platform';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -108,6 +108,8 @@
 
     onMount(() => {
         document.documentElement.classList.add('player-active');
+        // iPhone: landscape while watching, back to portrait after.
+        if (isIOS) invoke('plugin:mpv|orientation', { landscape: true }).catch(() => {});
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
         const offEvents = player.onEvent(onPlayerEvent);
         // Play/pause from the Windows media overlay or the keyboard's media keys.
@@ -138,6 +140,7 @@
             offEvents();
             offMedia.then((off) => off());
             offWindow.then((offs) => offs.forEach((off) => off()));
+            if (isIOS) invoke('plugin:mpv|orientation', { landscape: false }).catch(() => {});
             if (isDesktop) invoke('media_clear').catch(() => {});
             if (isDesktop) invoke('discord_clear').catch(() => {});
             document.documentElement.classList.remove('player-active', 'player-idle');

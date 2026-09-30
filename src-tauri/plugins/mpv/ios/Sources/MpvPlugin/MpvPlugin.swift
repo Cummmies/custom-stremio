@@ -37,6 +37,11 @@ private struct GetArgs: Decodable {
     let name: String
 }
 
+private struct OrientationArgs: Decodable {
+    /// true: landscape only (while a video plays); false: back to portrait.
+    let landscape: Bool
+}
+
 // MARK: - Events (same JSON as the desktop player's)
 
 private struct PropEvent: Encodable {
@@ -113,6 +118,15 @@ class MpvPlugin: Plugin {
         webview.backgroundColor = .clear
         webview.scrollView.backgroundColor = .clear
 
+        // Browsing is portrait (the phone layout); the player switches to landscape.
+        // (A moment later: the web view isn't in its window yet while loading.)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard let vc = webview.window?.rootViewController else { return }
+            OrientationLock.install(on: vc)
+            OrientationLock.mask = .portrait
+            vc.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
+
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(didEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         center.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -161,6 +175,23 @@ class MpvPlugin: Plugin {
         }
         // The web side unwraps `value` (see mpv.svelte.ts).
         invoke.resolve(GetResult(value: value))
+    }
+
+    /// Landscape while a video plays; portrait (the browsing layout) otherwise.
+    @objc public func orientation(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(OrientationArgs.self)
+        DispatchQueue.main.async { [self] in
+            guard let vc = webView?.window?.rootViewController,
+                  let scene = webView?.window?.windowScene
+            else { return invoke.resolve() }
+            OrientationLock.install(on: vc)
+            OrientationLock.mask = args.landscape ? .landscape : .portrait
+            vc.setNeedsUpdateOfSupportedInterfaceOrientations()
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: OrientationLock.mask!)) { error in
+                NSLog("mpv: orientation change refused: \(error)")
+            }
+            invoke.resolve()
+        }
     }
 
     /// Stops playback and shuts mpv down; the event thread finishes the teardown.
@@ -305,6 +336,30 @@ class MpvPlugin: Plugin {
     @objc private func willEnterForeground() {
         guard let mpv else { return }
         mpv_set_property_string(mpv, "vid", "auto")
+    }
+}
+
+// MARK: - Orientation
+
+/// Tauri's root view controller decides which orientations are allowed. Its
+/// `supportedInterfaceOrientations` is replaced (once) with one that returns
+/// `mask` when set, and the original answer otherwise.
+enum OrientationLock {
+    static var mask: UIInterfaceOrientationMask?
+    private static var installed = false
+
+    static func install(on vc: UIViewController) {
+        guard !installed else { return }
+        installed = true
+        let cls: AnyClass = type(of: vc)
+        let sel = #selector(getter: UIViewController.supportedInterfaceOrientations)
+        guard let method = class_getInstanceMethod(cls, sel) else { return }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> UInt
+        let original = unsafeBitCast(method_getImplementation(method), to: Getter.self)
+        let replacement: @convention(block) (AnyObject) -> UInt = { obj in
+            mask?.rawValue ?? original(obj, sel)
+        }
+        class_replaceMethod(cls, sel, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
     }
 }
 

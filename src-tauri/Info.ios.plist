@@ -13,6 +13,13 @@
     <array>
         <string>audio</string>
     </array>
+    <!-- Portrait for browsing; the player locks itself to landscape. -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
     <key>UIRequiresFullScreen</key>
     <false/>
 </dict>

@@ -1,3 +1,12 @@
 [default]
 description = "Everything the player screen needs: start, control and stop mpv."
-permissions = ["allow-start", "allow-command", "allow-set", "allow-get", "allow-stop"]
+permissions = [
+    "allow-start",
+    "allow-command",
+    "allow-set",
+    "allow-get",
+    "allow-stop",
+    "allow-orientation",
+    "allow-register-listener",
+    "allow-remove-listener",
+]

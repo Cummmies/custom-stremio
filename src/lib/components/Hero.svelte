@@ -8,6 +8,8 @@
     import { titleContext } from '$lib/contextmenu';
     import { fetchDetails, heroPreview, merge, needsDetails } from '$lib/heroPreview.svelte';
     import { onDestroy } from 'svelte';
+    import { invoke } from '@tauri-apps/api/core';
+    import { isIOS } from '$lib/platform';
 
     let { items }: { items: MetaItemPreview[] } = $props();
 
@@ -35,13 +37,23 @@
     onDestroy(() => heroPreview.clear());
 
     // Crossfade layers: the previous artwork stays until the next has loaded.
-    let layers = $state<{ key: string; src: string; ready: boolean }[]>([]);
+    // `focus` (iPhone): where the backdrop's subject is, so the narrow phone
+    // crop centers on it instead of on the middle (src-tauri/src/art.rs).
+    let layers = $state<{ key: string; src: string; ready: boolean; focus?: number }[]>([]);
+    function findFocus(key: string, src: string) {
+        if (!isIOS) return;
+        invoke<number>('art_focus', { url: src })
+            .then((focus) => (layers = layers.map((l) => (l.key === key ? { ...l, focus } : l))))
+            .catch(() => {});
+    }
     const shown = $derived(layers.findLastIndex((l) => l.ready));
 
     $effect(() => {
         const src = item ? backgroundOf(item) : null;
         if (!src || layers.at(-1)?.src === src) return;
-        layers = [...layers.slice(-1), { key: `${item!.id}-${Date.now()}`, src, ready: false }];
+        const key = `${item!.id}-${Date.now()}`;
+        layers = [...layers.slice(-1), { key, src, ready: false }];
+        findFocus(key, src);
     });
 
     $effect(() => {
@@ -73,8 +85,6 @@
 
     // Phones: swipe sideways to move between titles.
     let swipeX: number | null = null;
-    /** A swipe just happened: the click that follows isn't a tap on the poster. */
-    let swiped = false;
     function onpointerdown(e: PointerEvent) {
         swipeX = e.pointerType === 'mouse' ? null : e.clientX;
     }
@@ -83,8 +93,6 @@
         const dx = e.clientX - swipeX;
         swipeX = null;
         if (Math.abs(dx) < 50) return;
-        swiped = true;
-        setTimeout(() => (swiped = false), 400);
         heroPreview.clear();
         index = (index + (dx < 0 ? 1 : items.length - 1)) % items.length;
     }
@@ -115,6 +123,7 @@
             alt=""
             decoding="async"
             class:show={i === shown}
+            style:--focus={layer.focus != null ? `${Math.round(layer.focus * 100)}%` : null}
             onload={() => (layers = layers.map((l) => (l.key === layer.key ? { ...l, ready: true } : l)))}
         />
     {/each}
@@ -139,12 +148,6 @@
         {onpointerdown}
         {onpointerup}
         onpointercancel={() => (swipeX = null)}
-        onclickcapture={(e) => {
-            if (swiped) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        }}
     >
         {#key item.id}
             <div
@@ -152,13 +155,6 @@
                 aria-live={paused ? 'polite' : 'off'}
                 use:titleContext={{ type: item.type, id: item.id, name: item.name, preview: item }}
             >
-                <!-- Phones: the poster, which is made for a tall frame (backdrops
-                     cropped to a phone's width often lose their subject). -->
-                {#if item.poster}
-                    <a class="poster-card" href={titleHref(item.type, item.id)} aria-label={`More about ${item.name}`}>
-                        <img src={item.poster} alt="" />
-                    </a>
-                {/if}
                 {#if logo}
                     <img
                         class="logo"
@@ -403,32 +399,33 @@
         background: var(--label);
     }
 
-    .poster-card {
-        display: none;
-    }
-    /* Phones: the poster as a big centered card over a blurred backdrop, then
-       tags and a wide Play button; swipe between titles. */
+    /* Phones: shorter art shown whole-width, darkened only toward the rows;
+       everything centered, a wide Play button, swipe between titles. */
     @media (max-width: 700px) {
         .art {
-            height: 78vh;
+            height: 72vh;
         }
         .art img {
-            filter: blur(28px) saturate(1.3);
-            transform: scale(1.15);
+            object-position: var(--focus, 50%) 30%;
+            transition:
+                opacity 700ms var(--ease),
+                object-position 500ms var(--ease);
         }
         .art img.show {
-            opacity: 0.55;
+            opacity: 0.85;
         }
         .scrim {
-            background: linear-gradient(to top, var(--bg) 6%, rgb(13 13 18 / 0.55) 40%, rgb(13 13 18 / 0.2) 70%, rgb(13 13 18 / 0.5));
+            background:
+                linear-gradient(to top, var(--bg) 4%, rgb(13 13 18 / 0.75) 34%, transparent 62%),
+                linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 22%);
         }
         .hero {
-            min-height: 0;
+            min-height: 66vh;
             flex-direction: column;
             align-items: stretch;
             justify-content: flex-end;
             gap: 16px;
-            padding: calc(var(--nav-h) + 8px) var(--gutter) 20px;
+            padding: var(--nav-h) var(--gutter) 20px;
             touch-action: pan-y;
         }
         .copy {
@@ -437,30 +434,6 @@
             flex-direction: column;
             align-items: center;
             text-align: center;
-        }
-        .poster-card {
-            display: block;
-            width: min(64vw, 300px);
-            aspect-ratio: 2 / 3;
-            margin-bottom: 18px;
-            border-radius: 14px;
-            overflow: hidden;
-            background: var(--elevated);
-            box-shadow:
-                0 24px 60px rgb(0 0 0 / 0.55),
-                0 0 0 0.5px rgb(255 255 255 / 0.15);
-        }
-        .poster-card img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        /* The poster already carries the title. */
-        .poster-card ~ .logo,
-        .poster-card ~ h1,
-        .description {
-            display: none;
         }
         .logo {
             max-width: 72%;
@@ -473,6 +446,9 @@
         }
         .meta {
             justify-content: center;
+        }
+        .description {
+            font-size: 14px;
             margin-bottom: 16px;
         }
         .actions {
