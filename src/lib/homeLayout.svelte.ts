@@ -11,7 +11,8 @@ import type { Catalog } from '$lib/core/types';
 
 export type RowEntry = { key: string; hidden?: boolean; name?: string };
 export type Merge = { name: string; parts: string[] };
-type Layout = { order: RowEntry[]; merges: Record<string, Merge> };
+/** `dismissed`: combine suggestions the person said no to. */
+type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[] };
 
 export type SpecialKey = 'cw';
 export const SPECIAL_NAMES: Record<SpecialKey, string> = { cw: 'Continue Watching' };
@@ -174,7 +175,7 @@ class HomeLayout {
 
     setHidden(rows: ResolvedRow[], key: string, hidden: boolean) {
         const row = rows.find((r) => r.key === key);
-        this.#change(`${hidden ? 'Hid' : 'Showed'} “${row?.name ?? ''}”`, (l) => {
+        this.#change(hidden ? `Removed “${row?.name ?? ''}” from Home` : `Added “${row?.name ?? ''}” to Home`, (l) => {
             this.#materialize(l, rows);
             const e = l.order.find((x) => x.key === key);
             if (e) e.hidden = hidden || undefined;
@@ -201,7 +202,7 @@ class HomeLayout {
         const picked = rows.filter((r) => keys.includes(r.key) && r.kind !== 'special');
         if (picked.length < 2) return;
         const id = `merge:${Date.now().toString(36)}`;
-        this.#change(`Merged ${picked.length} rows`, (l) => {
+        this.#change(`Combined into “${name.trim() || picked[0].name}”`, (l) => {
             this.#materialize(l, rows);
             const parts = picked.flatMap((r) => r.parts);
             for (const r of picked) if (r.kind === 'merge') delete l.merges[r.key];
@@ -216,7 +217,7 @@ class HomeLayout {
     unmerge(rows: ResolvedRow[], key: string) {
         const m = this.layout.merges[key];
         if (!m) return;
-        this.#change(`Unmerged “${m.name}”`, (l) => {
+        this.#change(`Separated “${m.name}”`, (l) => {
             this.#materialize(l, rows);
             const at = l.order.findIndex((e) => e.key === key);
             const parts = l.merges[key].parts;
@@ -225,10 +226,23 @@ class HomeLayout {
         });
     }
 
+    /** "Not now" on a combine suggestion: don't offer it again. */
+    dismissSuggestion(id: string) {
+        const next = structuredClone($state.snapshot(this.layout));
+        next.dismissed = [...new Set([...(next.dismissed ?? []), id])];
+        this.layout = next;
+        this.#save();
+    }
+
+    isDismissed(id: string) {
+        return !!this.layout.dismissed?.includes(id);
+    }
+
     reset() {
-        this.#change('Reset Home', (l) => {
+        this.#change('Restored the default rows', (l) => {
             l.order = [];
             l.merges = {};
+            l.dismissed = [];
         });
     }
 }

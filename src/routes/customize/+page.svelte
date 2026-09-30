@@ -1,24 +1,41 @@
 <script lang="ts">
-    // Customize Home: reorder, hide, rename and merge Home's rows (per profile).
-    // An edit mode like iOS's "Edit Home Screen": changes apply as you make them,
-    // anything removed can be undone from the toast, and Done goes back to Home.
-    import { onMount } from 'svelte';
+    // Customize Home, built on the edit-list pattern people know from iOS and macOS
+    // (Control Center, Music): "On Home" and "More Rows", a red − / green + to take
+    // a row off or put it on, a ≡ handle on the right to drag. Combining rows is
+    // offered where it makes sense (a suggestion card), works like making a folder
+    // (drop a row onto another), and is in every row's menu for keyboard users.
+    // Changes apply as you make them; Undo covers every one of them.
+    import { onMount, tick } from 'svelte';
     import { goto } from '$app/navigation';
     import { core } from '$lib/core';
-    import type { Board } from '$lib/core/types';
+    import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
-    import { catalogKey, homeLayout, type BoardCatalog, type ResolvedRow } from '$lib/homeLayout.svelte';
+    import { catalogKey, homeLayout, interleave, type BoardCatalog, type ResolvedRow } from '$lib/homeLayout.svelte';
     import { catalogTitle } from '$lib/components/CatalogList.svelte';
     import Icon from '$lib/components/Icon.svelte';
 
     let board = $state<Board | null>(null);
+    let cw = $state<ContinueWatchingPreview | null>(null);
     onMount(() => {
-        const off = core.watch<Board>('board', (s) => (board = s));
+        const offs = [
+            core.watch<Board>('board', (s) => (board = s)),
+            core.watch<ContinueWatchingPreview>('continue_watching_preview', (s) => (cw = s)),
+        ];
         core.dispatch({ action: 'Load', args: { model: 'CatalogsWithExtra', args: { extra: [] } } }, 'board');
         return () => {
-            off();
+            offs.forEach((off) => off());
             core.dispatch({ action: 'Unload' }, 'board');
         };
+    });
+
+    // Every row shows a few of its posters, so load them all (once the list is known).
+    let loadedCount = 0;
+    $effect(() => {
+        const n = board?.catalogs?.length ?? 0;
+        if (n && n !== loadedCount) {
+            loadedCount = n;
+            core.dispatch({ action: 'CatalogsWithExtra', args: { action: 'LoadRange', args: { start: 0, end: n - 1 } } }, 'board');
+        }
     });
 
     $effect(() => homeLayout.sync());
@@ -26,23 +43,54 @@
     const catalogs = $derived((board?.catalogs ?? []) as BoardCatalog[]);
     const byKey = $derived(new Map(catalogs.map((c) => [catalogKey(c), c])));
     const rows = $derived(homeLayout.resolve(catalogs, new Map(catalogs.map((c) => [catalogKey(c), catalogTitle(c)]))));
-    const shown = $derived(rows.filter((r) => !r.hidden));
-    const hidden = $derived(rows.filter((r) => r.hidden));
+    const onHome = $derived(rows.filter((r) => !r.hidden));
+    const more = $derived(rows.filter((r) => r.hidden));
 
-    /** "Cinemeta · Movie" for each catalog a row draws from. */
-    function sources(r: ResolvedRow): string[] {
-        if (r.kind === 'special') return ['Built in'];
-        return r.parts.map((p) => {
-            const c = byKey.get(p);
-            const type = c?.type ? c.type.charAt(0).toUpperCase() + c.type.slice(1) : '';
-            return [c?.addon?.manifest?.name, type].filter(Boolean).join(' · ');
-        });
+    const TYPE_LABEL: Record<string, string> = { movie: 'Movies', series: 'Series', channel: 'Channels', tv: 'TV' };
+    const typeLabel = (t?: string) => (t ? (TYPE_LABEL[t] ?? t.charAt(0).toUpperCase() + t.slice(1)) : '');
+
+    function itemsOf(key: string): MetaItemPreview[] {
+        const c = byKey.get(key);
+        return c?.content?.type === 'Ready' ? c.content.content : [];
     }
+    /** A few posters to recognize the row by. */
+    function posters(r: ResolvedRow): (string | null)[] {
+        if (r.kind === 'special') return (cw?.items ?? []).slice(0, 3).map((i) => i.poster);
+        return interleave(r.parts.map(itemsOf)).slice(0, 3).map((i) => i.poster);
+    }
+    /** The plain-language line under a row's name. */
+    function detail(r: ResolvedRow): string {
+        if (r.kind === 'special') return 'Shows and movies you haven’t finished';
+        if (r.kind === 'merge') return `Combined from ${r.parts.length} rows`;
+        const c = byKey.get(r.parts[0]);
+        return [typeLabel(c?.type), c?.addon?.manifest?.name && `from ${c.addon.manifest.name}`].filter(Boolean).join(' · ');
+    }
+    const canCombine = (r: ResolvedRow) => r.kind !== 'special';
 
-    // --- Rename (inline) ---------------------------------------------------------
+    // --- Suggestions: rows that belong together ("Popular · Movie" + "Popular · Series") ---
+    const suggestion = $derived.by(() => {
+        const groups = new Map<string, ResolvedRow[]>();
+        for (const r of onHome) {
+            if (r.kind !== 'catalog' || r.renamed) continue;
+            const c = byKey.get(r.parts[0]);
+            const base = r.defaultName.split(' · ')[0];
+            const id = `${c?.addon?.manifest?.id}|${base}`;
+            groups.set(id, [...(groups.get(id) ?? []), r]);
+        }
+        for (const [id, list] of groups) {
+            const types = new Set(list.map((r) => byKey.get(r.parts[0])?.type));
+            if (list.length >= 2 && types.size >= 2 && !homeLayout.isDismissed(id)) {
+                return { id, name: list[0].defaultName.split(' · ')[0], rows: list };
+            }
+        }
+        return null;
+    });
+
+    // --- Rename: click the name ------------------------------------------------------
     let renaming = $state<string | null>(null);
     let draftName = $state('');
     function startRename(r: ResolvedRow) {
+        if (r.kind === 'special') return;
         renaming = r.key;
         draftName = r.name;
     }
@@ -55,103 +103,96 @@
         node.select();
     }
 
-    // --- Row menu ------------------------------------------------------------------
+    // --- Row menu (everything also reachable without dragging) -------------------------
     function rowMenu(e: MouseEvent, r: ResolvedRow) {
-        const i = rows.indexOf(r);
-        const list = r.hidden ? hidden : shown;
+        const list = r.hidden ? more : onHome;
         const j = list.indexOf(r);
+        const i = rows.indexOf(r);
+        const others = onHome.filter((o) => o !== r && canCombine(o));
         const entries: MenuEntry[] = [];
         if (r.kind !== 'special') entries.push({ label: 'Rename…', icon: 'pencil', onselect: () => startRename(r) });
-        entries.push(
-            { label: 'Move Up', disabled: j <= 0, onselect: () => homeLayout.move(rows, i, rows.indexOf(list[j - 1])) },
-            { label: 'Move Down', disabled: j >= list.length - 1, onselect: () => homeLayout.move(rows, i, rows.indexOf(list[j + 1])) }
-        );
-        if (r.kind !== 'special') {
-            entries.push({ separator: true }, { label: 'Merge With…', icon: 'merge', onselect: () => startSelect(r.key) });
+        if (!r.hidden) {
+            entries.push(
+                { label: 'Move Up', disabled: j <= 0, onselect: () => homeLayout.move(rows, i, rows.indexOf(list[j - 1])) },
+                { label: 'Move Down', disabled: j >= list.length - 1, onselect: () => homeLayout.move(rows, i, rows.indexOf(list[j + 1])) }
+            );
         }
-        if (r.kind === 'merge') entries.push({ label: 'Unmerge', onselect: () => homeLayout.unmerge(rows, r.key) });
-        entries.push({ separator: true }, {
-            label: r.hidden ? 'Show on Home' : 'Hide from Home',
-            icon: r.hidden ? 'eye' : 'eyeOff',
-            onselect: () => homeLayout.setHidden(rows, r.key, !r.hidden),
-        });
+        if (canCombine(r) && !r.hidden) {
+            entries.push({ separator: true }, {
+                label: 'Combine With',
+                icon: 'merge',
+                disabled: !others.length,
+                submenu: others.map((o) => ({ label: o.name, onselect: () => openCombine([o, r]) })),
+            });
+        }
+        if (r.kind === 'merge') entries.push({ label: 'Separate Rows', onselect: () => homeLayout.unmerge(rows, r.key) });
+        entries.push({ separator: true }, r.hidden
+            ? { label: 'Add to Home', icon: 'plus', onselect: () => homeLayout.setHidden(rows, r.key, false) }
+            : { label: 'Remove from Home', icon: 'minus', destructive: true, onselect: () => homeLayout.setHidden(rows, r.key, true) });
         menu.toggleFor(e.currentTarget as HTMLElement, entries, 'end');
     }
 
-    function pageMenu(e: MouseEvent) {
-        menu.toggleFor(
-            e.currentTarget as HTMLElement,
-            [{ label: 'Reset Home to Default', destructive: true, onselect: () => homeLayout.reset() }],
-            'end'
-        );
-    }
-
-    // --- Select & merge ----------------------------------------------------------------
-    let selecting = $state(false);
-    let selected = $state<string[]>([]);
-    function startSelect(first?: string) {
-        selecting = true;
-        selected = first ? [first] : [];
-    }
-    function toggleSelected(key: string) {
-        selected = selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key];
-    }
-    function stopSelect() {
-        selecting = false;
-        selected = [];
-    }
-
-    let merging = $state(false);
-    let mergeName = $state('');
-    let mergeDialog = $state<HTMLDialogElement>();
-    const mergeRows = $derived(rows.filter((r) => selected.includes(r.key)));
-    /** "Popular · Movie" + "Popular · Series" → "Popular". */
-    function commonName(list: ResolvedRow[]) {
+    // --- Combine sheet ---------------------------------------------------------------
+    let combining = $state<ResolvedRow[] | null>(null);
+    let combineName = $state('');
+    let combineDialog = $state<HTMLDialogElement>();
+    function openCombine(list: ResolvedRow[]) {
+        combining = list;
         const firsts = list.map((r) => r.name.split(' · ')[0]);
-        return firsts.every((f) => f === firsts[0]) ? firsts[0] : list[0]?.name ?? '';
+        combineName = firsts.every((f) => f === firsts[0]) ? firsts[0] : list[0].name;
+        tick().then(() => combineDialog?.showModal());
     }
-    function openMerge() {
-        mergeName = commonName(mergeRows);
-        merging = true;
-    }
-    $effect(() => {
-        if (merging) mergeDialog?.showModal();
-    });
-    function confirmMerge(e: SubmitEvent) {
+    const combinePreview = $derived(
+        combining ? interleave(combining.flatMap((r) => r.parts).map(itemsOf)).slice(0, 8) : []
+    );
+    function confirmCombine(e: SubmitEvent) {
         e.preventDefault();
-        homeLayout.merge(rows, selected, mergeName);
-        mergeDialog?.close();
-        stopSelect();
+        if (combining) homeLayout.merge(rows, combining.map((r) => r.key), combineName);
+        combineDialog?.close();
     }
 
-    // --- Drag to reorder -------------------------------------------------------------
-    // The drop position comes from where the pointer is against the middle of the
-    // other rows in the same list (shown or hidden), so the row follows smoothly.
+    // --- Drag: between rows reorders, onto a row combines --------------------------------
     let dragKey = $state<string | null>(null);
-    /** Where the dragged row would land, counting the other rows of its list. */
     let dropIndex = $state<number | null>(null);
+    let combineTarget = $state<string | null>(null);
     const dragged = $derived(rows.find((r) => r.key === dragKey) ?? null);
 
     function dragStart(e: PointerEvent, r: ResolvedRow) {
         if (e.button !== 0) return;
+        e.preventDefault();
         dragKey = r.key;
-        const list = r.hidden ? hidden : shown;
-        dropIndex = list.indexOf(r);
+        dropIndex = (r.hidden ? more : onHome).indexOf(r);
+        combineTarget = null;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     }
     function dragMove(e: PointerEvent) {
         if (!dragged) return;
-        const others = [...document.querySelectorAll<HTMLElement>(`[data-list="${dragged.hidden ? 'hidden' : 'shown'}"] > [data-row]`)].filter(
+        const others = [...document.querySelectorAll<HTMLElement>(`[data-list="${dragged.hidden ? 'more' : 'home'}"] > [data-row]`)].filter(
             (el) => el.dataset.row !== dragKey
         );
+        // Over the middle of another row: combine with it (not the built-in row, not in More Rows).
+        const over = others.find((el) => {
+            const b = el.getBoundingClientRect();
+            return e.clientY > b.top + b.height * 0.28 && e.clientY < b.bottom - b.height * 0.28;
+        });
+        const overRow = over && rows.find((r) => r.key === over.dataset.row);
+        if (overRow && !dragged.hidden && canCombine(dragged) && canCombine(overRow)) {
+            combineTarget = overRow.key;
+            return;
+        }
+        combineTarget = null;
         dropIndex = others.filter((el) => {
-            const box = el.getBoundingClientRect();
-            return box.top + box.height / 2 < e.clientY;
+            const b = el.getBoundingClientRect();
+            return b.top + b.height / 2 < e.clientY;
         }).length;
     }
     function dragEnd() {
-        if (dragged && dropIndex != null) {
-            const list = (dragged.hidden ? hidden : shown).filter((r) => r !== dragged);
+        if (!dragged) return;
+        if (combineTarget) {
+            const target = rows.find((r) => r.key === combineTarget);
+            if (target) openCombine([target, dragged]);
+        } else if (dropIndex != null) {
+            const list = (dragged.hidden ? more : onHome).filter((r) => r !== dragged);
             const from = rows.indexOf(dragged);
             const before = list[dropIndex];
             let to: number;
@@ -166,10 +207,11 @@
         }
         dragKey = null;
         dropIndex = null;
+        combineTarget = null;
     }
     /** The list as it would be after dropping, so rows make room while dragging. */
     function arranged(list: ResolvedRow[]) {
-        if (!dragged || dropIndex == null || !list.includes(dragged)) return list;
+        if (!dragged || dropIndex == null || combineTarget || !list.includes(dragged)) return list;
         const out = list.filter((r) => r !== dragged);
         out.splice(dropIndex, 0, dragged);
         return out;
@@ -190,71 +232,86 @@
 
 <svelte:window onpointermove={dragMove} onpointerup={dragEnd} />
 
-<div class="page">
+<div class="page" class:is-dragging={!!dragKey}>
     <header class="top">
-        <button class="icon-btn" onclick={() => history.back()} aria-label="Back"><Icon name="back" size={20} /></button>
-        <div class="top-actions">
-            <button class="icon-btn" onclick={pageMenu} aria-label="More" aria-haspopup="menu" aria-expanded="false"><Icon name="more" size={22} /></button>
-            <button class="pill primary" onclick={() => goto('/')}>Done</button>
+        <div>
+            <h1>Customize Home</h1>
+            <p class="tip">
+                Drag <span class="kbd"><Icon name="grip" size={14} /></span> to reorder. Drop a row onto another to combine them.
+            </p>
         </div>
+        <button class="pill primary" onclick={() => goto('/')}>Done</button>
     </header>
 
-    <h1>Customize Home</h1>
-    <p class="lede">Rows come from your addons. Reorder, rename, merge or hide any of them. Changes are saved for this profile.</p>
-
-    <section>
-        <div class="section-head">
-            <h2>Home Rows <span class="count">{shown.length} shown · {hidden.length} hidden</span></h2>
-            {#if selecting}
-                <button class="pill" onclick={stopSelect}>Cancel</button>
-            {:else}
-                <button class="pill" onclick={() => startSelect()}>Select</button>
-            {/if}
+    {#if suggestion}
+        <div class="suggest" role="region" aria-label="Suggestion">
+            <span class="suggest-icon" aria-hidden="true"><Icon name="merge" size={20} /></span>
+            <div class="suggest-text">
+                <strong>Combine “{suggestion.name}” into one row?</strong>
+                <span>{suggestion.rows.map((r) => typeLabel(byKey.get(r.parts[0])?.type)).join(' and ')} together, taking turns.</span>
+            </div>
+            <button class="pill" onclick={() => homeLayout.dismissSuggestion(suggestion.id)}>Not Now</button>
+            <button class="pill primary" onclick={() => openCombine(suggestion.rows)}>Combine</button>
         </div>
+    {/if}
 
+    <section aria-labelledby="on-home">
+        <h2 id="on-home">On Home</h2>
         {#if !board}
             <p class="empty">Loading your rows…</p>
+        {:else if !onHome.length}
+            <p class="empty">Nothing on Home. Add rows from More Rows below.</p>
         {/if}
-
-        <ul class="rows" aria-label="Shown on Home" data-list="shown">
-            {#each arranged(shown) as r (r.key)}
+        <ul class="list" data-list="home">
+            {#each arranged(onHome) as r (r.key)}
                 {@render row(r)}
             {/each}
         </ul>
+    </section>
 
-        {#if hidden.length}
-            <h3 class="hidden-head">Hidden · Not Shown on Home</h3>
-            <ul class="rows" aria-label="Hidden" data-list="hidden">
-                {#each arranged(hidden) as r (r.key)}
+    <section aria-labelledby="more-rows">
+        <h2 id="more-rows">More Rows</h2>
+        {#if more.length}
+            <ul class="list" data-list="more">
+                {#each more as r (r.key)}
                     {@render row(r)}
                 {/each}
             </ul>
+        {:else}
+            <p class="empty">Rows you remove from Home wait here, ready to add back.</p>
         {/if}
     </section>
+
+    <div class="footer">
+        <button class="text-btn" onclick={() => homeLayout.reset()}>Restore Default Rows</button>
+    </div>
 </div>
 
 {#snippet row(r: ResolvedRow)}
-    {@const canSelect = r.kind !== 'special'}
-    <li class="row" class:off={r.hidden} class:dragging={dragKey === r.key} data-row={r.key}>
-        {#if selecting}
-            <button
-                class="check"
-                class:on={selected.includes(r.key)}
-                role="checkbox"
-                aria-checked={selected.includes(r.key)}
-                aria-label={`Select ${r.name}`}
-                disabled={!canSelect}
-                onclick={() => toggleSelected(r.key)}
-            >
-                {#if selected.includes(r.key)}<Icon name="check" size={14} />{/if}
+    {@const pics = posters(r)}
+    <li
+        class="row"
+        class:dragging={dragKey === r.key}
+        class:target={combineTarget === r.key}
+        data-row={r.key}
+    >
+        {#if r.hidden}
+            <button class="round add" onclick={() => homeLayout.setHidden(rows, r.key, false)} aria-label={`Add ${r.name} to Home`} title="Add to Home">
+                <Icon name="plus" size={16} />
             </button>
         {:else}
-            <button class="handle" aria-label={`Drag to reorder ${r.name}`} title="Drag to reorder" onpointerdown={(e) => dragStart(e, r)}>
-                <Icon name="grip" size={18} />
+            <button class="round remove" onclick={() => homeLayout.setHidden(rows, r.key, true)} aria-label={`Remove ${r.name} from Home`} title="Remove from Home">
+                <Icon name="minus" size={16} />
             </button>
         {/if}
 
-        <div class="info">
+        <div class="art" aria-hidden="true">
+            {#each [0, 1, 2] as i (i)}
+                {#if pics[i]}<img src={pics[i]} alt="" loading="lazy" />{:else}<span></span>{/if}
+            {/each}
+        </div>
+
+        <div class="text">
             {#if renaming === r.key}
                 <input
                     class="rename"
@@ -271,62 +328,61 @@
                     }}
                     onblur={() => finishRename(true)}
                 />
-            {:else}
+            {:else if r.kind === 'special'}
                 <span class="name">{r.name}</span>
+            {:else}
+                <button class="name editable" onclick={() => startRename(r)} title="Rename">{r.name}<Icon name="pencil" size={13} /></button>
             {/if}
-            <span class="sources">
-                {#each sources(r) as s, i (i)}
-                    {#if i}<span class="plus" aria-hidden="true">+</span>{/if}<span class="chip">{s}</span>
-                {/each}
+            <span class="detail">
+                {detail(r)}
+                {#if r.kind === 'merge'}
+                    · <button class="link" onclick={() => homeLayout.unmerge(rows, r.key)}>Separate</button>
+                {/if}
             </span>
         </div>
 
-        <button
-            class="icon-btn eye"
-            class:on={!r.hidden}
-            onclick={() => homeLayout.setHidden(rows, r.key, !r.hidden)}
-            aria-label={r.hidden ? `Show ${r.name} on Home` : `Hide ${r.name} from Home`}
-            title={r.hidden ? 'Show on Home' : 'Hide from Home'}
-        >
-            <Icon name={r.hidden ? 'eyeOff' : 'eye'} size={19} />
+        {#if combineTarget === r.key}
+            <span class="combine-badge" aria-hidden="true"><Icon name="merge" size={14} /> Combine</span>
+        {/if}
+
+        <button class="round ghost" onclick={(e) => rowMenu(e, r)} aria-label={`More for ${r.name}`} aria-haspopup="menu" aria-expanded="false">
+            <Icon name="more" size={20} />
         </button>
-        <button class="icon-btn" onclick={(e) => rowMenu(e, r)} aria-label={`More for ${r.name}`} aria-haspopup="menu" aria-expanded="false">
-            <Icon name="more" size={22} />
-        </button>
+        {#if !r.hidden}
+            <button class="handle" aria-label={`Drag to reorder ${r.name}`} title="Drag to reorder, or onto another row to combine" onpointerdown={(e) => dragStart(e, r)}>
+                <Icon name="grip" size={18} />
+            </button>
+        {/if}
     </li>
 {/snippet}
 
-{#if selecting}
-    <div class="select-bar" role="toolbar" aria-label="Selection">
-        <span>{selected.length} selected</span>
-        <button class="pill primary" disabled={selected.length < 2} onclick={openMerge}><Icon name="merge" size={16} /> Merge Rows</button>
-    </div>
-{/if}
+{#if combining}
+    <dialog bind:this={combineDialog} class="sheet" aria-labelledby="combine-title" onclose={() => (combining = null)}>
+        <form onsubmit={confirmCombine}>
+            <span class="sheet-icon" aria-hidden="true"><Icon name="merge" size={22} /></span>
+            <h2 id="combine-title">Combine Rows</h2>
+            <p class="sub">{combining.map((r) => r.name).join(' and ')} become one row, their titles taking turns.</p>
 
-{#if merging}
-    <dialog bind:this={mergeDialog} class="merge" aria-labelledby="merge-title" onclose={() => (merging = false)}>
-        <form onsubmit={confirmMerge}>
-            <h2 id="merge-title">Merge Rows</h2>
-            <p class="sub">Combines {mergeRows.length} rows into one on Home, their titles taking turns.</p>
-            <label class="label" for="merge-name">New Row Name</label>
-            <input id="merge-name" class="field" bind:value={mergeName} maxlength="40" required />
-            <p class="label">Combining</p>
-            <ul class="combining">
-                {#each mergeRows as r (r.key)}
-                    <li><span>{r.name}</span><span class="chips">{#each sources(r) as s, i (i)}<span class="chip">{s}</span>{/each}</span></li>
+            <div class="preview" aria-hidden="true">
+                {#each combinePreview as item (item.id)}
+                    {#if item.poster}<img src={item.poster} alt="" />{:else}<span></span>{/if}
                 {/each}
-            </ul>
-            <div class="dialog-actions">
-                <span class="note">You can unmerge anytime.</span>
-                <button type="button" class="pill" onclick={() => mergeDialog?.close()}>Cancel</button>
-                <button type="submit" class="pill primary" disabled={!mergeName.trim()}>Merge Rows</button>
             </div>
+
+            <label class="field-label" for="combine-name">Row Name</label>
+            <input id="combine-name" class="field" bind:value={combineName} maxlength="40" required />
+
+            <div class="sheet-actions">
+                <button type="button" class="pill" onclick={() => combineDialog?.close()}>Cancel</button>
+                <button type="submit" class="pill primary" disabled={!combineName.trim()}>Combine</button>
+            </div>
+            <p class="fine">You can separate them again anytime.</p>
         </form>
     </dialog>
 {/if}
 
 {#if homeLayout.undoLabel}
-    <div class="toast" class:lifted={selecting} role="status">
+    <div class="toast" role="status">
         <span>{homeLayout.undoLabel}</span>
         <button onclick={() => homeLayout.undo()}>Undo</button>
     </div>
@@ -334,20 +390,20 @@
 
 <style>
     .page {
-        max-width: 760px;
+        max-width: 720px;
         margin: 0 auto;
-        padding: calc(var(--nav-h) + 12px) var(--gutter) 120px;
+        padding: calc(var(--nav-h) + 20px) var(--gutter) 120px;
+    }
+    .page.is-dragging {
+        user-select: none;
+        cursor: grabbing;
     }
     .top {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 18px;
-    }
-    .top-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
+        gap: 20px;
+        margin-bottom: 24px;
     }
     h1 {
         margin: 0;
@@ -356,115 +412,194 @@
         font-weight: 700;
         letter-spacing: -0.02em;
     }
-    .lede {
-        margin: 6px 0 28px;
+    .tip {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin: 8px 0 0;
         color: var(--label-2);
         font-size: var(--text-callout);
     }
-    .section-head {
+    .kbd {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: var(--fill-hover);
+        color: var(--label);
+    }
+
+    /* Suggestion */
+    .suggest {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12px;
+        gap: 14px;
+        margin-bottom: 28px;
+        padding: 14px 14px 14px 16px;
+        border-radius: var(--radius-l);
+        background: linear-gradient(135deg, rgb(109 74 240 / 0.22), rgb(45 140 240 / 0.12));
+        border: 1px solid rgb(109 74 240 / 0.35);
     }
-    h2 {
-        margin: 0;
-        font-size: var(--text-title3);
-        font-weight: 600;
+    .suggest-icon {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: rgb(109 74 240 / 0.35);
+        color: white;
     }
-    .count {
-        margin-left: 8px;
+    .suggest-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .suggest-text span {
         font-size: 13px;
-        font-weight: 500;
         color: var(--label-2);
     }
-    .hidden-head {
-        margin: 28px 0 10px 4px;
+
+    /* Sections */
+    section + section {
+        margin-top: 32px;
+    }
+    h2 {
+        margin: 0 0 10px 4px;
         font-size: 13px;
         font-weight: 600;
         color: var(--label-2);
     }
     .empty {
+        margin: 0 0 0 4px;
         color: var(--label-2);
+        font-size: 14px;
     }
-    .rows {
+    .list {
         list-style: none;
         margin: 0;
         padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-    .row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-height: 68px;
-        padding: 10px 10px 10px 8px;
         border-radius: var(--radius-l);
         background: var(--elevated);
         border: 1px solid var(--separator);
-        transition:
-            box-shadow var(--fast),
-            opacity var(--fast);
+        overflow: hidden;
     }
-    .row.off .name,
-    .row.off .chip {
-        opacity: 0.55;
+    .row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 72px;
+        padding: 10px 8px 10px 14px;
+        background: var(--elevated);
+        transition:
+            background var(--fast),
+            box-shadow var(--fast);
+    }
+    .row + .row {
+        border-top: 1px solid var(--separator);
     }
     .row.dragging {
-        box-shadow: 0 12px 30px rgb(0 0 0 / 0.45);
-        border-color: rgb(255 255 255 / 0.25);
+        z-index: 2;
+        background: var(--elevated-2);
+        box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
     }
-    .handle {
-        display: grid;
-        place-items: center;
-        width: 32px;
-        height: 44px;
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--label-3);
-        cursor: grab;
-        touch-action: none;
+    .row.target {
+        background: rgb(109 74 240 / 0.18);
+        box-shadow: inset 0 0 0 2px rgb(109 74 240 / 0.8);
     }
-    .handle:active {
-        cursor: grabbing;
-    }
-    .check {
+
+    /* − / + */
+    .round {
         display: grid;
         place-items: center;
         flex: none;
-        width: 24px;
-        height: 24px;
-        margin: 0 4px;
+        width: 28px;
+        height: 28px;
         padding: 0;
+        border: 0;
         border-radius: 50%;
-        border: 2px solid var(--label-3);
-        background: none;
-        color: var(--bg);
+        color: white;
         cursor: pointer;
+        transition: transform var(--fast) var(--ease);
     }
-    .check.on {
-        border-color: var(--label);
-        background: var(--label);
+    .round:hover {
+        transform: scale(1.08);
     }
-    .check:disabled {
-        opacity: 0.3;
-        cursor: default;
+    .round.remove {
+        background: #ff453a;
     }
-    .info {
+    .round.add {
+        background: #30d158;
+    }
+    .round.ghost {
+        width: 44px;
+        height: 44px;
+        background: transparent;
+        color: var(--label-2);
+    }
+    .round.ghost:hover {
+        transform: none;
+        background: var(--fill-hover);
+        color: var(--label);
+    }
+
+    .art {
+        display: flex;
+        flex: none;
+    }
+    .art img,
+    .art span {
+        width: 30px;
+        height: 45px;
+        border-radius: 5px;
+        object-fit: cover;
+        background: var(--elevated-2);
+        box-shadow: 0 0 0 2px var(--elevated);
+    }
+    .art > * + * {
+        margin-left: -10px;
+    }
+    .text {
         flex: 1;
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        align-items: flex-start;
+        gap: 3px;
     }
     .name {
-        font-weight: 600;
+        max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-weight: 600;
+    }
+    .name.editable {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--label);
+        font: inherit;
+        font-weight: 600;
+        cursor: text;
+        border-radius: 4px;
+    }
+    .name.editable :global(svg) {
+        opacity: 0;
+        color: var(--label-2);
+        transition: opacity var(--fast);
+    }
+    .row:hover .name.editable :global(svg),
+    .name.editable:focus-visible :global(svg) {
+        opacity: 1;
     }
     .rename {
         height: 32px;
@@ -476,55 +611,57 @@
         font: inherit;
         font-weight: 600;
     }
-    .sources {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-    }
-    .chip {
-        padding: 2px 8px;
-        border-radius: 999px;
-        background: var(--fill-hover);
-        font-size: 12px;
+    .detail {
+        font-size: 13px;
         color: var(--label-2);
     }
-    .plus {
-        font-size: 12px;
-        color: var(--label-3);
+    .link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: #8b7bff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
     }
-    .icon-btn {
+    .link:hover {
+        text-decoration: underline;
+    }
+    .combine-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #6d4af0;
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .handle {
         display: grid;
         place-items: center;
         flex: none;
-        width: 44px;
+        width: 40px;
         height: 44px;
         padding: 0;
         border: 0;
-        border-radius: 50%;
-        background: transparent;
-        color: var(--label-2);
-        cursor: pointer;
-        transition:
-            background var(--fast),
-            color var(--fast);
+        border-radius: 8px;
+        background: none;
+        color: var(--label-3);
+        cursor: grab;
+        touch-action: none;
     }
-    .icon-btn:hover {
-        background: var(--fill-hover);
+    .handle:hover {
         color: var(--label);
     }
-    .icon-btn.eye.on {
-        background: var(--fill);
-        color: var(--label);
-    }
-    .top .icon-btn {
-        background: var(--fill);
-        color: var(--label);
-    }
+
+    /* Buttons */
     .pill {
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        flex: none;
         height: 40px;
         padding: 0 18px;
         border: 1px solid var(--separator);
@@ -549,53 +686,90 @@
         opacity: 0.45;
         cursor: default;
     }
-    .select-bar {
-        position: fixed;
-        left: 50%;
-        bottom: 24px;
-        translate: -50% 0;
-        z-index: 20;
+    .footer {
         display: flex;
-        align-items: center;
-        gap: 18px;
-        padding: 8px 8px 8px 20px;
-        border-radius: 999px;
-        background: rgb(31 31 40 / 0.92);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid var(--separator);
-        box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
-        font-weight: 600;
+        justify-content: center;
+        margin-top: 28px;
     }
-    .merge {
-        width: min(520px, calc(100vw - 32px));
-        padding: 28px;
+    .text-btn {
+        height: 40px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 999px;
+        background: none;
+        color: var(--label-2);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .text-btn:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
+
+    /* Combine sheet */
+    .sheet {
+        width: min(480px, calc(100vw - 32px));
+        padding: 28px 28px 22px;
         border: 1px solid var(--separator);
         border-radius: 24px;
         background: var(--elevated-2);
         color: var(--label);
         box-shadow: 0 24px 64px rgb(0 0 0 / 0.6);
+        text-align: center;
     }
-    .merge::backdrop {
+    .sheet::backdrop {
         background: rgb(0 0 0 / 0.55);
     }
-    .merge h2 {
-        font-size: 26px;
-        font-family: var(--font-display);
-        font-weight: 700;
+    .sheet[open] {
+        animation: pop var(--slow) var(--ease);
     }
-    .merge .sub {
-        margin: 6px 0 20px;
+    @keyframes pop {
+        from {
+            opacity: 0;
+            transform: scale(0.96);
+        }
+    }
+    .sheet-icon {
+        display: inline-grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: #6d4af0;
+        color: white;
+    }
+    .sheet h2 {
+        margin: 12px 0 0;
+        font-family: var(--font-display);
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--label);
+    }
+    .sheet .sub {
+        margin: 6px 0 18px;
         color: var(--label-2);
         font-size: 14px;
     }
-    .label {
+    .preview {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-bottom: 18px;
+    }
+    .preview img,
+    .preview span {
+        width: 44px;
+        height: 66px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: var(--elevated);
+    }
+    .field-label {
         display: block;
-        margin: 16px 0 8px;
-        font-size: 12px;
+        margin: 0 0 8px;
+        text-align: left;
+        font-size: 13px;
         font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
         color: var(--label-2);
     }
     .field {
@@ -603,7 +777,7 @@
         box-sizing: border-box;
         height: 48px;
         padding: 0 18px;
-        border-radius: 999px;
+        border-radius: 12px;
         border: 1px solid var(--separator);
         background: var(--bg);
         color: var(--label);
@@ -613,40 +787,21 @@
         outline: none;
         border-color: var(--accent-hover);
     }
-    .combining {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        border-radius: 16px;
-        background: var(--fill);
-        overflow: hidden;
-    }
-    .combining li {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px 16px;
-        font-weight: 600;
-    }
-    .combining li + li {
-        border-top: 1px solid var(--separator);
-    }
-    .combining .chips {
-        display: flex;
-        gap: 6px;
-    }
-    .dialog-actions {
-        display: flex;
-        align-items: center;
+    .sheet-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 10px;
-        margin-top: 24px;
+        margin-top: 20px;
     }
-    .note {
-        flex: 1;
-        font-size: 13px;
+    .sheet-actions .pill {
+        justify-content: center;
+    }
+    .fine {
+        margin: 12px 0 0;
+        font-size: 12px;
         color: var(--label-2);
     }
+
     .toast {
         position: fixed;
         left: 50%;
@@ -673,13 +828,21 @@
         font-weight: 700;
         cursor: pointer;
     }
-    /* Above the selection bar when both are up. */
-    .toast.lifted {
-        bottom: 88px;
+    @media (max-width: 560px) {
+        .art {
+            display: none;
+        }
+        .suggest {
+            flex-wrap: wrap;
+        }
     }
     @media (prefers-reduced-motion: reduce) {
-        .row {
+        .row,
+        .round {
             transition: none;
+        }
+        .sheet[open] {
+            animation: none;
         }
     }
 </style>

@@ -53,6 +53,7 @@
         exitFullscreen: 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',
         next: 'M6 5.5v13l9.5-6.5zM18 5v14',
         close: 'M6 6l12 12M18 6 6 18',
+        minus: 'M5 12h14',
     } as const;
     export type IconName = keyof typeof paths;
 </script>
