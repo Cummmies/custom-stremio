@@ -1,6 +1,7 @@
 // Checks GitHub Releases for a signed update, downloads it quietly, and lets
 // the person restart when it suits them (never mid-movie).
 import { getVersion } from '@tauri-apps/api/app';
+import { isDesktop } from '$lib/platform';
 
 type Phase = 'idle' | 'checking' | 'downloading' | 'ready' | 'up-to-date' | 'error';
 
@@ -14,8 +15,9 @@ class Updates {
 
     #update: { downloadAndInstall: Function; download: Function; install: () => Promise<void> } | null = null;
 
+    /** The desktop app updates itself; iOS installs are replaced by sideloading. */
     get supported() {
-        return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+        return isDesktop;
     }
 
     async check({ quiet = false } = {}) {

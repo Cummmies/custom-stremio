@@ -22,11 +22,8 @@ tauri = { version = "2", features = ["image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-libloading = "0.8"
-raw-window-handle = "0.6"
 tauri-plugin-deep-link = "2"
 ureq = { version = "2", default-features = false, features = ["tls", "json"] }
-discord-rich-presence = "1.1"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -42,7 +39,16 @@ win32job = "2"
 windows-registry = "0.5"
 windows = { version = "0.44", features = ["Foundation", "Media", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Storage_EnhancedStorage"] }
 
+# Desktop only: embedded libmpv (loaded at runtime), the streaming server, Discord,
+# window modes and the updater.
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+libloading = "0.8"
+raw-window-handle = "0.6"
+discord-rich-presence = "1.1"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
+
+# iOS: mpv comes from MPVKit, driven by a small Swift plugin (plugins/mpv).
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri-plugin-mpv = { path = "plugins/mpv" }

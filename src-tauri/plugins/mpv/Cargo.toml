@@ -1,0 +1,12 @@
+[package]
+name = "tauri-plugin-mpv"
+version = "0.1.0"
+edition = "2021"
+description = "Embedded mpv for iOS (MPVKit), with the same commands and events as the desktop player."
+links = "tauri-plugin-mpv"
+
+[dependencies]
+tauri = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

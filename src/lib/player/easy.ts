@@ -3,6 +3,7 @@
 import type { MetaDetails, Stream } from '$lib/core/types';
 import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
+import { isDesktop } from '$lib/platform';
 import { audioMatch, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
 const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
@@ -49,7 +50,8 @@ export function rankedPicks(
         // A source you picked yourself above the Easy Mode cap is still fine for the next episode.
         maxResolution: Math.max(playerPrefs.maxResolution, like?.resolution ?? 0),
         language: playerPrefs.easyLanguage,
-        allowTorrents: playerPrefs.allowTorrents,
+        // Torrents need the streaming server, which only the desktop app has.
+        allowTorrents: playerPrefs.allowTorrents && isDesktop,
         anime,
     });
     if (like?.addonUrl) {

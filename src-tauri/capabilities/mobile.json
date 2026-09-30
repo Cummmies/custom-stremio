@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "iOS: the MPVKit player",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "iOS"
+  ],
+  "permissions": [
+    "mpv:default"
+  ]
+}

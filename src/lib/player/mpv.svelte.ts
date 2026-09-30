@@ -1,9 +1,13 @@
-// The desktop player backend: a thin, reactive client for the embedded mpv
-// (src-tauri/src/player.rs). Screens use it through `player` (player.ts) and
-// the PlayerBackend interface; only mpv-specific extras (silence skip) use
-// `mpv` and its raw get/set/command directly.
-import { invoke } from '@tauri-apps/api/core';
+// The mpv player backend: a thin, reactive client for embedded mpv. On the
+// desktop that's libmpv in Rust (src-tauri/src/player.rs); on iOS it's MPVKit in
+// a Swift plugin (src-tauri/plugins/mpv). Both take the same commands and send
+// the same events, so only the transport below differs.
+//
+// Screens use it through `player` (player.ts) and the PlayerBackend interface;
+// only mpv-specific extras (silence skip) use `mpv` and its raw get/set/command.
+import { addPluginListener, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { inTauri, isIOS } from '$lib/platform';
 import { playerPrefs, type Upscaler } from './prefs.svelte';
 import { langKey } from './lang';
 import type { PlayerBackend, PlayerEvent, PlayerFeatures, RawChapter, StartSettings, Track } from './backend';
@@ -25,17 +29,56 @@ const OBSERVED = [
     'video-params/h', 'hwdec-current',
 ];
 
-export const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+export { inTauri } from '$lib/platform';
+
+type Prop = { name: string; value: string | null };
+
+/** How commands reach mpv and how its events come back. */
+type Transport = {
+    start(options: Record<string, string>): Promise<void>;
+    command(args: string[]): Promise<void>;
+    set(name: string, value: string): Promise<void>;
+    get(name: string): Promise<string | null>;
+    stop(): Promise<void>;
+    listen(onProp: (p: Prop) => void, onEvent: (e: PlayerEvent) => void): Promise<UnlistenFn[]>;
+};
+
+const desktop: Transport = {
+    start: (options) => invoke('mpv_start', { options }),
+    command: (args) => invoke('mpv_command', { args }),
+    set: (name, value) => invoke('mpv_set', { name, value }),
+    get: (name) => invoke<string | null>('mpv_get', { name }),
+    stop: () => invoke('mpv_stop'),
+    listen: async (onProp, onEvent) => [
+        await listen<Prop>('mpv://prop', (e) => onProp(e.payload)),
+        await listen<PlayerEvent>('mpv://event', (e) => onEvent(e.payload)),
+    ],
+};
+
+const ios: Transport = {
+    start: (options) => invoke('plugin:mpv|start', { options }),
+    command: (args) => invoke('plugin:mpv|command', { args }),
+    set: (name, value) => invoke('plugin:mpv|set', { name, value }),
+    get: async (name) => (await invoke<{ value?: string | null }>('plugin:mpv|get', { name }))?.value ?? null,
+    stop: () => invoke('plugin:mpv|stop'),
+    listen: async (onProp, onEvent) => {
+        const listeners = [await addPluginListener<Prop>('mpv', 'prop', onProp), await addPluginListener<PlayerEvent>('mpv', 'event', onEvent)];
+        return listeners.map((l) => () => void l.unregister());
+    },
+};
+
+const transport = isIOS ? ios : desktop;
 
 const num = (v: string | null) => (v == null || v === '' ? null : Number(v));
 const flag = (v: string | null) => v === 'yes';
 
 class Mpv implements PlayerBackend {
+    // iOS: no d3d11 upscalers or HDMI passthrough, and no second mpv for thumbnails.
     readonly features: PlayerFeatures = {
-        upscaling: true,
-        hdrPassthrough: true,
-        audioPassthrough: true,
-        thumbnails: true,
+        upscaling: !isIOS,
+        hdrPassthrough: !isIOS,
+        audioPassthrough: !isIOS,
+        thumbnails: !isIOS,
         silenceSkip: true,
     };
 
@@ -104,12 +147,12 @@ class Mpv implements PlayerBackend {
     async start(settings: StartSettings) {
         const options = buildOptions(settings);
         this.#rtx = options.hwdec === 'd3d11va';
-        if (!inTauri) throw new Error('Playback needs the desktop app.');
+        if (!inTauri) throw new Error('Playback needs the app.');
         if (!this.#unlisten.length) {
             this.#unlisten.push(
-                await listen<{ name: string; value: string | null }>('mpv://prop', (e) => this.#apply(e.payload.name, e.payload.value)),
-                await listen<PlayerEvent>('mpv://event', (e) => {
-                    const ev = e.payload;
+                ...(await transport.listen(
+                    (p) => this.#apply(p.name, p.value ?? null),
+                    (ev) => {
                     if (ev.kind === 'file-loaded') {
                         this.loaded = true;
                         this.ended = false;
@@ -122,10 +165,11 @@ class Mpv implements PlayerBackend {
                         this.running = false;
                     }
                     this.#listeners.forEach((fn) => fn(ev));
-                })
+                    }
+                ))
             );
         }
-        await invoke('mpv_start', { options });
+        await transport.start(options);
         this.running = true;
         await this.sync();
     }
@@ -157,16 +201,16 @@ class Mpv implements PlayerBackend {
     }
 
     command(...args: string[]) {
-        return invoke<void>('mpv_command', { args });
+        return transport.command(args);
     }
 
     set(name: string, value: string | number | boolean) {
         const v = typeof value === 'boolean' ? (value ? 'yes' : 'no') : String(value);
-        return invoke<void>('mpv_set', { name, value: v });
+        return transport.set(name, v);
     }
 
     get(name: string) {
-        return invoke<string | null>('mpv_get', { name });
+        return transport.get(name);
     }
 
     togglePause() {
@@ -239,6 +283,7 @@ class Mpv implements PlayerBackend {
 
     /** Switches upscaler; RTX needs native d3d11 decoding, so switching to or from it changes the decoder. */
     async setUpscaler(kind: Upscaler) {
+        if (!this.features.upscaling) return;
         const rtx = kind === 'rtx';
         if (rtx !== this.#rtx) {
             this.#rtx = rtx;
@@ -272,7 +317,7 @@ class Mpv implements PlayerBackend {
 
     async stop(): Promise<void> {
         this.loaded = false;
-        await invoke('mpv_stop').catch(() => {});
+        await transport.stop().catch(() => {});
     }
 
     reset() {
@@ -315,7 +360,26 @@ function buildOptions(settings: StartSettings): Record<string, string> {
     // Don't turn on subtitles in the language you're already hearing (dubs),
     // apart from forced ones (signs and songs).
     o['subs-with-matching-audio'] = 'no';
-    if (playerPrefs.audioPassthrough) o['audio-spdif'] = SPDIF;
+    if (playerPrefs.audioPassthrough && !isIOS) o['audio-spdif'] = SPDIF;
+    if (isIOS) Object.assign(o, iosOptions(settings));
+    return o;
+}
+
+/**
+ * iOS: Metal through MoltenVK (what MPVKit supports), VideoToolbox decoding, a
+ * smaller cache for a phone's memory, and no desktop-only extras.
+ */
+function iosOptions(settings: StartSettings): Record<string, string> {
+    const o: Record<string, string> = {
+        'gpu-api': 'vulkan',
+        'gpu-context': 'moltenvk',
+        hwdec: settings.hardwareDecoding === false ? 'no' : 'videotoolbox',
+        'target-colorspace-hint': 'no',
+        'demuxer-max-bytes': '150MiB',
+        'demuxer-max-back-bytes': '50MiB',
+        // Phone screens are small and close: a slightly smaller subtitle size reads better.
+        'sub-font-size': '40',
+    };
     return o;
 }
 

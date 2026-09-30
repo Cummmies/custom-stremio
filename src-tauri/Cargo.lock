@@ -3887,6 +3887,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
+ "tauri-plugin-mpv",
  "tauri-plugin-opener",
  "tauri-plugin-process",
  "tauri-plugin-single-instance",
@@ -3994,6 +3995,14 @@ dependencies = [
  "url",
  "windows-registry",
  "windows-result 0.3.4",
+]
+
+[[package]]
+name = "tauri-plugin-mpv"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

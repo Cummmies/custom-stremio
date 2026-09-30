@@ -1,24 +1,76 @@
+// Desktop: embedded libmpv, Stremio's streaming server, Discord, the Windows
+// media overlay and window modes. iOS plays with MPVKit (plugins/mpv) and has
+// no streaming server, so torrents aren't playable there; debrid links are.
+#[cfg(desktop)]
 mod discord;
+#[cfg(desktop)]
 mod media_controls;
+#[cfg(desktop)]
 mod player;
+#[cfg(desktop)]
 mod server;
 mod skips;
 mod storage;
+#[cfg(desktop)]
 mod window_modes;
 
-use player::Player;
+#[cfg(desktop)]
 use server::{ServerStatus, StreamingServer};
+#[cfg(desktop)]
 use std::sync::Arc;
+#[cfg(desktop)]
 use tauri::{Manager, RunEvent};
-use window_modes::WindowModes;
 
+#[cfg(desktop)]
 #[tauri::command]
 fn server_status(server: tauri::State<'_, Arc<StreamingServer>>) -> ServerStatus {
     server.status()
 }
 
+/// No streaming server on mobile: the app says so instead of waiting for one.
+#[cfg(mobile)]
+#[tauri::command]
+fn server_status() -> serde_json::Value {
+    serde_json::json!({ "state": "missing", "message": "Torrents play in the desktop app. Debrid links play here." })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(desktop)]
+    run_desktop();
+    #[cfg(mobile)]
+    run_mobile();
+}
+
+#[cfg(mobile)]
+fn run_mobile() {
+    tauri::Builder::default()
+        .plugin(storage::plugin())
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_mpv::init())
+        .manage(storage::Storage::default())
+        .invoke_handler(tauri::generate_handler![
+            server_status,
+            skips::skip_lookup,
+            storage::storage_set,
+            storage::storage_set_many,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            use tauri::Manager;
+            if let tauri::RunEvent::Exit = event {
+                app.state::<storage::Storage>().flush();
+            }
+        });
+}
+
+#[cfg(desktop)]
+fn run_desktop() {
+    use player::Player;
+    use window_modes::WindowModes;
+
     // Before any window: lets Windows' media panel show our name and icon.
     #[cfg(windows)]
     media_controls::register("com.sdola.customstremio");

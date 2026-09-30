@@ -18,6 +18,7 @@
     import { app } from '$lib/app.svelte';
     import { player, type Track } from '$lib/player/player';
     import { inTauri } from '$lib/player/mpv.svelte';
+    import { isDesktop } from '$lib/platform';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -110,14 +111,14 @@
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
         const offEvents = player.onEvent(onPlayerEvent);
         // Play/pause from the Windows media overlay or the keyboard's media keys.
-        const offMedia = inTauri
+        const offMedia = isDesktop
             ? listen<string>('media://button', (e) => {
                   markActive();
                   player.setPaused(e.payload === 'pause');
               })
             : Promise.resolve(() => {});
         // Pause on minimize / on switching to another window (Settings → Playback).
-        const win = inTauri ? getCurrentWindow() : null;
+        const win = isDesktop ? getCurrentWindow() : null;
         const pauseNow = () => {
             if (player.loaded && !player.paused) player.setPaused(true);
         };
@@ -137,8 +138,8 @@
             offEvents();
             offMedia.then((off) => off());
             offWindow.then((offs) => offs.forEach((off) => off()));
-            if (inTauri) invoke('media_clear').catch(() => {});
-            if (inTauri) invoke('discord_clear').catch(() => {});
+            if (isDesktop) invoke('media_clear').catch(() => {});
+            if (isDesktop) invoke('discord_clear').catch(() => {});
             document.documentElement.classList.remove('player-active', 'player-idle');
             clearTimeout(idleTimer);
             clearTimeout(watchdog);
@@ -445,7 +446,7 @@
 
     // --- Windows media overlay: show name, "S1 · E3 · Episode", play/pause ---
     $effect(() => {
-        if (!inTauri || !player.loaded || !model) return;
+        if (!isDesktop || !player.loaded || !model) return;
         const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
         invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: player.paused }).catch(() => {});
     });
@@ -454,7 +455,7 @@
     /** Bumped when playback restarts after a seek, so Discord's progress bar is redone. */
     let seeks = $state(0);
     $effect(() => {
-        if (!inTauri) return;
+        if (!isDesktop) return;
         if (!playerPrefs.discordPresence) {
             invoke('discord_clear').catch(() => {});
             return;
@@ -764,13 +765,16 @@
         }, 2600);
     }
 
+    // Desktop windows only; on iOS the player is always full screen.
     async function toggleFullscreen() {
+        if (!isDesktop) return;
         if (pip) await togglePip();
         fullscreen = !fullscreen;
         await invoke('set_fullscreen', { fullscreen });
     }
 
     async function togglePip() {
+        if (!isDesktop) return;
         pip = !pip;
         if (pip) fullscreen = false;
         await invoke('set_pip', { enabled: pip });
@@ -1107,10 +1111,12 @@
                         <Icon name="gear" size={20} />
                     </button>
                 {/if}
+                {#if isDesktop}
                 <button class="icon" onclick={togglePip} aria-label={pip ? 'Exit picture in picture' : 'Picture in picture'} title="Picture in Picture (P)">
                     <Icon name="pip" size={20} />
                 </button>
-                {#if !pip}
+                {/if}
+                {#if !pip && isDesktop}
                     <button class="icon" onclick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title="Full Screen (F)">
                         <Icon name={fullscreen ? 'exitFullscreen' : 'fullscreen'} size={20} />
                     </button>

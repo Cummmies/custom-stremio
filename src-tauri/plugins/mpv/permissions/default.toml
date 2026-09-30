@@ -1,0 +1,3 @@
+[default]
+description = "Everything the player screen needs: start, control and stop mpv."
+permissions = ["allow-start", "allow-command", "allow-set", "allow-get", "allow-stop"]

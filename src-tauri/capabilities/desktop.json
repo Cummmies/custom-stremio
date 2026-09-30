@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "Desktop only: updater, relaunch, and taking over stremio:// links",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "windows",
+    "macOS",
+    "linux"
+  ],
+  "permissions": [
+    "deep-link:allow-register",
+    "deep-link:allow-unregister",
+    "deep-link:allow-is-registered",
+    "updater:default",
+    "process:allow-restart"
+  ]
+}

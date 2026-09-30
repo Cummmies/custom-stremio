@@ -29,6 +29,11 @@ pub struct Storage {
 }
 
 fn dir() -> PathBuf {
+    // iOS: only the app container's Library (and Documents, tmp) is writable.
+    #[cfg(target_os = "ios")]
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home).join("Library").join("Application Support").join("storage");
+    }
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))

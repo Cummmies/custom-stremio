@@ -6,6 +6,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
+    import { isDesktop } from '$lib/platform';
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { profiles } from '$lib/profiles.svelte';
@@ -196,6 +197,7 @@
                     </div>
                     <Toggle label="Skip intros and recaps automatically" checked={playerPrefs.autoSkip} onchange={(v) => (playerPrefs.autoSkip = v)} />
                 </div>
+                {#if isDesktop}
                 <div class="row">
                     <div>
                         <div class="title">Pause when minimized</div>
@@ -210,6 +212,7 @@
                     </div>
                     <Toggle label="Pause when the window loses focus" checked={playerPrefs.pauseOnLostFocus} onchange={(v) => (playerPrefs.pauseOnLostFocus = v)} />
                 </div>
+                {/if}
                 <div class="row">
                     <div>
                         <div class="title">Ask if you’re still watching</div>
@@ -312,6 +315,7 @@
                             onchange={(v) => (playerPrefs.maxResolution = v)}
                         />
                     </div>
+                    {#if isDesktop}
                     <div class="row">
                         <div>
                             <div class="title">Fall back to non-debrid torrents</div>
@@ -322,11 +326,12 @@
                         </div>
                         <Toggle label="Fall back to non-debrid torrents" checked={playerPrefs.allowTorrents} onchange={(v) => (playerPrefs.allowTorrents = v)} />
                     </div>
+                    {/if}
                 {/if}
             </div>
         </section>
 
-        {#if inTauri}
+        {#if isDesktop}
             <section>
                 <h2>Integrations</h2>
                 <div class="group">

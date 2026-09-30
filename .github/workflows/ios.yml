@@ -1,0 +1,85 @@
+# Builds an unsigned iOS app (.ipa) for sideloading with SideStore, AltStore or
+# Sideloadly, which sign it with your own Apple ID when they install it.
+#
+# Run it from the Actions tab (Run workflow), or push a v* tag to also attach
+# the .ipa to that release. The .ipa is under the run's Artifacts.
+name: iOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # The Xcode project is generated, not committed, so it always matches the
+      # Tauri version in package.json.
+      - name: Generate the Xcode project
+        run: npx tauri ios init --ci
+
+      # No Apple developer account here: build without code signing. The
+      # sideloading app signs the .ipa when it installs it on your iPhone.
+      # XCODE_XCCONFIG_FILE applies these settings to every xcodebuild the Tauri
+      # CLI runs. The archive step is what we need; the export step afterwards
+      # needs a signing identity and is allowed to fail.
+      - name: Build
+        env:
+          XCODE_XCCONFIG_FILE: ${{ github.workspace }}/unsigned.xcconfig
+        run: |
+          cat > unsigned.xcconfig <<'EOF'
+          CODE_SIGNING_ALLOWED = NO
+          CODE_SIGNING_REQUIRED = NO
+          CODE_SIGN_IDENTITY =
+          CODE_SIGN_ENTITLEMENTS =
+          DEVELOPMENT_TEAM =
+          // What MPVKit's libraries (bundled into the Rust library) need from the system.
+          OTHER_LDFLAGS = $(inherited) -lbz2 -liconv -lexpat -lresolv -lxml2 -lz -lc++ -framework AVFoundation -framework AudioToolbox -framework CoreAudio -framework CoreMedia -framework CoreVideo -framework VideoToolbox -framework Metal -framework QuartzCore -framework IOSurface
+          EOF
+          npx tauri ios build --target aarch64 --ci || echo "::warning::tauri ios build exited with an error (expected at the signed export step)"
+
+      - name: Package the .ipa
+        run: |
+          APP=$(find src-tauri/gen/apple/build -maxdepth 6 -type d -path '*.xcarchive/Products/Applications/*.app' | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::No .app was built. See the Build step's log."
+            find src-tauri/gen/apple/build -maxdepth 4 | head -50 || true
+            exit 1
+          fi
+          echo "Built $APP"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry CustomStremio.ipa Payload
+          ls -lh CustomStremio.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CustomStremio-ios
+          path: CustomStremio.ipa
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" CustomStremio.ipa --clobber
