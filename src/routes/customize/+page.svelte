@@ -1,7 +1,7 @@
 <script lang="ts">
-    // Customize Home, built on the edit-list pattern people know from iOS and macOS
-    // (Control Center, Music): "On Home" and "More Rows", a red − / green + to take
-    // a row off or put it on, a ≡ handle on the right to drag. Combining rows is
+    // Customize Home: one calm list of Home's rows, each with a few posters, a plain
+    // description and a switch for whether it's on Home (the app's own switch, as
+    // in Settings). The drag handle and ⋯ menu appear on hover or focus. Combining is
     // offered where it makes sense (a suggestion card), works like making a folder
     // (drop a row onto another), and is in every row's menu for keyboard users.
     // Changes apply as you make them; Undo covers every one of them.
@@ -13,6 +13,7 @@
     import { catalogKey, homeLayout, interleave, type BoardCatalog, type ResolvedRow } from '$lib/homeLayout.svelte';
     import { catalogTitle } from '$lib/components/CatalogList.svelte';
     import Icon from '$lib/components/Icon.svelte';
+    import Toggle from '$lib/components/Toggle.svelte';
 
     let board = $state<Board | null>(null);
     let cw = $state<ContinueWatchingPreview | null>(null);
@@ -44,7 +45,6 @@
     const byKey = $derived(new Map(catalogs.map((c) => [catalogKey(c), c])));
     const rows = $derived(homeLayout.resolve(catalogs, new Map(catalogs.map((c) => [catalogKey(c), catalogTitle(c)]))));
     const onHome = $derived(rows.filter((r) => !r.hidden));
-    const more = $derived(rows.filter((r) => r.hidden));
 
     const TYPE_LABEL: Record<string, string> = { movie: 'Movies', series: 'Series', channel: 'Channels', tv: 'TV' };
     const typeLabel = (t?: string) => (t ? (TYPE_LABEL[t] ?? t.charAt(0).toUpperCase() + t.slice(1)) : '');
@@ -105,19 +105,15 @@
 
     // --- Row menu (everything also reachable without dragging) -------------------------
     function rowMenu(e: MouseEvent, r: ResolvedRow) {
-        const list = r.hidden ? more : onHome;
-        const j = list.indexOf(r);
         const i = rows.indexOf(r);
         const others = onHome.filter((o) => o !== r && canCombine(o));
         const entries: MenuEntry[] = [];
         if (r.kind !== 'special') entries.push({ label: 'Rename…', icon: 'pencil', onselect: () => startRename(r) });
-        if (!r.hidden) {
-            entries.push(
-                { label: 'Move Up', disabled: j <= 0, onselect: () => homeLayout.move(rows, i, rows.indexOf(list[j - 1])) },
-                { label: 'Move Down', disabled: j >= list.length - 1, onselect: () => homeLayout.move(rows, i, rows.indexOf(list[j + 1])) }
-            );
-        }
-        if (canCombine(r) && !r.hidden) {
+        entries.push(
+            { label: 'Move Up', disabled: i <= 0, onselect: () => homeLayout.move(rows, i, i - 1) },
+            { label: 'Move Down', disabled: i >= rows.length - 1, onselect: () => homeLayout.move(rows, i, i + 1) }
+        );
+        if (canCombine(r)) {
             entries.push({ separator: true }, {
                 label: 'Combine With',
                 icon: 'merge',
@@ -126,9 +122,6 @@
             });
         }
         if (r.kind === 'merge') entries.push({ label: 'Separate Rows', onselect: () => homeLayout.unmerge(rows, r.key) });
-        entries.push({ separator: true }, r.hidden
-            ? { label: 'Add to Home', icon: 'plus', onselect: () => homeLayout.setHidden(rows, r.key, false) }
-            : { label: 'Remove from Home', icon: 'minus', destructive: true, onselect: () => homeLayout.setHidden(rows, r.key, true) });
         menu.toggleFor(e.currentTarget as HTMLElement, entries, 'end');
     }
 
@@ -157,26 +150,37 @@
     let combineTarget = $state<string | null>(null);
     const dragged = $derived(rows.find((r) => r.key === dragKey) ?? null);
 
+    // A row can be picked up anywhere but its controls; it lifts once the
+    // pointer has moved a little, so a plain click doesn't flash it.
+    let pressed: { key: string; y: number } | null = null;
     function dragStart(e: PointerEvent, r: ResolvedRow) {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || renaming) return;
+        const fromHandle = !!(e.target as HTMLElement).closest('.handle');
+        if (!fromHandle && (e.target as HTMLElement).closest('button, input')) return;
         e.preventDefault();
-        dragKey = r.key;
-        dropIndex = (r.hidden ? more : onHome).indexOf(r);
+        pressed = { key: r.key, y: e.clientY };
+        if (fromHandle) lift();
+    }
+    function lift() {
+        if (!pressed) return;
+        dragKey = pressed.key;
+        dropIndex = rows.findIndex((r) => r.key === pressed!.key);
         combineTarget = null;
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        pressed = null;
     }
     function dragMove(e: PointerEvent) {
+        if (pressed && Math.abs(e.clientY - pressed.y) > 5) lift();
         if (!dragged) return;
-        const others = [...document.querySelectorAll<HTMLElement>(`[data-list="${dragged.hidden ? 'more' : 'home'}"] > [data-row]`)].filter(
+        const others = [...document.querySelectorAll<HTMLElement>('[data-list="home"] > [data-row]')].filter(
             (el) => el.dataset.row !== dragKey
         );
-        // Over the middle of another row: combine with it (not the built-in row, not in More Rows).
+        // Over the middle of another row: combine with it (not the built-in row).
         const over = others.find((el) => {
             const b = el.getBoundingClientRect();
             return e.clientY > b.top + b.height * 0.28 && e.clientY < b.bottom - b.height * 0.28;
         });
         const overRow = over && rows.find((r) => r.key === over.dataset.row);
-        if (overRow && !dragged.hidden && canCombine(dragged) && canCombine(overRow)) {
+        if (overRow && canCombine(dragged) && canCombine(overRow)) {
             combineTarget = overRow.key;
             return;
         }
@@ -187,12 +191,13 @@
         }).length;
     }
     function dragEnd() {
+        pressed = null;
         if (!dragged) return;
         if (combineTarget) {
             const target = rows.find((r) => r.key === combineTarget);
             if (target) openCombine([target, dragged]);
         } else if (dropIndex != null) {
-            const list = (dragged.hidden ? more : onHome).filter((r) => r !== dragged);
+            const list = rows.filter((r) => r !== dragged);
             const from = rows.indexOf(dragged);
             const before = list[dropIndex];
             let to: number;
@@ -237,7 +242,7 @@
         <div>
             <h1>Customize Home</h1>
             <p class="tip">
-                Drag <span class="kbd"><Icon name="grip" size={14} /></span> to reorder. Drop a row onto another to combine them.
+                Switch rows on or off, drag to reorder, and drop one row onto another to combine them.
             </p>
         </div>
         <button class="pill primary" onclick={() => goto('/')}>Done</button>
@@ -255,31 +260,16 @@
         </div>
     {/if}
 
-    <section aria-labelledby="on-home">
-        <h2 id="on-home">On Home</h2>
+    <section aria-labelledby="rows-head">
+        <h2 id="rows-head">Rows <span class="count">{onHome.length} of {rows.length} on Home</span></h2>
         {#if !board}
             <p class="empty">Loading your rows…</p>
-        {:else if !onHome.length}
-            <p class="empty">Nothing on Home. Add rows from More Rows below.</p>
         {/if}
         <ul class="list" data-list="home">
-            {#each arranged(onHome) as r (r.key)}
+            {#each arranged(rows) as r (r.key)}
                 {@render row(r)}
             {/each}
         </ul>
-    </section>
-
-    <section aria-labelledby="more-rows">
-        <h2 id="more-rows">More Rows</h2>
-        {#if more.length}
-            <ul class="list" data-list="more">
-                {#each more as r (r.key)}
-                    {@render row(r)}
-                {/each}
-            </ul>
-        {:else}
-            <p class="empty">Rows you remove from Home wait here, ready to add back.</p>
-        {/if}
     </section>
 
     <div class="footer">
@@ -291,19 +281,15 @@
     {@const pics = posters(r)}
     <li
         class="row"
+        class:off={r.hidden}
         class:dragging={dragKey === r.key}
         class:target={combineTarget === r.key}
         data-row={r.key}
+        onpointerdown={(e) => dragStart(e, r)}
     >
-        {#if r.hidden}
-            <button class="round add" onclick={() => homeLayout.setHidden(rows, r.key, false)} aria-label={`Add ${r.name} to Home`} title="Add to Home">
-                <Icon name="plus" size={16} />
-            </button>
-        {:else}
-            <button class="round remove" onclick={() => homeLayout.setHidden(rows, r.key, true)} aria-label={`Remove ${r.name} from Home`} title="Remove from Home">
-                <Icon name="minus" size={16} />
-            </button>
-        {/if}
+        <span class="handle" aria-hidden="true" title="Drag to reorder, or onto another row to combine">
+            <Icon name="grip" size={14} />
+        </span>
 
         <div class="art" aria-hidden="true">
             {#each [0, 1, 2] as i (i)}
@@ -333,26 +319,17 @@
             {:else}
                 <button class="name editable" onclick={() => startRename(r)} title="Rename">{r.name}<Icon name="pencil" size={13} /></button>
             {/if}
-            <span class="detail">
-                {detail(r)}
-                {#if r.kind === 'merge'}
-                    · <button class="link" onclick={() => homeLayout.unmerge(rows, r.key)}>Separate</button>
-                {/if}
-            </span>
+            <span class="detail">{detail(r)}</span>
         </div>
 
         {#if combineTarget === r.key}
             <span class="combine-badge" aria-hidden="true"><Icon name="merge" size={14} /> Combine</span>
         {/if}
 
-        <button class="round ghost" onclick={(e) => rowMenu(e, r)} aria-label={`More for ${r.name}`} aria-haspopup="menu" aria-expanded="false">
+        <button class="more" onclick={(e) => rowMenu(e, r)} aria-label={`More for ${r.name}`} aria-haspopup="menu">
             <Icon name="more" size={20} />
         </button>
-        {#if !r.hidden}
-            <button class="handle" aria-label={`Drag to reorder ${r.name}`} title="Drag to reorder, or onto another row to combine" onpointerdown={(e) => dragStart(e, r)}>
-                <Icon name="grip" size={18} />
-            </button>
-        {/if}
+        <Toggle label={`Show ${r.name} on Home`} checked={!r.hidden} onchange={(on) => homeLayout.setHidden(rows, r.key, !on)} />
     </li>
 {/snippet}
 
@@ -413,24 +390,11 @@
         letter-spacing: -0.02em;
     }
     .tip {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 4px;
+        max-width: 46ch;
         margin: 8px 0 0;
         color: var(--label-2);
         font-size: var(--text-callout);
     }
-    .kbd {
-        display: inline-grid;
-        place-items: center;
-        width: 22px;
-        height: 22px;
-        border-radius: 6px;
-        background: var(--fill-hover);
-        color: var(--label);
-    }
-
     /* Suggestion */
     .suggest {
         display: flex;
@@ -465,14 +429,16 @@
     }
 
     /* Sections */
-    section + section {
-        margin-top: 32px;
-    }
     h2 {
         margin: 0 0 10px 4px;
         font-size: 13px;
         font-weight: 600;
         color: var(--label-2);
+    }
+    .count {
+        margin-left: 6px;
+        font-weight: 400;
+        color: var(--label-3);
     }
     .empty {
         margin: 0 0 0 4px;
@@ -490,11 +456,14 @@
     }
     .row {
         position: relative;
+        cursor: grab;
+        user-select: none;
+        touch-action: none;
         display: flex;
         align-items: center;
         gap: 14px;
         min-height: 72px;
-        padding: 10px 8px 10px 14px;
+        padding: 10px 14px 10px 8px;
         background: var(--elevated);
         transition:
             background var(--fast),
@@ -513,39 +482,54 @@
         box-shadow: inset 0 0 0 2px rgb(109 74 240 / 0.8);
     }
 
-    /* − / + */
-    .round {
+    .more {
         display: grid;
         place-items: center;
         flex: none;
-        width: 28px;
-        height: 28px;
+        width: 36px;
+        height: 36px;
         padding: 0;
         border: 0;
         border-radius: 50%;
-        color: white;
-        cursor: pointer;
-        transition: transform var(--fast) var(--ease);
-    }
-    .round:hover {
-        transform: scale(1.08);
-    }
-    .round.remove {
-        background: #ff453a;
-    }
-    .round.add {
-        background: #30d158;
-    }
-    .round.ghost {
-        width: 44px;
-        height: 44px;
         background: transparent;
         color: var(--label-2);
+        cursor: pointer;
     }
-    .round.ghost:hover {
-        transform: none;
+    .more:hover,
+    .more:focus-visible {
         background: var(--fill-hover);
         color: var(--label);
+    }
+
+    /* Drag handle and ⋯ stay out of the way until the row is pointed at. */
+    .handle,
+    .more {
+        opacity: 0;
+        transition:
+            opacity var(--fast),
+            background var(--fast);
+    }
+    .row:hover .handle,
+    .row:hover .more,
+    .row:focus-within .more,
+    .row.dragging .handle {
+        opacity: 1;
+    }
+    @media (hover: none) {
+        .handle,
+        .more {
+            opacity: 1;
+        }
+    }
+
+    /* Switched off: still listed, but quieter. */
+    .row.off .art,
+    .row.off .text {
+        opacity: 0.45;
+    }
+    .art,
+    .text {
+        transition: opacity var(--fast);
     }
 
     .art {
@@ -615,18 +599,6 @@
         font-size: 13px;
         color: var(--label-2);
     }
-    .link {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: #8b7bff;
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    .link:hover {
-        text-decoration: underline;
-    }
     .combine-badge {
         display: inline-flex;
         align-items: center;
@@ -642,18 +614,9 @@
         display: grid;
         place-items: center;
         flex: none;
-        width: 40px;
-        height: 44px;
-        padding: 0;
-        border: 0;
-        border-radius: 8px;
-        background: none;
+        width: 16px;
+        margin-right: -6px;
         color: var(--label-3);
-        cursor: grab;
-        touch-action: none;
-    }
-    .handle:hover {
-        color: var(--label);
     }
 
     /* Buttons */
@@ -838,7 +801,10 @@
     }
     @media (prefers-reduced-motion: reduce) {
         .row,
-        .round {
+        .art,
+        .text,
+        .handle,
+        .more {
             transition: none;
         }
         .sheet[open] {
