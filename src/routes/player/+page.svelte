@@ -548,8 +548,10 @@
             })
             .catch(() => {});
     });
-    // Only the intro and outro split the bar, and only for episodes (movies get one bar).
-    const seekChapters = $derived(!mpv.duration || type === 'movie' ? [] : introOutroMarks(fileChapters, segments, mpv.duration));
+    // Only the intro and outro split the bar; movies only split off their end credits.
+    const seekChapters = $derived(
+        !mpv.duration ? [] : introOutroMarks(fileChapters, segments, mpv.duration, type === 'movie')
+    );
 
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
     const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);

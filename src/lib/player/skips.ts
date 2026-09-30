@@ -96,17 +96,24 @@ const SECTION_NAME: Record<SkipKind, string> = { intro: 'Intro', recap: '', cred
  * starts and ends, and nowhere else. Taken from the file's chapters when they
  * name them ("Opening", "Ending"…, or a generic chapter a known section
  * covers), otherwise from the known sections.
+ *
+ * Movies: only the end credits, labelled "Credits", from the known sections
+ * (which for a movie are only ever the end credits).
  */
-export function introOutroMarks(chapters: Chapter[], segments: Segment[], duration: number): Chapter[] {
+export function introOutroMarks(chapters: Chapter[], segments: Segment[], duration: number, movie = false): Chapter[] {
     type Section = { title: string; start: number; end: number };
     let sections: Section[] = [];
-    if (chapters.length >= 2) {
+    if (movie) {
+        sections = segments
+            .filter((x) => x.kind === 'credits')
+            .map((x) => ({ title: 'Credits', start: x.start, end: x.end }));
+    } else if (chapters.length >= 2) {
         const named = nameChapters(chapters, segments, duration);
         sections = named
             .map((c, i) => ({ title: c.title, start: c.time, end: named[i + 1]?.time ?? duration }))
             .filter((x) => x.title);
     }
-    if (!sections.length) {
+    if (!sections.length && !movie) {
         sections = segments
             .filter((x) => x.kind === 'intro' || x.kind === 'credits')
             .map((x) => ({ title: SECTION_NAME[x.kind], start: x.start, end: x.end }));
