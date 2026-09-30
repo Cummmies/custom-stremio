@@ -367,6 +367,19 @@
     {/if}
 
     <section>
+        <h2>Home</h2>
+        <div class="group">
+            <div class="row">
+                <div>
+                    <div class="title">Customize Home</div>
+                    <div class="sub">Reorder, rename, merge or hide Home’s rows, including Continue Watching and Top 10.</div>
+                </div>
+                <a class="btn" href="/customize">Customize…</a>
+            </div>
+        </div>
+    </section>
+
+    <section>
         <h2>Keyboard Shortcuts</h2>
         {#each shortcutGroups as g (g.title)}
             <h3 class="subhead">{g.title}</h3>
@@ -520,6 +533,12 @@
         font-weight: 600;
         cursor: pointer;
         white-space: nowrap;
+    }
+    a.btn {
+        display: inline-flex;
+        align-items: center;
+        color: var(--label);
+        text-decoration: none;
     }
     .btn:hover {
         background: var(--fill-hover);

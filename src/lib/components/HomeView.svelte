@@ -9,7 +9,9 @@
     import WideCard from './WideCard.svelte';
     import RankCard from './RankCard.svelte';
     import CategoryTiles from './CategoryTiles.svelte';
-    import CatalogList, { catalogAnchor, catalogTitle, isEmptyCatalog } from './CatalogList.svelte';
+    import CatalogList, { catalogTitle, isEmptyCatalog, rowAnchor, type ListRow } from './CatalogList.svelte';
+    import { catalogKey, homeLayout, type BoardCatalog } from '$lib/homeLayout.svelte';
+    import Icon from './Icon.svelte';
     import EmptyState from './EmptyState.svelte';
 
     let { type = null }: { type?: 'movie' | 'series' | null } = $props();
@@ -58,14 +60,36 @@
 
     const cwItems = $derived((continueWatching?.items ?? []).filter((i) => !type || i.type === type));
 
+    // Rows in the order set in Customize Home (per profile): hidden ones left out,
+    // renamed and merged ones as set. Movies / Series keep only their own catalogs.
+    $effect(() => homeLayout.sync());
+    const boardCatalogs = $derived(catalogs as BoardCatalog[]);
+    const indexByKey = $derived(new Map(boardCatalogs.map((c, i) => [catalogKey(c), i])));
+    const resolved = $derived(
+        homeLayout.resolve(boardCatalogs, new Map(boardCatalogs.map((c) => [catalogKey(c), catalogTitle(c)])))
+    );
+    const rows = $derived<ListRow[]>(
+        resolved
+            .filter((r) => !r.hidden)
+            .map((r): ListRow => {
+                if (r.kind === 'special') return { key: r.key, title: r.name, special: true, indices: [] };
+                const indices = r.parts
+                    .map((p) => indexByKey.get(p))
+                    .filter((i): i is number => i != null && (!type || catalogs[i].type === type));
+                return { key: r.key, title: r.name, indices };
+            })
+            .filter((r) => r.special || r.indices.length > 0)
+    );
+    const top10Shown = $derived(rows.some((r) => r.key === 'top10') && !!top10 && top10.items.length >= 5);
+
     const tiles = $derived(
-        ofType
-            .filter(({ c }) => !isEmptyCatalog(c))
-            .map(({ c, index }) => {
-                const first = readyItems(index)[0];
+        rows
+            .filter((r) => !r.special && r.indices.some((i) => !isEmptyCatalog(catalogs[i])))
+            .map((r) => {
+                const first = readyItems(r.indices[0])[0];
                 return {
-                    label: type ? c.name ?? catalogTitle(c) : catalogTitle(c),
-                    anchor: catalogAnchor(index),
+                    label: r.title,
+                    anchor: rowAnchor(r.key),
                     art: first?.id.startsWith('tt') ? `https://images.metahub.space/background/small/${first.id}/img` : (first?.poster ?? null),
                 };
             })
@@ -83,22 +107,6 @@
         <CategoryTiles {tiles} />
     {/if}
 
-    {#if cwItems.length > 0}
-        <Shelf title="Continue Watching" href="/library" itemWidth="clamp(240px, 21vw, 320px)">
-            {#each cwItems as item (item._id)}
-                <WideCard {item} />
-            {/each}
-        </Shelf>
-    {/if}
-
-    {#if top10 && top10.items.length >= 5}
-        <Shelf title={top10.title} itemWidth="max-content" gap="20px">
-            {#each top10.items as item, i (item.id)}
-                <RankCard {item} rank={i + 1} />
-            {/each}
-        </Shelf>
-    {/if}
-
     {#if board && ofType.length === 0}
         <EmptyState icon="library" title="Nothing here yet">
             <p>None of your addons provide {type === 'series' ? 'series' : type === 'movie' ? 'movie' : ''} catalogs. Install an addon like Cinemeta to fill this page.</p>
@@ -109,12 +117,57 @@
             model="board"
             {catalogs}
             {type}
-            continueFrom={top10 && top10.items.length >= 5 ? { index: top10.index, skip: top10.items.length } : null}
-        />
+            {rows}
+            continueFrom={top10Shown && top10 ? { index: top10.index, skip: top10.items.length } : null}
+        >
+            {#snippet special(key)}
+                {#if key === 'cw' && cwItems.length > 0}
+                    <Shelf title={resolved.find((r) => r.key === 'cw')?.name ?? 'Continue Watching'} href="/library" itemWidth="clamp(240px, 21vw, 320px)">
+                        {#each cwItems as item (item._id)}
+                            <WideCard {item} />
+                        {/each}
+                    </Shelf>
+                {:else if key === 'top10' && top10Shown && top10}
+                    <Shelf title={top10.title} itemWidth="max-content" gap="20px">
+                        {#each top10.items as item, i (item.id)}
+                            <RankCard {item} rank={i + 1} />
+                        {/each}
+                    </Shelf>
+                {/if}
+            {/snippet}
+        </CatalogList>
+    {/if}
+
+    {#if !type && board}
+        <div class="customize">
+            <a class="customize-btn" href="/customize"><Icon name="gear" size={16} /> Customize Home</a>
+        </div>
     {/if}
 </div>
 
 <style>
+    .customize {
+        display: flex;
+        justify-content: center;
+        padding: 8px var(--gutter) 0;
+    }
+    .customize-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 18px;
+        border-radius: 999px;
+        border: 1px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        font-weight: 600;
+        text-decoration: none;
+        transition: background var(--fast);
+    }
+    .customize-btn:hover {
+        background: var(--fill-hover);
+    }
     .content {
         position: relative;
         z-index: 1;
