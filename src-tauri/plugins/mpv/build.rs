@@ -20,6 +20,7 @@ fn bundle_mpvkit() {
     fs::create_dir_all(&out).unwrap();
     let target = env::var("TARGET").unwrap_or_default();
     let simulator = target.ends_with("-sim") || target.starts_with("x86_64");
+    let arch = if target.starts_with("x86_64") { "x86_64" } else { "arm64" };
 
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let mut xcframeworks = Vec::new();
@@ -46,13 +47,29 @@ fn bundle_mpvkit() {
             if !binary.is_file() || !linked.insert(name.clone()) {
                 continue;
             }
-            fs::copy(&binary, out.join(format!("lib{name}.a"))).unwrap();
+            thin(&binary, &out.join(format!("lib{name}.a")), arch);
             println!("cargo:rustc-link-lib=static={name}");
         }
     }
     println!("cargo:rustc-link-search=native={}", out.display());
     if linked.is_empty() {
         println!("cargo:warning=MPVKit's libraries weren't found; the app won't link libmpv.");
+    }
+}
+
+/// The frameworks' binaries are "universal" files wrapping the archive, which
+/// rustc can't read; take out the one architecture as a plain .a.
+fn thin(binary: &Path, dest: &Path, arch: &str) {
+    let _ = fs::remove_file(dest);
+    let thinned = std::process::Command::new("lipo")
+        .arg(binary)
+        .args(["-thin", arch, "-output"])
+        .arg(dest)
+        .status()
+        .is_ok_and(|s| s.success());
+    // Not a universal file (already a plain archive): use it as it is.
+    if !thinned {
+        fs::copy(binary, dest).unwrap();
     }
 }
 
