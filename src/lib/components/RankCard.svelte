@@ -4,6 +4,7 @@
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
+    import { previewInHero } from '$lib/heroPreview.svelte';
 
     let { item, rank }: { item: MetaItemPreview; rank: number } = $props();
     let loaded = $state(false);
@@ -13,6 +14,7 @@
     class="card"
     href={titleHref(item.type, item.id)}
     use:titleContext={{ type: item.type, id: item.id, name: item.name, preview: item }}
+    use:previewInHero={item}
     onkeydown={arrowNav} aria-label={`Number ${rank}: ${item.name}`}>
     <span class="rank" aria-hidden="true">{rank}</span>
     <div class="poster" class:loaded>

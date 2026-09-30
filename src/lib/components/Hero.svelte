@@ -6,6 +6,8 @@
     import Icon from './Icon.svelte';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
+    import { heroPreview } from '$lib/heroPreview.svelte';
+    import { onDestroy } from 'svelte';
 
     let { items }: { items: MetaItemPreview[] } = $props();
 
@@ -16,7 +18,10 @@
     let reducedMotion = $state(false);
     let logoFailed = $state<Record<string, boolean>>({});
 
-    const item = $derived(items[index] ?? items[0] ?? null);
+    // A hovered title card takes over the banner; otherwise it cycles through `items`.
+    const previewing = $derived(!!heroPreview.item);
+    const item = $derived(heroPreview.item ?? items[index] ?? items[0] ?? null);
+    onDestroy(() => heroPreview.clear());
 
     // Crossfade layers: the previous artwork stays until the next has loaded.
     let layers = $state<{ key: string; src: string; ready: boolean }[]>([]);
@@ -38,7 +43,7 @@
 
     // Auto-advance, except while someone is hovering/focused in it or asked for less motion.
     $effect(() => {
-        if (paused || reducedMotion || items.length < 2) return;
+        if (paused || previewing || reducedMotion || items.length < 2) return;
         index;
         const t = setTimeout(() => (index = (index + 1) % items.length), INTERVAL);
         return () => clearTimeout(t);
@@ -92,8 +97,14 @@
         class="hero"
         aria-roledescription="carousel"
         aria-label="Featured"
-        onmouseenter={() => (paused = true)}
-        onmouseleave={() => (paused = false)}
+        onmouseenter={() => {
+            paused = true;
+            heroPreview.hold(true);
+        }}
+        onmouseleave={() => {
+            paused = false;
+            heroPreview.hold(false);
+        }}
         onfocusin={() => (paused = true)}
         onfocusout={() => (paused = false)}
     >
@@ -145,10 +156,13 @@
             <div class="dots" role="group" aria-label="Choose featured title">
                 {#each items as it, i (it.id)}
                     <button
-                        class:current={i === index}
+                        class:current={!previewing && i === index}
                         aria-label={`${i + 1} of ${items.length}: ${it.name}`}
-                        aria-current={i === index}
-                        onclick={() => (index = i)}
+                        aria-current={!previewing && i === index}
+                        onclick={() => {
+                            heroPreview.clear();
+                            index = i;
+                        }}
                         {onkeydown}
                     ></button>
                 {/each}

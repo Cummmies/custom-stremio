@@ -14,6 +14,8 @@
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
+    import { previewInHero } from '$lib/heroPreview.svelte';
+    import type { MetaItemPreview } from '$lib/core/types';
 
     let { item }: { item: PosterItem } = $props();
 
@@ -22,12 +24,27 @@
 
     // Catalog items are full previews (addable to the library); library items aren't.
     const preview = $derived('posterShape' in item ? item : undefined);
+    // What the Home banner shows while this card is hovered.
+    const heroItem = $derived<MetaItemPreview>(
+        (preview as MetaItemPreview | undefined) ?? {
+            id: item.id,
+            type: item.type,
+            name: item.name,
+            poster: item.poster,
+            posterShape: 'poster',
+            background: null,
+            logo: null,
+            description: null,
+            releaseInfo: item.releaseInfo ?? null,
+        }
+    );
 </script>
 
 <a
     class="card"
     href={titleHref(item.type, item.id)}
     use:titleContext={{ type: item.type, id: item.id, name: item.name, preview }}
+    use:previewInHero={heroItem}
     onkeydown={arrowNav}
     aria-label={[item.name, item.releaseInfo].filter(Boolean).join(', ')}
 >

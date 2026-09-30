@@ -5,6 +5,7 @@
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
+    import { previewInHero } from '$lib/heroPreview.svelte';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
@@ -35,6 +36,7 @@
     class="card"
     {href}
     use:titleContext={{ type: item.type, id: item._id, name: item.name, preview: libraryItemPreview(item) }}
+    use:previewInHero={libraryItemPreview(item)}
     onkeydown={arrowNav}
     aria-label={[item.name, detail].filter(Boolean).join(', ')}>
     <div class="art" class:loaded>
