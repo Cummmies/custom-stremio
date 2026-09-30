@@ -39,11 +39,10 @@ jobs:
       - name: Generate the Xcode project
         run: npx tauri ios init --ci
 
-      # No Apple developer account here: build without code signing. The
-      # sideloading app signs the .ipa when it installs it on your iPhone.
+      # No Apple developer account here: --no-sign builds an unsigned .ipa, and
+      # the sideloading app signs it when it installs it on your iPhone.
       # XCODE_XCCONFIG_FILE applies these settings to every xcodebuild the Tauri
-      # CLI runs. The archive step is what we need; the export step afterwards
-      # needs a signing identity and is allowed to fail.
+      # CLI runs.
       - name: Build
         env:
           XCODE_XCCONFIG_FILE: ${{ github.workspace }}/unsigned.xcconfig
@@ -57,20 +56,17 @@ jobs:
           // What MPVKit's libraries (bundled into the Rust library) need from the system.
           OTHER_LDFLAGS = $(inherited) -lbz2 -liconv -lexpat -lresolv -lxml2 -lz -lc++ -framework AVFoundation -framework AudioToolbox -framework CoreAudio -framework CoreMedia -framework CoreVideo -framework VideoToolbox -framework Metal -framework QuartzCore -framework IOSurface
           EOF
-          npx tauri ios build --target aarch64 --ci || echo "::warning::tauri ios build exited with an error (expected at the signed export step)"
+          npx tauri ios build --target aarch64 --no-sign --ci
 
       - name: Package the .ipa
         run: |
-          APP=$(find src-tauri/gen/apple/build -maxdepth 6 -type d -path '*.xcarchive/Products/Applications/*.app' | head -1)
-          if [ -z "$APP" ]; then
-            echo "::error::No .app was built. See the Build step's log."
+          IPA=$(find src-tauri/gen/apple/build -maxdepth 3 -name '*.ipa' | head -1)
+          if [ -z "$IPA" ]; then
+            echo "::error::No .ipa was built. See the Build step's log."
             find src-tauri/gen/apple/build -maxdepth 4 | head -50 || true
             exit 1
           fi
-          echo "Built $APP"
-          rm -rf Payload && mkdir Payload
-          cp -R "$APP" Payload/
-          zip -qry CustomStremio.ipa Payload
+          cp "$IPA" CustomStremio.ipa
           ls -lh CustomStremio.ipa
 
       - uses: actions/upload-artifact@v4
