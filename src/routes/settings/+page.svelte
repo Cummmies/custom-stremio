@@ -12,7 +12,6 @@
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { tmdb } from '$lib/tmdb.svelte';
-    import { seasonArt } from '$lib/seasonArt.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
     const myProfile = $derived(profiles.get(app.user?._id));
@@ -70,18 +69,6 @@
         if (!tmdb.enabled) return (tmdbStatus = 'idle');
         tmdbStatus = 'checking';
         tmdbStatus = (await tmdb.test()) ? 'ok' : 'bad';
-    }
-
-    // Fanart.tv: per-season backgrounds.
-    let fanartInput = $state(seasonArt.fanartKey);
-    let fanartStatus = $state<'idle' | 'checking' | 'ok' | 'bad'>(seasonArt.fanartKey ? 'ok' : 'idle');
-    const fanartChanged = $derived(fanartInput.trim() !== seasonArt.fanartKey);
-    async function saveFanart(e: SubmitEvent) {
-        e.preventDefault();
-        seasonArt.setFanartKey(fanartInput);
-        if (!seasonArt.fanartKey) return (fanartStatus = 'idle');
-        fanartStatus = 'checking';
-        fanartStatus = (await seasonArt.testFanart()) ? 'ok' : 'bad';
     }
 
     function saveServerUrl(e: SubmitEvent) {
@@ -417,35 +404,6 @@
                     {#if tmdbChanged}<button class="btn primary" type="submit">{tmdbInput.trim() ? 'Save' : 'Remove'}</button>{/if}
                 </div>
             </form>
-            <form class="row" onsubmit={saveFanart}>
-                <div>
-                    <label class="title" for="fanart-key">Fanart.tv</label>
-                    <div class="sub">
-                        {#if fanartStatus === 'checking'}Checking…
-                        {:else if fanartStatus === 'ok'}Connected. Backgrounds follow the season you’re on when Fanart.tv has art for it{#if !tmdb.enabled} (anime only until TMDB is set up){/if}.
-                        {:else if fanartStatus === 'bad'}Fanart.tv didn’t accept that. Paste the Personal API Key from fanart.tv → your profile → API.
-                        {:else}A free Personal API Key from fanart.tv gives season-specific backgrounds. Finds shows through TMDB (anime work without it).{/if}
-                    </div>
-                </div>
-                <div class="url">
-                    <input
-                        id="fanart-key"
-                        type="password"
-                        bind:value={fanartInput}
-                        spellcheck="false"
-                        autocomplete="off"
-                        placeholder="Personal API Key"
-                    />
-                    {#if fanartChanged}<button class="btn primary" type="submit">{fanartInput.trim() ? 'Save' : 'Remove'}</button>{/if}
-                </div>
-            </form>
-            <div class="row">
-                <div>
-                    <div class="title">Anime season banners from AniList</div>
-                    <div class="sub">Anime backgrounds follow the season you’re on, using AniList’s banner for it. No account needed.</div>
-                </div>
-                <Toggle label="Anime season banners from AniList" checked={seasonArt.anilist} onchange={(v) => seasonArt.setAnilist(v)} />
-            </div>
         </div>
     </section>
 

@@ -11,7 +11,6 @@
     import { looksLikeAnime } from '$lib/player/ranking';
     import { anime } from '$lib/anime.svelte';
     import { tmdb } from '$lib/tmdb.svelte';
-    import { seasonArt } from '$lib/seasonArt.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import Icon from '$lib/components/Icon.svelte';
@@ -246,14 +245,7 @@
     );
 
     const back = () => (history.length > 1 ? history.back() : goto('/'));
-    // Series: art for the season picked in the dropdown when there is some (Fanart.tv,
-    // AniList), so the background changes with the season. Else TMDB's, else Stremio's.
-    const seasonBackground = $derived(
-        meta && isSeries
-            ? seasonArt.hero(meta.id, season, resumeVideo?.season === season ? (resumeVideo.episode ?? null) : null)
-            : null
-    );
-    const art = $derived(meta ? (seasonBackground ?? tmdb.backdrop(meta.id) ?? backgroundOf(meta)) : null);
+    const art = $derived(meta ? (tmdb.backdrop(meta.id) ?? backgroundOf(meta)) : null);
     const logo = $derived(meta && !logoFailed ? logoOf(meta) : null);
 </script>
 

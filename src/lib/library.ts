@@ -5,16 +5,10 @@ import { tmdb } from '$lib/tmdb.svelte';
 
 /** The season a series entry is on, from its resume episode ("tt…:3:12" → 3). */
 export function currentSeason(item: LibraryItem): number | null {
-    return resumePosition(item)?.season ?? null;
-}
-
-/** Season and episode of a series entry's resume episode ("tt…:3:12" → 3, 12). */
-export function resumePosition(item: LibraryItem): { season: number; episode: number } | null {
     const parts = cleanVideoId(item.state?.videoId)?.split(':');
     if (item.type !== 'series' || !parts || parts.length < 3) return null;
-    const season = Number(parts[parts.length - 2]);
-    const episode = Number(parts[parts.length - 1]);
-    return Number.isFinite(season) && Number.isFinite(episode) ? { season, episode } : null;
+    const n = Number(parts[parts.length - 2]);
+    return Number.isFinite(n) ? n : null;
 }
 
 export function libraryToPoster(item: LibraryItem): PosterItem {

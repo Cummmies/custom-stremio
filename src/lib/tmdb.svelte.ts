@@ -14,7 +14,7 @@ const IMG = 'https://image.tmdb.org/t/p';
 const PARALLEL = 4;
 
 type SeasonArt = { n: number; air: string | null; poster: string | null };
-type ShowArt = { fetchedAt: number; backdrop: string | null; poster: string | null; seasons: SeasonArt[]; tvdb?: number | null };
+type ShowArt = { fetchedAt: number; backdrop: string | null; poster: string | null; seasons: SeasonArt[] };
 
 function load<T>(key: string, fallback: T): T {
     try {
@@ -73,18 +73,12 @@ class Tmdb {
         return path ? `${IMG}/w500${path}` : null;
     }
 
-    /** The show's TVDB id (for Fanart.tv). */
-    tvdbId(imdbId: string | null | undefined): number | null {
-        return this.#art(imdbId)?.tvdb ?? null;
-    }
-
     #art(imdbId: string | null | undefined): ShowArt | null {
         this.version; // reactive dependency
         const id = imdbId?.split(':')[0];
         if (!this.enabled || !id || !/^tt\d+$/.test(id)) return null;
         const cached = this.#cache[id];
-        // Entries saved before the TVDB id was kept are refreshed once.
-        if (cached === undefined || (cached && (Date.now() - cached.fetchedAt > MAX_AGE_MS || !('tvdb' in cached)))) this.#enqueue(id);
+        if (cached === undefined || (cached && Date.now() - cached.fetchedAt > MAX_AGE_MS)) this.#enqueue(id);
         return cached ?? null;
     }
 
@@ -124,13 +118,12 @@ class Tmdb {
         const movie = found.movie_results?.[0];
         if (!tv && !movie) return null;
         const path = tv ? `/tv/${tv.id}` : `/movie/${movie.id}`;
-        const details = await this.#get(`${path}?append_to_response=images,external_ids&include_image_language=en,null`);
+        const details = await this.#get(`${path}?append_to_response=images&include_image_language=en,null`);
         if (!details) return undefined;
         return {
             fetchedAt: Date.now(),
             backdrop: pickBackdrop(details.images?.backdrops) ?? details.backdrop_path ?? null,
             poster: details.poster_path ?? null,
-            tvdb: details.external_ids?.tvdb_id ?? null,
             seasons: (details.seasons ?? [])
                 .filter((s: { season_number: number }) => s.season_number > 0)
                 .map((s: { season_number: number; air_date?: string | null; poster_path?: string | null }) => ({
