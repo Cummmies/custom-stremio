@@ -154,4 +154,9 @@
         gap: 36px;
         padding-bottom: 64px;
     }
+    @media (max-width: 700px) {
+        .content {
+            gap: 26px;
+        }
+    }
 </style>

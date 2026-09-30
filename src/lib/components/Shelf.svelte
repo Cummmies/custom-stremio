@@ -152,4 +152,16 @@
     .pager.hidden {
         pointer-events: none;
     }
+    /* Phones: tighter rows so the next poster peeks in (it scrolls), no arrows. */
+    @media (max-width: 700px) {
+        .track {
+            gap: 10px;
+        }
+        .pager {
+            display: none;
+        }
+        header {
+            margin-bottom: 8px;
+        }
+    }
 </style>

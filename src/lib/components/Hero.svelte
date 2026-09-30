@@ -71,6 +71,20 @@
         if (src) new Image().src = src;
     });
 
+    // Phones: swipe sideways to move between titles.
+    let swipeX: number | null = null;
+    function onpointerdown(e: PointerEvent) {
+        swipeX = e.pointerType === 'mouse' ? null : e.clientX;
+    }
+    function onpointerup(e: PointerEvent) {
+        if (swipeX == null || items.length < 2) return;
+        const dx = e.clientX - swipeX;
+        swipeX = null;
+        if (Math.abs(dx) < 50) return;
+        heroPreview.clear();
+        index = (index + (dx < 0 ? 1 : items.length - 1)) % items.length;
+    }
+
     function onkeydown(e: KeyboardEvent) {
         if (e.key === 'ArrowRight') index = (index + 1) % items.length;
         else if (e.key === 'ArrowLeft') index = (index - 1 + items.length) % items.length;
@@ -118,6 +132,9 @@
         }}
         onfocusin={() => (paused = true)}
         onfocusout={() => (paused = false)}
+        {onpointerdown}
+        {onpointerup}
+        onpointercancel={() => (swipeX = null)}
     >
         {#key item.id}
             <div
@@ -367,5 +384,73 @@
     .dots button.current {
         width: 24px;
         background: var(--label);
+    }
+
+    /* Phones: shorter art shown whole-width, darkened only toward the rows;
+       everything centered, a wide Play button, swipe between titles. */
+    @media (max-width: 700px) {
+        .art {
+            height: 72vh;
+        }
+        .art img {
+            object-position: center 30%;
+        }
+        .art img.show {
+            opacity: 0.85;
+        }
+        .scrim {
+            background:
+                linear-gradient(to top, var(--bg) 4%, rgb(13 13 18 / 0.75) 34%, transparent 62%),
+                linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 22%);
+        }
+        .hero {
+            min-height: 66vh;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-end;
+            gap: 16px;
+            padding: var(--nav-h) var(--gutter) 20px;
+            touch-action: pan-y;
+        }
+        .copy {
+            max-width: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .logo {
+            max-width: 72%;
+            max-height: 96px;
+            object-position: center bottom;
+            margin-bottom: 14px;
+        }
+        h1 {
+            font-size: 30px;
+        }
+        .meta {
+            justify-content: center;
+        }
+        .description {
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        .actions {
+            width: 100%;
+            max-width: 420px;
+        }
+        .play {
+            flex: 1;
+            justify-content: center;
+            height: 48px;
+        }
+        .round {
+            width: 48px;
+            height: 48px;
+        }
+        .dots {
+            justify-content: center;
+            padding-bottom: 0;
+        }
     }
 </style>

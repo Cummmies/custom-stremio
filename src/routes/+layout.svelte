@@ -11,6 +11,7 @@
     import MenuHost from '$lib/components/menu/MenuHost.svelte';
     import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
     import UpdateToast from '$lib/components/UpdateToast.svelte';
+    import TabBar from '$lib/components/TabBar.svelte';
     import ProfilePicker from '$lib/components/ProfilePicker.svelte';
     import { profiles } from '$lib/profiles.svelte';
     import { confirmWebBundle, updates } from '$lib/updates.svelte';
@@ -85,6 +86,7 @@
 {/if}
 
 {#if !inPlayer}
+    <TabBar />
     <UpdateToast />
 {/if}
 
@@ -94,5 +96,7 @@
     main {
         position: relative;
         min-height: 100vh;
+        /* Room for the phone tab bar (0 on wider screens). */
+        padding-bottom: var(--tabbar-h);
     }
 </style>

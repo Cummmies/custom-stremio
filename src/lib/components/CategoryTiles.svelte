@@ -70,4 +70,14 @@
         padding: 0 12px;
         text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
     }
+    @media (max-width: 700px) {
+        .tiles {
+            grid-auto-columns: 44vw;
+            gap: 10px;
+        }
+        a {
+            height: 56px;
+            font-size: 15px;
+        }
+    }
 </style>

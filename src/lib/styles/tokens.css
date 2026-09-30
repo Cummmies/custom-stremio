@@ -51,6 +51,30 @@
     --slow: 420ms;
 }
 
+/*
+ * Phones (compact width, iOS size classes): tighter margins, iOS-sized text, a
+ * bottom tab bar instead of the top pill, and room for the home indicator.
+ * Desktop windows never get this narrow (min width 900).
+ */
+:root {
+    --tabbar-h: 0px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (max-width: 700px) {
+    :root {
+        --gutter: 16px;
+        --text-body: 15px;
+        --text-callout: 16px;
+        --text-title3: 17px;
+        --text-title2: 22px;
+        --text-large: 28px;
+        --poster-w: 104px;
+        --nav-h: calc(52px + var(--safe-top));
+        --tabbar-h: calc(50px + var(--safe-bottom));
+    }
+}
+
 @media (prefers-contrast: more) {
     :root {
         --label-2: #c7c7d0;
@@ -118,4 +142,13 @@ input {
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+}
+
+/* Phones: iOS zooms the page into any text field smaller than 16px. */
+@media (max-width: 700px) {
+    input,
+    textarea,
+    select {
+        font-size: max(16px, 1em);
+    }
 }

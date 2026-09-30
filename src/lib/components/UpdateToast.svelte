@@ -36,6 +36,18 @@
         box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
         animation: rise var(--slow) var(--ease);
     }
+    /* Phones: full width, above the tab bar. */
+    @media (max-width: 700px) {
+        .toast {
+            left: 12px;
+            right: 12px;
+            bottom: calc(var(--tabbar-h) + 12px);
+        }
+        .text {
+            flex: 1;
+            min-width: 0;
+        }
+    }
     @keyframes rise {
         from {
             opacity: 0;

@@ -302,7 +302,7 @@
         padding: 0;
         border-radius: 50%;
     }
-    @media (max-width: 760px) {
+    @media (min-width: 701px) and (max-width: 760px) {
         .brand {
             display: none;
         }
@@ -311,6 +311,21 @@
         }
         .pill a {
             padding: 0 12px;
+        }
+    }
+    /* Phones: sections and search move to the tab bar; keep the brand and account. */
+    @media (max-width: 700px) {
+        .nav {
+            grid-template-columns: 1fr auto;
+            padding-top: var(--safe-top);
+        }
+        .pill,
+        .search,
+        .server-note {
+            display: none;
+        }
+        .brand {
+            font-size: 20px;
         }
     }
 </style>
