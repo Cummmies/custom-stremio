@@ -1,10 +1,12 @@
-// Seek-bar thumbnails from the Rust thumbnailer (a second, silent mpv).
+// Seek-bar thumbnails from a second, silent mpv: the Rust thumbnailer on the
+// desktop (raw pixels), the Swift one on iOS (JPEGs; plugins/mpv).
 //
 // Network streams take seconds per frame, so hovering can't wait for an exact
 // frame. Instead we fill a spread of frames across the whole video in the
 // background (coarse first, then finer) and always show the nearest one we
 // have; the exact frame for where you hover is fetched first and swaps in.
 import { invoke } from '@tauri-apps/api/core';
+import { isIOS } from '$lib/platform';
 
 const WIDTH = 224;
 const BUCKET = 2; // seconds; nearby hovers share a frame
@@ -115,13 +117,9 @@ export class Thumbnails {
 
     async #fetch(b: number) {
         try {
-            const buf = await invoke<ArrayBuffer>('thumb_frame', { url: this.#url, time: b, width: WIDTH });
-            if (this.#closed) return;
-            const view = new DataView(buf);
-            const w = view.getUint32(0, true);
-            const h = view.getUint32(4, true);
-            const pixels = new Uint8ClampedArray(buf, 8, w * h * 4);
-            this.#cache.set(b, await createImageBitmap(new ImageData(pixels, w, h)));
+            const bitmap = isIOS ? await this.#fetchJpeg(b) : await this.#fetchPixels(b);
+            if (this.#closed) return bitmap.close();
+            this.#cache.set(b, bitmap);
             if (this.#cache.size > MAX_FRAMES) {
                 const oldest = this.#cache.keys().next().value!;
                 this.#cache.get(oldest)?.close();
@@ -137,6 +135,22 @@ export class Thumbnails {
         }
     }
 
+    /** Desktop: [width u32 LE][height u32 LE][RGBA pixels]. */
+    async #fetchPixels(time: number) {
+        const buf = await invoke<ArrayBuffer>('thumb_frame', { url: this.#url, time, width: WIDTH });
+        const view = new DataView(buf);
+        const w = view.getUint32(0, true);
+        const h = view.getUint32(4, true);
+        return createImageBitmap(new ImageData(new Uint8ClampedArray(buf, 8, w * h * 4), w, h));
+    }
+
+    /** iOS: a base64 JPEG (plugin responses are JSON). */
+    async #fetchJpeg(time: number) {
+        const { data } = await invoke<{ data: string }>('plugin:mpv|thumb_frame', { url: this.#url, time, width: WIDTH * 2 });
+        const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+        return createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+    }
+
     #bucket(time: number) {
         return Math.max(0, Math.round(time / BUCKET) * BUCKET);
     }
@@ -147,6 +161,6 @@ export class Thumbnails {
         this.#background = [];
         this.#cache.forEach((b) => b.close());
         this.#cache.clear();
-        invoke('thumb_close').catch(() => {});
+        invoke(isIOS ? 'plugin:mpv|thumb_close' : 'thumb_close').catch(() => {});
     }
 }

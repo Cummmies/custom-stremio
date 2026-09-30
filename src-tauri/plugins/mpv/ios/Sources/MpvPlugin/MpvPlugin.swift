@@ -37,6 +37,17 @@ private struct GetArgs: Decodable {
     let name: String
 }
 
+private struct ThumbArgs: Decodable {
+    let url: String
+    let time: Double
+    let width: Int
+}
+
+private struct ThumbResult: Encodable {
+    /// Base64 JPEG.
+    let data: String
+}
+
 private struct OrientationArgs: Decodable {
     /// true: landscape only (while a video plays); false: back to portrait.
     let landscape: Bool
@@ -190,6 +201,34 @@ class MpvPlugin: Plugin {
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: OrientationLock.mask!)) { error in
                 NSLog("mpv: orientation change refused: \(error)")
             }
+            invoke.resolve()
+        }
+    }
+
+    // MARK: Seek-bar thumbnails (Thumbnailer.swift), one at a time off the main thread.
+
+    private let thumbQueue = DispatchQueue(label: "mpv thumbnails", qos: .utility)
+    private var thumbnailer: Thumbnailer?
+
+    @objc public func thumbFrame(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(ThumbArgs.self)
+        thumbQueue.async { [self] in
+            do {
+                if thumbnailer?.url != args.url {
+                    thumbnailer = nil
+                    thumbnailer = try Thumbnailer(url: args.url)
+                }
+                let jpeg = try thumbnailer!.frame(time: args.time, width: args.width)
+                invoke.resolve(ThumbResult(data: jpeg.base64EncodedString()))
+            } catch {
+                invoke.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc public func thumbClose(_ invoke: Invoke) {
+        thumbQueue.async { [self] in
+            thumbnailer = nil
             invoke.resolve()
         }
     }

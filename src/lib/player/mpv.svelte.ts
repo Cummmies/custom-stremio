@@ -73,12 +73,12 @@ const num = (v: string | null) => (v == null || v === '' ? null : Number(v));
 const flag = (v: string | null) => v === 'yes';
 
 class Mpv implements PlayerBackend {
-    // iOS: no d3d11 upscalers or HDMI passthrough, and no second mpv for thumbnails.
+    // iOS: no d3d11 upscalers or HDMI passthrough.
     readonly features: PlayerFeatures = {
         upscaling: !isIOS,
         hdrPassthrough: !isIOS,
         audioPassthrough: !isIOS,
-        thumbnails: !isIOS,
+        thumbnails: true,
         silenceSkip: true,
     };
 

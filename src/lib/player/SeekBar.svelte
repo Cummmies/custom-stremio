@@ -59,15 +59,19 @@
         if (!d) return;
         bar!.setPointerCapture(e.pointerId);
         dragging = timeAt(e.clientX);
+        // Touch has no hover: show the time (and thumbnail) from the first touch.
+        onpointermove(e);
     }
     function onpointermove(e: PointerEvent) {
         const r = bar!.getBoundingClientRect();
         hoverX = Math.min(r.width, Math.max(0, e.clientX - r.left));
         if (dragging != null) dragging = timeAt(e.clientX);
     }
-    function onpointerup() {
+    function onpointerup(e: PointerEvent) {
         if (dragging != null) onseek(dragging);
         dragging = null;
+        // A finger lifting ends the preview; a mouse keeps hovering.
+        if (e.pointerType !== 'mouse') hoverX = null;
     }
 
     function onkeydown(e: KeyboardEvent) {

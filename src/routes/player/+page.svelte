@@ -1139,7 +1139,8 @@
         </aside>
     {/if}
 
-    <footer class="bottom">
+    <!-- Touch: keep the controls up while dragging the seek bar. -->
+    <footer class="bottom" onpointerdown={poke} onpointermove={poke}>
         <SeekBar time={player.time} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
             {#snippet preview(t: number)}
                 {#if thumbs && !pip}<SeekPreview {thumbs} time={t} />{/if}
