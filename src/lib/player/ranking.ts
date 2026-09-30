@@ -66,13 +66,20 @@ const ENGLISH_AUDIO = /\beng(?:lish)?[ ._-]*(?:audio|aac|ac-?3|e-?ac-?3|ddp?|dts
 // Both languages named together: "JPN+ENG", "Jap-Eng", "JP/EN", "English + Japanese".
 const JP_AND_EN = /\b(?:jpn?|jap(?:anese)?)[ ._+&/-]+(?:en|eng(?:lish)?)\b|\b(?:en|eng(?:lish)?)[ ._+&/-]+(?:jpn?|jap(?:anese)?)\b/i;
 // Anime release groups that only put out the original audio with subtitles (or raws).
-const SUB_ONLY_GROUP = /^\s*\[(?:SubsPlease|Erai-raws|HorribleSubs|ASW|Tsundere-Raws|SubsPlus\+?|Ohys-Raws|Lilith-Raws|NanakoRaws|Skymoon-Raws|Moozzi2|Leopard-Raws)\]/im;
+// A release group as addons write it: "[SubsPlease] Show - 01…" at the start of a
+// line (also after AIOStreams' 📁), or AIOStreams' "🏷️ SubsPlease".
+const group = (names: string) => new RegExp(`(?:^[ \\t]*(?:📁\\s*)?\\[|🏷\\uFE0F?\\s*)(?:${names})(?=\\]|\\s|$)`, 'imu');
+const SUB_ONLY_GROUP = group('SubsPlease|Erai-raws|HorribleSubs|ASW|Tsundere-Raws|SubsPlus\\+?|Ohys-Raws|Lilith-Raws|NanakoRaws|Skymoon-Raws|Moozzi2|Leopard-Raws');
 // Anime release groups that put out English dubs.
-const DUB_GROUP = /^\s*\[(?:Yameii)\]/im;
+const DUB_GROUP = group('Yameii');
 // Streaming-service WEB releases, which often keep every audio track.
 const MULTI_AUDIO_SERVICE = /\b(?:NF|AMZN|DSNP|HMAX|MAX|ATVP|HULU|PCOK)[ ._-]+WEB/i;
 
-const DEBRID_TAG = /\[(RD|AD|PM|DL|TB|OC|ED|PK|DB|EN|TRD|DLS)(\+| ?download)?\]/i;
+const SERVICES = 'RD|AD|PM|DL|TB|OC|ED|PK|PKP|DB|EN|TRD|DLS|SR|TD';
+// Torrentio "[RD+]" (cached) / "[RD]", "[RD download]"; AIOStreams "[TB⚡]" / "[TB⏳]".
+const DEBRID_TAG = new RegExp(`\\[(${SERVICES})(\\+|⚡|⏳| ?download)?\\]`, 'iu');
+// AIOStreams name template "AIOStreams (Instant TB) (1080p)" / "AIOStreams (TB) (1080p)".
+const DEBRID_PAREN = new RegExp(`\\(([Ii]nstant\\s+)?(${SERVICES})\\)`);
 
 function parseSize(text: string, hint?: number): number | null {
     if (hint && hint > 0) return hint;
@@ -95,10 +102,14 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
     if (s.externalUrl || s.ytId || (!s.url && !s.infoHash)) kind = 'skip';
     else if (s.infoHash && !s.url) kind = 'torrent';
     else {
-        // "[RD+]" = cached on Real-Debrid; "[RD]" / "[RD download]" = not cached yet.
-        // Other addons mark uncached with ⏳. An untagged web link plays directly.
+        // "[RD+]" / "[TB⚡]" / "(Instant TB)" = cached; "[RD]" / "[RD download]" /
+        // "[TB⏳]" / "(TB)" = not cached yet. Other addons mark uncached with ⏳.
+        // An untagged web link plays directly.
         const tag = text.match(DEBRID_TAG);
-        if (tag) kind = tag[2]?.includes('+') ? 'debrid' : 'debrid-uncached';
+        const paren = (s.name ?? '').match(DEBRID_PAREN);
+        if (/\[P2P\]/i.test(s.name ?? '')) kind = 'torrent';
+        else if (tag) kind = tag[2] && /[+⚡]/u.test(tag[2]) ? 'debrid' : 'debrid-uncached';
+        else if (paren) kind = paren[1] ? 'debrid' : 'debrid-uncached';
         else kind = /⏳/.test(text) ? 'debrid-uncached' : 'debrid';
     }
 
@@ -114,17 +125,22 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
                 ? 480
                 : null;
 
-    const seed = text.match(/👤\s*(\d+)/) ?? text.match(/(\d+)\s*seed/i);
+    const seed = text.match(/(?:👤|👥)\s*(\d+)/u) ?? text.match(/(\d+)\s*seed/i);
 
     const languages = new Set<string>();
     // Subtitle languages ("Eng Subs", "English Subtitles", "ESub") aren't audio: an
     // anime release "with English subs" is Japanese audio.
-    const audioText = text.replace(SUBS, ' ');
+    // AIOStreams lists subtitle languages on their own 📝 line: leave that line out.
+    const noSubLines = text
+        .split('\n')
+        .filter((l) => !/^\s*📝/u.test(l))
+        .join('\n');
+    const audioText = noSubLines.replace(SUBS, ' ');
     // Torrentio's flag line lists every language in the torrent name, subtitles
     // included, so when the name talks about subtitles the flags can't be trusted
     // for audio ("(Multi-Subs)" + 🇬🇧 is Japanese audio with English subs).
-    const mentionsSubs = audioText !== text;
-    if (!mentionsSubs) for (const [flag, code] of Object.entries(FLAGS)) if (text.includes(flag)) languages.add(code);
+    const mentionsSubs = audioText !== noSubLines;
+    if (!mentionsSubs) for (const [flag, code] of Object.entries(FLAGS)) if (noSubLines.includes(flag)) languages.add(code);
     for (const [re, code] of WORDS) if (re.test(audioText)) languages.add(code);
     // Always English: "English Dub", "English Audio" / "ENG AAC", "JPN+ENG", dub groups.
     // Anime only: "Dual Audio" (Japanese + English) and "Dubbed" with no other language.
@@ -184,12 +200,13 @@ export function audioMatch(p: Parsed, language: string | null): AudioMatch {
 }
 
 // Anime release groups and trackers, for guessing when the anime list isn't available.
-const ANIME_SOURCE = /\bnyaa(?:si)?\b|^\s*\[(?:Judas|EMBER|DB|Anime Time|Cytox|Kametsu|Yameii|Doomdos|NanDesuKa)\]/im;
+const ANIME_TRACKER = /\bnyaa(?:si)?\b/i;
+const ANIME_GROUP = group('Judas|EMBER|DB|Anime Time|Cytox|Kametsu|Yameii|Doomdos|NanDesuKa');
 
 /** A guess from the sources alone: several of them come from anime trackers or groups. */
 export function looksLikeAnime(streams: Stream[]): boolean {
     const text = (s: Stream) => [s.name, s.title, s.description, s.behaviorHints?.filename].filter(Boolean).join('\n');
-    return streams.filter((s) => ANIME_SOURCE.test(text(s)) || SUB_ONLY_GROUP.test(text(s))).length >= 2;
+    return streams.filter((s) => ANIME_TRACKER.test(text(s)) || ANIME_GROUP.test(text(s)) || SUB_ONLY_GROUP.test(text(s))).length >= 2;
 }
 
 const KIND_RANK: Record<Kind, number> = { debrid: 0, 'debrid-uncached': 1, torrent: 2, skip: 9 };
