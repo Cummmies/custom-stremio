@@ -73,6 +73,8 @@
 
     // Phones: swipe sideways to move between titles.
     let swipeX: number | null = null;
+    /** A swipe just happened: the click that follows isn't a tap on the poster. */
+    let swiped = false;
     function onpointerdown(e: PointerEvent) {
         swipeX = e.pointerType === 'mouse' ? null : e.clientX;
     }
@@ -81,6 +83,8 @@
         const dx = e.clientX - swipeX;
         swipeX = null;
         if (Math.abs(dx) < 50) return;
+        swiped = true;
+        setTimeout(() => (swiped = false), 400);
         heroPreview.clear();
         index = (index + (dx < 0 ? 1 : items.length - 1)) % items.length;
     }
@@ -135,6 +139,12 @@
         {onpointerdown}
         {onpointerup}
         onpointercancel={() => (swipeX = null)}
+        onclickcapture={(e) => {
+            if (swiped) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }}
     >
         {#key item.id}
             <div
@@ -142,6 +152,13 @@
                 aria-live={paused ? 'polite' : 'off'}
                 use:titleContext={{ type: item.type, id: item.id, name: item.name, preview: item }}
             >
+                <!-- Phones: the poster, which is made for a tall frame (backdrops
+                     cropped to a phone's width often lose their subject). -->
+                {#if item.poster}
+                    <a class="poster-card" href={titleHref(item.type, item.id)} aria-label={`More about ${item.name}`}>
+                        <img src={item.poster} alt="" />
+                    </a>
+                {/if}
                 {#if logo}
                     <img
                         class="logo"
@@ -386,30 +403,32 @@
         background: var(--label);
     }
 
-    /* Phones: shorter art shown whole-width, darkened only toward the rows;
-       everything centered, a wide Play button, swipe between titles. */
+    .poster-card {
+        display: none;
+    }
+    /* Phones: the poster as a big centered card over a blurred backdrop, then
+       tags and a wide Play button; swipe between titles. */
     @media (max-width: 700px) {
         .art {
-            height: 72vh;
+            height: 78vh;
         }
         .art img {
-            object-position: center 30%;
+            filter: blur(28px) saturate(1.3);
+            transform: scale(1.15);
         }
         .art img.show {
-            opacity: 0.85;
+            opacity: 0.55;
         }
         .scrim {
-            background:
-                linear-gradient(to top, var(--bg) 4%, rgb(13 13 18 / 0.75) 34%, transparent 62%),
-                linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 22%);
+            background: linear-gradient(to top, var(--bg) 6%, rgb(13 13 18 / 0.55) 40%, rgb(13 13 18 / 0.2) 70%, rgb(13 13 18 / 0.5));
         }
         .hero {
-            min-height: 66vh;
+            min-height: 0;
             flex-direction: column;
             align-items: stretch;
             justify-content: flex-end;
             gap: 16px;
-            padding: var(--nav-h) var(--gutter) 20px;
+            padding: calc(var(--nav-h) + 8px) var(--gutter) 20px;
             touch-action: pan-y;
         }
         .copy {
@@ -418,6 +437,30 @@
             flex-direction: column;
             align-items: center;
             text-align: center;
+        }
+        .poster-card {
+            display: block;
+            width: min(64vw, 300px);
+            aspect-ratio: 2 / 3;
+            margin-bottom: 18px;
+            border-radius: 14px;
+            overflow: hidden;
+            background: var(--elevated);
+            box-shadow:
+                0 24px 60px rgb(0 0 0 / 0.55),
+                0 0 0 0.5px rgb(255 255 255 / 0.15);
+        }
+        .poster-card img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* The poster already carries the title. */
+        .poster-card ~ .logo,
+        .poster-card ~ h1,
+        .description {
+            display: none;
         }
         .logo {
             max-width: 72%;
@@ -430,9 +473,6 @@
         }
         .meta {
             justify-content: center;
-        }
-        .description {
-            font-size: 14px;
             margin-bottom: 16px;
         }
         .actions {
