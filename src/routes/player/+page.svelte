@@ -16,7 +16,8 @@
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
-    import { mpv, buildOptions, inTauri, type Track } from '$lib/player/mpv.svelte';
+    import { player, type Track } from '$lib/player/player';
+    import { inTauri } from '$lib/player/mpv.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -99,7 +100,7 @@
     const subheading = $derived(
         model?.seriesInfo ? `S${model.seriesInfo.season} · E${model.seriesInfo.episode}${episodeTitle ? ` · ${episodeTitle}` : ''}` : null
     );
-    const loadingVideo = $derived(!mpv.loaded || (mpv.buffering && !mpv.paused));
+    const loadingVideo = $derived(!player.loaded || (player.buffering && !player.paused));
     const nextThreshold = $derived(((settings?.nextVideoNotificationDuration as number | undefined) ?? 35000) / 1000);
 
     // --- lifecycle ---------------------------------------------------------
@@ -107,18 +108,18 @@
     onMount(() => {
         document.documentElement.classList.add('player-active');
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
-        const offEvents = mpv.onEvent(onMpvEvent);
+        const offEvents = player.onEvent(onPlayerEvent);
         // Play/pause from the Windows media overlay or the keyboard's media keys.
         const offMedia = inTauri
             ? listen<string>('media://button', (e) => {
                   markActive();
-                  mpv.set('pause', e.payload === 'pause');
+                  player.setPaused(e.payload === 'pause');
               })
             : Promise.resolve(() => {});
         // Pause on minimize / on switching to another window (Settings → Playback).
         const win = inTauri ? getCurrentWindow() : null;
         const pauseNow = () => {
-            if (mpv.loaded && !mpv.paused) mpv.set('pause', true);
+            if (player.loaded && !player.paused) player.setPaused(true);
         };
         const offWindow = win
             ? Promise.all([
@@ -146,7 +147,7 @@
             cancelSilenceSkip();
             if (pip) invoke('set_pip', { enabled: false });
             if (fullscreen) invoke('set_fullscreen', { fullscreen: false });
-            mpv.stop();
+            player.stop();
             thumbs?.close();
             core.dispatch({ action: 'Unload' }, 'player');
         };
@@ -200,7 +201,7 @@
 
         thumbs?.close();
         // Background thumbnail work steps aside whenever the main video is buffering.
-        thumbs = new Thumbnails(url, () => mpv.buffering || !mpv.loaded);
+        thumbs = player.features.thumbnails ? new Thumbnails(url, () => player.buffering || !player.loaded) : null;
 
         // Easy Mode: if this source never shows a picture, move on to the next best.
         firstFrame = false;
@@ -210,12 +211,12 @@
             watchdog = setTimeout(() => !firstFrame && tryNextSource(), isTorrent ? 30000 : 15000);
         }
         try {
-            await mpv.start(buildOptions(settings ?? {}));
+            await player.start(settings ?? {});
             const start = await resumeFrom();
-            // mpv.load clears the old file's state in the same tick, so `fileFor`
+            // player.load clears the old file's state in the same tick, so `fileFor`
             // never pairs this video with the previous file's length or position.
             fileFor = `${id}|${videoId}`;
-            await mpv.load(url, start);
+            await player.load(url, start);
         } catch (e) {
             startError = String(e);
         }
@@ -231,7 +232,7 @@
     /** Which video mpv's current file belongs to. The URL changes first when moving to
      *  the next episode, while mpv still reports the previous file's length and time. */
     let fileFor = $state<string | null>(null);
-    const fileReady = $derived(mpv.loaded && fileFor === `${id}|${videoId}`);
+    const fileReady = $derived(player.loaded && fileFor === `${id}|${videoId}`);
     let playingStream: Stream | null = null;
 
     /** Easy Mode can step in: it picked this source, or it's on and can take over. */
@@ -278,12 +279,12 @@
 
     // A hard error on an auto-picked source → next source.
     $effect(() => {
-        if ((startError || mpv.error) && easyCanAct()) tryNextSource();
+        if ((startError || player.error) && easyCanAct()) tryNextSource();
     });
 
     // Stuck buffering for 30s mid-episode → next source (it resumes at the same time).
     $effect(() => {
-        const stuck = mpv.buffering && firstFrame && !mpv.paused;
+        const stuck = player.buffering && firstFrame && !player.paused;
         clearTimeout(stallTimer);
         if (stuck && easyCanAct()) stallTimer = setTimeout(tryNextSource, 30000);
     });
@@ -300,7 +301,7 @@
         return sameVideo ? Math.floor(saved.timeOffset / 1000) : 0;
     }
 
-    function onMpvEvent(e: { kind: string; reason?: string }) {
+    function onPlayerEvent(e: { kind: string; reason?: string }) {
         if (e.kind === 'playback-restart') {
             seeks++;
             firstFrame = true;
@@ -309,12 +310,12 @@
             clearTimeout(watchdog);
         }
         if (e.kind === 'file-loaded') {
-            mpv.applyUpscaler(playerPrefs.upscaler);
+            player.setUpscaler?.(playerPrefs.upscaler);
             scheduleThumbnails();
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             // An addon's error clip ending isn't the episode ending.
-            if (mpv.duration != null && mpv.duration < ERROR_CLIP_MAX_S) return;
+            if (player.duration != null && player.duration < ERROR_CLIP_MAX_S) return;
             core.dispatch({ action: 'Player', args: { action: 'Ended' } }, 'player');
             // Unless you cancelled the countdown on the Up next card.
             if (settings?.bingeWatching && model?.nextVideo && !nextDismissed && !autoplayFired) autoPlayNext();
@@ -338,8 +339,8 @@
         const t = thumbs;
         const check = async () => {
             if (t !== thumbs || !t) return;
-            const ahead = Number(await mpv.get('demuxer-cache-duration').catch(() => 0)) || 0;
-            if (mpv.duration && firstFrame && mpv.time > 30 && ahead >= 45 && !mpv.buffering) t.warmUp(mpv.duration);
+            const ahead = await player.bufferedAhead().catch(() => 0);
+            if (player.duration && firstFrame && player.time > 30 && ahead >= 45 && !player.buffering) t.warmUp(player.duration);
             else setTimeout(check, 5000);
         };
         setTimeout(check, 30000);
@@ -354,12 +355,14 @@
     async function addAddonSubtitle(s: { url?: string | null; lang: string; label?: string | null }, select: boolean) {
         if (!s.url) return;
         if (addedSubs.has(s.url)) {
-            const track = mpv.subTracks.find((t) => t.external && t.title === subtitleTitle(s));
-            if (select && track) await mpv.set('sid', track.id);
+            const track = player.subTracks.find((t) => t.external && t.title === subtitleTitle(s));
+            if (select && track) await player.selectSubtitle(track.id);
             return;
         }
         addedSubs.set(s.url, true);
-        await mpv.command('sub-add', s.url, select ? 'select' : 'auto', subtitleTitle(s), s.lang).catch(() => addedSubs.delete(s.url!));
+        await player
+            .addSubtitle(s.url, { select, title: subtitleTitle(s), lang: s.lang })
+            .catch(() => addedSubs.delete(s.url!));
     }
 
     const subtitleTitle = (s: { lang: string; label?: string | null }) => s.label || langName(s.lang);
@@ -374,11 +377,11 @@
         // Decide after a short delay, once mpv has reported the file's own tracks.
         setTimeout(() => {
             // Listening in that language already (e.g. an English dub): no subtitles needed.
-            const audio = mpv.audioTracks.find((t) => t.selected);
+            const audio = player.audioTracks.find((t) => t.selected);
             if (audio && sameLanguage(audio.lang, pref)) return;
-            const builtIn = mpv.subTracks.some((t) => !t.external && sameLanguage(t.lang, pref));
+            const builtIn = player.subTracks.some((t) => !t.external && sameLanguage(t.lang, pref));
             const match = subs.find((s) => sameLanguage(s.lang, pref) && s.url);
-            if (!builtIn && match) addAddonSubtitle(match, mpv.sid === 'no');
+            if (!builtIn && match) addAddonSubtitle(match, player.sid === 'no');
         }, 3000);
     });
 
@@ -386,14 +389,14 @@
     // orange "An unexpected error occurred, please try again later"). It plays
     // fine, so nothing else notices. No movie or episode is that short.
     const ERROR_CLIP_MAX_S = 90;
-    const errorClip = $derived(fileReady && !!mpv.duration && mpv.duration < ERROR_CLIP_MAX_S);
+    const errorClip = $derived(fileReady && !!player.duration && player.duration < ERROR_CLIP_MAX_S);
     let errorClipHandled: string | null = null;
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
         if (!errorClip || errorClipHandled === key) return;
         errorClipHandled = key;
         if (easyCanAct()) {
-            mpv.set('pause', true);
+            player.setPaused(true);
             tryNextSource();
         } else {
             note('This looks like an error message from the addon, not the video. Try another source.', 8000);
@@ -406,7 +409,7 @@
     let audioChecked: string | null = null;
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
-        if (!fileReady || !mpv.duration || errorClip || audioChecked === key || !mpv.audioTracks.length) return;
+        if (!fileReady || !player.duration || errorClip || audioChecked === key || !player.audioTracks.length) return;
         audioChecked = key;
         const auto = easyCanAct();
         const pref = (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
@@ -414,7 +417,7 @@
         const name = langName(langKey(pref) ?? pref);
         const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
         // An untagged track could be anything: don't guess.
-        if (mpv.audioTracks.some((t) => inPref(t) || !t.lang)) return;
+        if (player.audioTracks.some((t) => inPref(t) || !t.lang)) return;
         // Only anime: elsewhere the original audio is what you want (a Korean film stays Korean).
         if (auto && anime.isAnime(id) !== false) {
             findLanguage(name);
@@ -442,9 +445,9 @@
 
     // --- Windows media overlay: show name, "S1 · E3 · Episode", play/pause ---
     $effect(() => {
-        if (!inTauri || !mpv.loaded || !model) return;
+        if (!inTauri || !player.loaded || !model) return;
         const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
-        invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: mpv.paused }).catch(() => {});
+        invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: player.paused }).catch(() => {});
     });
 
     // --- Discord: "Watching <show> · S3 · E7" with time left (Settings, off by default) ---
@@ -463,9 +466,9 @@
             subtitle: subheading ?? '',
             image: episodeVideo?.thumbnail || meta?.poster || meta?.background || null,
             // Read without subscribing: the time ticks constantly; seeks and pauses re-run this.
-            position: untrack(() => mpv.time),
-            duration: mpv.duration,
-            paused: mpv.paused,
+            position: untrack(() => player.time),
+            duration: player.duration,
+            paused: player.paused,
         };
         invoke('discord_set', { presence }).catch(() => {});
     });
@@ -473,22 +476,22 @@
     // --- report progress to Stremio (drives Continue Watching) --------------
 
     $effect(() => {
-        const t = mpv.time;
+        const t = player.time;
         // Not while an addon's error clip plays: it would overwrite where you left off.
-        if (!mpv.loaded || !mpv.duration || mpv.duration < ERROR_CLIP_MAX_S || Math.abs(t - lastReported) < 1) return;
+        if (!player.loaded || !player.duration || player.duration < ERROR_CLIP_MAX_S || Math.abs(t - lastReported) < 1) return;
         lastReported = t;
         core.dispatch(
             {
                 action: 'Player',
-                args: { action: 'TimeChanged', args: { time: Math.round(t * 1000), duration: Math.round((mpv.duration ?? 0) * 1000), device: 'mpv' } },
+                args: { action: 'TimeChanged', args: { time: Math.round(t * 1000), duration: Math.round((player.duration ?? 0) * 1000), device: 'mpv' } },
             },
             'player'
         );
     });
 
     $effect(() => {
-        const paused = mpv.paused;
-        if (mpv.loaded) core.dispatch({ action: 'Player', args: { action: 'PausedChanged', args: { paused } } }, 'player');
+        const paused = player.paused;
+        if (player.loaded) core.dispatch({ action: 'Player', args: { action: 'PausedChanged', args: { paused } } }, 'player');
     });
 
     // --- skip intro / recap / credits ---------------------------------------
@@ -509,19 +512,19 @@
     let segmentsFor: string | null = null;
     $effect(() => {
         const key = `${id}|${videoId}`;
-        if (!fileReady || !mpv.duration || !id || segmentsFor === key) return;
+        if (!fileReady || !player.duration || !id || segmentsFor === key) return;
         segmentsFor = key;
         loadSegments();
     });
 
     async function loadSegments() {
-        const duration = mpv.duration;
+        const duration = player.duration;
         if (!duration) return;
         const forVideo = videoId;
         const parts = videoId?.split(':') ?? [];
         const season = model?.seriesInfo?.season ?? (parts.length >= 3 ? Number(parts[parts.length - 2]) : null);
         const episode = model?.seriesInfo?.episode ?? (parts.length >= 3 ? Number(parts[parts.length - 1]) : null);
-        const chapters = fromChapters(await mpv.get('chapter-list').catch(() => null), duration);
+        const chapters = fromChapters(await player.chapters(), duration);
         const found = await lookupSegments({
             imdb: id,
             season: type === 'series' ? season : null,
@@ -542,19 +545,20 @@
         if (!fileReady || chaptersFor === key) return;
         chaptersFor = key;
         fileChapters = [];
-        mpv.get('chapter-list')
-            .then((json) => {
-                if (chaptersFor === key) fileChapters = parseChapters(json as string | null);
+        player
+            .chapters()
+            .then((list) => {
+                if (chaptersFor === key) fileChapters = parseChapters(list);
             })
             .catch(() => {});
     });
     // Only the intro and outro split the bar; movies only split off their end credits.
     const seekChapters = $derived(
-        !mpv.duration ? [] : introOutroMarks(fileChapters, segments, mpv.duration, type === 'movie')
+        !player.duration ? [] : introOutroMarks(fileChapters, segments, player.duration, type === 'movie')
     );
 
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
-    const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);
+    const currentSegment = $derived(segments.find((s) => player.time >= s.start && player.time < s.end - 0.75) ?? null);
 
     // The Skip button shows for 10s when a section starts, then gets out of the way
     // (it comes back while the controls are up, and S works throughout).
@@ -575,7 +579,7 @@
 
     function skip(s: Segment) {
         if (s.kind === 'credits' && model?.nextVideo) return playNext();
-        mpv.seek(s.end);
+        player.seek(s.end);
     }
 
     // Optional: skip intros and recaps without asking (once each; seeking back in keeps it).
@@ -585,7 +589,7 @@
         const key = `${s.kind}:${s.start}`;
         if (autoSkipped.has(key)) return;
         autoSkipped.add(key);
-        mpv.seek(s.end);
+        player.seek(s.end);
         note(s.kind === 'intro' ? 'Skipped intro' : 'Skipped recap');
     });
 
@@ -598,8 +602,9 @@
         }
         if (currentSegment) return skip(currentSegment);
         // Known timings beat guessing: an intro or recap coming up next skips straight past it.
-        const upcoming = segments.find((s) => (s.kind === 'intro' || s.kind === 'recap') && s.start > mpv.time);
+        const upcoming = segments.find((s) => (s.kind === 'intro' || s.kind === 'recap') && s.start > player.time);
         if (upcoming) return skip(upcoming);
+        if (!player.features.silenceSkip) return note('No intro timings for this episode');
         silenceSearching = true;
         note('Looking for the end of the intro… Press S to cancel', 60000);
         startSilenceSkip((at) => {
@@ -610,10 +615,10 @@
 
     // "Up next" card near the end of an episode.
     $effect(() => {
-        const d = mpv.duration;
+        const d = player.duration;
         // Also as soon as the credits start, when we know where they are.
         const inCredits = currentSegment?.kind === 'credits';
-        showNext = !!model?.nextVideo && !!d && (inCredits || d - mpv.time <= nextThreshold) && !nextDismissed && !pip;
+        showNext = !!model?.nextVideo && !!d && (inCredits || d - player.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
     // With "Play next episode automatically" on, the card counts down and starts the
@@ -624,13 +629,13 @@
     let nextThumbFailed = $state(false);
     $effect(() => {
         if (!showNext) nextCardAt = null;
-        else if (nextCardAt == null) nextCardAt = mpv.time;
+        else if (nextCardAt == null) nextCardAt = player.time;
     });
     const autoplayIn = $derived.by(() => {
-        if (!settings?.bingeWatching || !showNext || nextCardAt == null || !mpv.duration) return null;
-        return Math.max(0, Math.min(mpv.duration, nextCardAt + nextThreshold) - mpv.time);
+        if (!settings?.bingeWatching || !showNext || nextCardAt == null || !player.duration) return null;
+        return Math.max(0, Math.min(player.duration, nextCardAt + nextThreshold) - player.time);
     });
-    const autoplayTotal = $derived(mpv.duration && nextCardAt != null ? Math.min(mpv.duration, nextCardAt + nextThreshold) - nextCardAt : 0);
+    const autoplayTotal = $derived(player.duration && nextCardAt != null ? Math.min(player.duration, nextCardAt + nextThreshold) - nextCardAt : 0);
     $effect(() => {
         if (autoplayIn == null || autoplayIn > 0.25 || autoplayFired) return;
         autoplayFired = true;
@@ -645,13 +650,13 @@
     const PREFETCH_LEAD = 60;
     $effect(() => {
         const next = model?.nextVideo;
-        const d = mpv.duration;
+        const d = player.duration;
         if (!next || !d || !fileReady || !type || !id || next.id === videoId) return;
         if (next.deepLinks?.player || prefetchFor === next.id) return;
         // The card shows at the credits (when known) or `nextThreshold` before the end.
         const credits = segments.find((s) => s.kind === 'credits');
         const cardAt = Math.min(credits?.start ?? d, d - nextThreshold);
-        if (mpv.time < cardAt - PREFETCH_LEAD) return;
+        if (player.time < cardAt - PREFETCH_LEAD) return;
         prefetchFor = next.id;
         prefetchPicks(type, id, next.id, likeThis()).then(({ picks, anime: isAnime }) => {
             if (picks.length) prefetched = { video: next.id, picks, anime: isAnime };
@@ -684,9 +689,9 @@
     // when its timing isn't known), ask, and pause if there's no answer in 15s.
     $effect(() => {
         if (!playerPrefs.askStillWatching || stillAsk || activeThisEpisode || stillWatching.autoEpisodes < 2) return;
-        if (!fileReady || mpv.paused || errorClip) return;
+        if (!fileReady || player.paused || errorClip) return;
         const intro = segments.find((s) => s.kind === 'intro');
-        if (mpv.time < (intro ? intro.end + 5 : 180)) return;
+        if (player.time < (intro ? intro.end + 5 : 180)) return;
         stillAsk = { left: 15 };
         clearInterval(stillTimer);
         stillTimer = setInterval(() => {
@@ -694,7 +699,7 @@
             if (stillAsk.left > 1) stillAsk = { left: stillAsk.left - 1 };
             else {
                 clearInterval(stillTimer);
-                mpv.set('pause', true);
+                player.setPaused(true);
                 stillAsk = { paused: true };
             }
         }, 1000);
@@ -703,7 +708,7 @@
     function keepWatching() {
         const wasPaused = !!stillAsk && 'paused' in stillAsk;
         markActive();
-        if (wasPaused) mpv.set('pause', false);
+        if (wasPaused) player.setPaused(false);
     }
 
     async function playNext() {
@@ -753,7 +758,7 @@
         document.documentElement.classList.remove('player-idle');
         clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
-            if (mpv.paused || menu.open) return poke();
+            if (player.paused || menu.open) return poke();
             controlsVisible = false;
             document.documentElement.classList.add('player-idle');
         }, 2600);
@@ -795,12 +800,12 @@
 
     function subtitlesMenu(el: HTMLElement) {
         const entries: MenuEntry[] = [
-            { label: 'Off', checked: mpv.sid === 'no', onselect: () => mpv.set('sid', 'no') },
-            ...(mpv.subTracks.length ? [{ separator: true } as MenuEntry] : []),
-            ...mpv.subTracks.map((t) => ({
+            { label: 'Off', checked: player.sid === 'no', onselect: () => player.selectSubtitle('no') },
+            ...(player.subTracks.length ? [{ separator: true } as MenuEntry] : []),
+            ...player.subTracks.map((t) => ({
                 label: trackLabel(t) + (t.external ? '' : ' (built in)'),
-                checked: String(t.id) === mpv.sid,
-                onselect: () => mpv.set('sid', t.id),
+                checked: String(t.id) === player.sid,
+                onselect: () => player.selectSubtitle(t.id),
             })),
         ];
 
@@ -838,8 +843,8 @@
     function audioMenu(el: HTMLElement) {
         menu.toggleFor(
             el,
-            mpv.audioTracks.length
-                ? mpv.audioTracks.map((t) => ({ label: trackLabel(t), checked: String(t.id) === mpv.aid, onselect: () => mpv.set('aid', t.id) }))
+            player.audioTracks.length
+                ? player.audioTracks.map((t) => ({ label: trackLabel(t), checked: String(t.id) === player.aid, onselect: () => player.selectAudio(t.id) }))
                 : [{ label: 'No audio tracks', disabled: true }],
             'end'
         );
@@ -848,53 +853,54 @@
     function settingsMenu(el: HTMLElement) {
         const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
         const info = [
-            mpv.width && mpv.height ? `${mpv.width}×${mpv.height}` : null,
-            mpv.hdr ? (mpv.gamma === 'hlg' ? 'HLG' : 'HDR10') : 'SDR',
-            mpv.hwdec == null ? null : mpv.hwdec && mpv.hwdec !== 'no' ? `GPU decoding (${mpv.hwdec})` : 'CPU decoding',
+            player.width && player.height ? `${player.width}×${player.height}` : null,
+            player.hdr ? (player.gamma === 'hlg' ? 'HLG' : 'HDR10') : 'SDR',
+            player.hwdec == null ? null : player.hwdec && player.hwdec !== 'no' ? `GPU decoding (${player.hwdec})` : 'CPU decoding',
         ].filter(Boolean);
         const setUpscaler = (u: Upscaler) => {
-            const needsRestart = (u === 'rtx') !== (playerPrefs.upscaler === 'rtx');
             playerPrefs.upscaler = u;
-            if (needsRestart) mpv.set('hwdec', u === 'rtx' ? 'd3d11va' : 'auto-safe').catch(() => {});
-            mpv.applyUpscaler(u);
+            player.setUpscaler?.(u);
         };
-        menu.toggleFor(
-            el,
-            [
-                { header: 'Video', detail: info.join(' · ') },
-                ...(type && id ? [{ label: 'Change Source…', icon: 'link', onselect: changeSource } as MenuEntry] : []),
-                {
-                    label: 'Speed',
-                    submenu: speeds.map((s) => ({ label: s === 1 ? 'Normal' : `${s}×`, checked: mpv.speed === s, onselect: () => mpv.set('speed', s) })),
+        const entries: MenuEntry[] = [{ header: 'Video', detail: info.join(' · ') }];
+        if (type && id) entries.push({ label: 'Change Source…', icon: 'link', onselect: changeSource });
+        entries.push({
+            label: 'Speed',
+            submenu: speeds.map((s) => ({ label: s === 1 ? 'Normal' : `${s}×`, checked: player.speed === s, onselect: () => player.setSpeed(s) })),
+        });
+        // Desktop-only extras, where the player can do them.
+        const { upscaling, hdrPassthrough, audioPassthrough } = player.features;
+        if (upscaling) {
+            entries.push({
+                label: 'Upscaling',
+                submenu: (Object.keys(upscalerLabels) as Upscaler[]).map((u) => ({
+                    label: upscalerLabels[u],
+                    checked: playerPrefs.upscaler === u,
+                    onselect: () => setUpscaler(u),
+                })),
+            });
+        }
+        if (hdrPassthrough || audioPassthrough) entries.push({ separator: true });
+        if (hdrPassthrough) {
+            entries.push({
+                label: 'HDR Passthrough',
+                checked: playerPrefs.hdrPassthrough,
+                onselect: () => {
+                    playerPrefs.hdrPassthrough = !playerPrefs.hdrPassthrough;
+                    player.setHdrPassthrough?.(playerPrefs.hdrPassthrough).catch(() => {});
                 },
-                {
-                    label: 'Upscaling',
-                    submenu: (Object.keys(upscalerLabels) as Upscaler[]).map((u) => ({
-                        label: upscalerLabels[u],
-                        checked: playerPrefs.upscaler === u,
-                        onselect: () => setUpscaler(u),
-                    })),
+            });
+        }
+        if (audioPassthrough) {
+            entries.push({
+                label: 'Audio Passthrough (Atmos)',
+                checked: playerPrefs.audioPassthrough,
+                onselect: () => {
+                    playerPrefs.audioPassthrough = !playerPrefs.audioPassthrough;
+                    player.setAudioPassthrough?.(playerPrefs.audioPassthrough).catch(() => {});
                 },
-                { separator: true },
-                {
-                    label: 'HDR Passthrough',
-                    checked: playerPrefs.hdrPassthrough,
-                    onselect: () => {
-                        playerPrefs.hdrPassthrough = !playerPrefs.hdrPassthrough;
-                        mpv.set('target-colorspace-hint', playerPrefs.hdrPassthrough).catch(() => {});
-                    },
-                },
-                {
-                    label: 'Audio Passthrough (Atmos)',
-                    checked: playerPrefs.audioPassthrough,
-                    onselect: () => {
-                        playerPrefs.audioPassthrough = !playerPrefs.audioPassthrough;
-                        mpv.set('audio-spdif', playerPrefs.audioPassthrough ? 'ac3,eac3,dts,dts-hd,truehd' : '').catch(() => {});
-                    },
-                },
-            ],
-            'end'
-        );
+            });
+        }
+        menu.toggleFor(el, entries, 'end');
     }
 
     function onkeydown(e: KeyboardEvent) {
@@ -904,12 +910,12 @@
         // Tab skips while the Skip button is up; otherwise it moves between controls as usual.
         if (k === 'tab' && !e.shiftKey && skipVisible) tabSkip();
         else if (k === 's') tabSkip();
-        else if (k === ' ' || k === 'k') mpv.togglePause();
-        else if (k === 'arrowright') mpv.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
-        else if (k === 'arrowleft') mpv.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
-        else if (k === 'arrowup') mpv.setVolume(mpv.volume + 5);
-        else if (k === 'arrowdown') mpv.setVolume(mpv.volume - 5);
-        else if (k === 'm') mpv.set('mute', !mpv.muted);
+        else if (k === ' ' || k === 'k') player.togglePause();
+        else if (k === 'arrowright') player.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
+        else if (k === 'arrowleft') player.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
+        else if (k === 'arrowup') player.setVolume(player.volume + 5);
+        else if (k === 'arrowdown') player.setVolume(player.volume - 5);
+        else if (k === 'm') player.setMuted(!player.muted);
         else if (k === 'f') toggleFullscreen();
         else if (k === 'p') togglePip();
         else if (k === 'n' && model?.nextVideo) playNext();
@@ -929,7 +935,7 @@
     let clickTimer: ReturnType<typeof setTimeout> | undefined;
     function onsurfaceclick() {
         clearTimeout(clickTimer);
-        clickTimer = setTimeout(() => mpv.togglePause(), 220);
+        clickTimer = setTimeout(() => player.togglePause(), 220);
     }
     function onsurfacedblclick() {
         clearTimeout(clickTimer);
@@ -948,7 +954,7 @@
     <!-- Transparent surface over the video that takes clicks. -->
     <button
         class="surface"
-        aria-label={mpv.paused ? 'Play' : 'Pause'}
+        aria-label={player.paused ? 'Play' : 'Pause'}
         onclick={onsurfaceclick}
         ondblclick={onsurfacedblclick}
         onpointerdown={onsurfacedown}
@@ -958,10 +964,10 @@
         <div class="switching" role="status">{switching}</div>
     {/if}
 
-    {#if (startError || mpv.error) && !easyQueue.activeFor(videoId) && !adopting}
+    {#if (startError || player.error) && !easyQueue.activeFor(videoId) && !adopting}
         <div class="center-card" role="alert">
             <p class="err-title">Can’t play this stream</p>
-            <p class="err-body">{startError ?? mpv.error}</p>
+            <p class="err-body">{startError ?? player.error}</p>
             <div class="err-actions">
                 <button onclick={() => (type && id ? changeSource() : exit())}>Choose Another Source</button>
             </div>
@@ -969,7 +975,7 @@
     {:else if loadingVideo}
         <div class="spinner" role="status" aria-label="Loading">
             <span></span>
-            {#if mpv.bufferingPercent != null && mpv.bufferingPercent < 100}<em>{mpv.bufferingPercent}%</em>{/if}
+            {#if player.bufferingPercent != null && player.bufferingPercent < 100}<em>{player.bufferingPercent}%</em>{/if}
         </div>
     {/if}
 
@@ -981,7 +987,7 @@
             <h1>{heading}</h1>
             {#if subheading}<p>{subheading}</p>{/if}
         </div>
-        {#if mpv.hdr}<span class="badge">HDR</span>{/if}
+        {#if player.hdr}<span class="badge">HDR</span>{/if}
         {#if pip}
             <button class="icon" onclick={togglePip} aria-label="Exit picture in picture" title="Exit Picture in Picture (P)"><Icon name="exitFullscreen" size={18} /></button>
         {/if}
@@ -1044,7 +1050,7 @@
     {/if}
 
     <footer class="bottom">
-        <SeekBar time={mpv.time} duration={mpv.duration} buffered={mpv.cacheTime} chapters={seekChapters} onseek={(s) => mpv.seek(s)}>
+        <SeekBar time={player.time} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
             {#snippet preview(t: number)}
                 {#if thumbs && !pip}<SeekPreview {thumbs} time={t} />{/if}
             {/snippet}
@@ -1052,8 +1058,8 @@
 
         <div class="bar">
             <div class="group">
-                <button class="icon big" onclick={() => mpv.togglePause()} aria-label={mpv.paused ? 'Play' : 'Pause'} title={mpv.paused ? 'Play (Space)' : 'Pause (Space)'}>
-                    <Icon name={mpv.paused ? 'play' : 'pause'} size={24} filled={mpv.paused} />
+                <button class="icon big" onclick={() => player.togglePause()} aria-label={player.paused ? 'Play' : 'Pause'} title={player.paused ? 'Play (Space)' : 'Pause (Space)'}>
+                    <Icon name={player.paused ? 'play' : 'pause'} size={24} filled={player.paused} />
                 </button>
                 {#if !pip}
                     <!-- Skipping by seconds lives on ←/→; the bar keeps the episode control. -->
@@ -1069,23 +1075,23 @@
                         </button>
                     {/if}
                     <div class="volume">
-                        <button class="icon" onclick={() => mpv.set('mute', !mpv.muted)} aria-label={mpv.muted ? 'Unmute' : 'Mute'} title="Mute (M)">
-                            <Icon name={mpv.muted || mpv.volume === 0 ? 'mute' : 'volume'} size={21} />
+                        <button class="icon" onclick={() => player.setMuted(!player.muted)} aria-label={player.muted ? 'Unmute' : 'Mute'} title="Mute (M)">
+                            <Icon name={player.muted || player.volume === 0 ? 'mute' : 'volume'} size={21} />
                         </button>
                         <input
                             type="range"
                             min="0"
                             max="130"
-                            value={mpv.muted ? 0 : mpv.volume}
+                            value={player.muted ? 0 : player.volume}
                             oninput={(e) => {
-                                if (mpv.muted) mpv.set('mute', false);
-                                mpv.setVolume(Number(e.currentTarget.value));
+                                if (player.muted) player.setMuted(false);
+                                player.setVolume(Number(e.currentTarget.value));
                             }}
                             aria-label="Volume"
-                            style:--fill="{((mpv.muted ? 0 : mpv.volume) / 130) * 100}%"
+                            style:--fill="{((player.muted ? 0 : player.volume) / 130) * 100}%"
                         />
                     </div>
-                    <span class="time">{[fmtTime(mpv.time), mpv.duration ? fmtTime(mpv.duration) : null].filter(Boolean).join(' / ')}</span>
+                    <span class="time">{[fmtTime(player.time), player.duration ? fmtTime(player.duration) : null].filter(Boolean).join(' / ')}</span>
                 {/if}
             </div>
 

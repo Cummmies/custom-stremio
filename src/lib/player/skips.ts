@@ -4,6 +4,7 @@
 //   1. The file's own chapter markers ("Intro", "Opening", "Credits"…): exact for this file.
 //   2. TheIntroDB and IntroDB: crowdsourced timings looked up by IMDb id + season/episode.
 import { invoke } from '@tauri-apps/api/core';
+import type { RawChapter } from './backend';
 
 export type SkipKind = 'intro' | 'recap' | 'credits' | 'preview';
 export type Segment = { kind: SkipKind; start: number; end: number; source: string };
@@ -76,16 +77,11 @@ const CHAPTER_KINDS: [RegExp, SkipKind][] = [
 export type Chapter = { time: number; title: string };
 
 /** The file's chapters (mpv's `chapter-list` property JSON), in order. */
-export function parseChapters(chapterListJson: string | null): Chapter[] {
-    try {
-        const list: { title?: string; time: number }[] = chapterListJson ? JSON.parse(chapterListJson) : [];
-        return list
-            .filter((c) => Number.isFinite(c.time))
-            .map((c) => ({ time: c.time, title: (c.title ?? '').trim() }))
-            .sort((a, b) => a.time - b.time);
-    } catch {
-        return [];
-    }
+export function parseChapters(list: RawChapter[]): Chapter[] {
+    return list
+        .filter((c) => Number.isFinite(c.time))
+        .map((c) => ({ time: c.time, title: (c.title ?? '').trim() }))
+        .sort((a, b) => a.time - b.time);
 }
 
 // Seek-bar names: only the intro and outro get one.
@@ -153,14 +149,8 @@ export function nameChapters(chapters: Chapter[], segments: Segment[], duration:
     });
 }
 
-/** Segments from the file's chapter list (mpv's `chapter-list` property JSON). */
-export function fromChapters(chapterListJson: string | null, duration: number): Segment[] {
-    let chapters: { title?: string; time: number }[] = [];
-    try {
-        chapters = chapterListJson ? JSON.parse(chapterListJson) : [];
-    } catch {
-        return [];
-    }
+/** Segments from the file's chapter markers. */
+export function fromChapters(chapters: RawChapter[], duration: number): Segment[] {
     const out: Segment[] = [];
     chapters.forEach((c, i) => {
         const kind = CHAPTER_KINDS.find(([re]) => re.test(c.title ?? ''))?.[1];

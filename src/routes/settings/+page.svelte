@@ -6,6 +6,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
+    import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { profiles } from '$lib/profiles.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
@@ -226,9 +227,11 @@
             </div>
         </section>
 
+        {#if player.features.upscaling || player.features.hdrPassthrough || player.features.audioPassthrough}
         <section>
             <h2>Video</h2>
             <div class="group">
+                {#if player.features.upscaling}
                 <div class="row">
                     <div>
                         <div class="title">Upscaling</div>
@@ -244,6 +247,8 @@
                         onchange={(v) => (playerPrefs.upscaler = v)}
                     />
                 </div>
+                {/if}
+                {#if player.features.hdrPassthrough}
                 <div class="row">
                     <div>
                         <div class="title">HDR passthrough</div>
@@ -251,6 +256,8 @@
                     </div>
                     <Toggle label="HDR passthrough" checked={playerPrefs.hdrPassthrough} onchange={(v) => (playerPrefs.hdrPassthrough = v)} />
                 </div>
+                {/if}
+                {#if player.features.audioPassthrough}
                 <div class="row">
                     <div>
                         <div class="title">Audio passthrough (Dolby Atmos, DTS)</div>
@@ -258,8 +265,10 @@
                     </div>
                     <Toggle label="Audio passthrough" checked={playerPrefs.audioPassthrough} onchange={(v) => (playerPrefs.audioPassthrough = v)} />
                 </div>
+                {/if}
             </div>
         </section>
+        {/if}
 
         <section>
             <h2>Easy Mode</h2>

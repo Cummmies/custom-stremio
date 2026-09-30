@@ -1,23 +1,14 @@
-// Thin, reactive client for the embedded mpv (src-tauri/src/player.rs).
+// The desktop player backend: a thin, reactive client for the embedded mpv
+// (src-tauri/src/player.rs). Screens use it through `player` (player.ts) and
+// the PlayerBackend interface; only mpv-specific extras (silence skip) use
+// `mpv` and its raw get/set/command directly.
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { playerPrefs, type Upscaler } from './prefs.svelte';
 import { langKey } from './lang';
+import type { PlayerBackend, PlayerEvent, PlayerFeatures, RawChapter, StartSettings, Track } from './backend';
 
-export type Track = {
-    id: number;
-    type: 'video' | 'audio' | 'sub';
-    title?: string;
-    lang?: string;
-    codec?: string;
-    selected: boolean;
-    external?: boolean;
-    'demux-channel-count'?: number;
-    'audio-channels'?: number;
-};
-
-type EndFile = { kind: 'end-file'; reason: 'eof' | 'stop' | 'quit' | 'error' | 'other'; error?: string };
-type MpvEvent = { kind: 'file-loaded' | 'playback-restart' | 'shutdown' } | EndFile;
+export type { Track } from './backend';
 
 /** mpv's sharper, heavier scalers (what its built-in "high-quality" profile uses). */
 const HIGH_QUALITY: Record<string, string> = {
@@ -39,7 +30,15 @@ export const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in
 const num = (v: string | null) => (v == null || v === '' ? null : Number(v));
 const flag = (v: string | null) => v === 'yes';
 
-class Mpv {
+class Mpv implements PlayerBackend {
+    readonly features: PlayerFeatures = {
+        upscaling: true,
+        hdrPassthrough: true,
+        audioPassthrough: true,
+        thumbnails: true,
+        silenceSkip: true,
+    };
+
     running = $state(false);
     loaded = $state(false);
     time = $state(0);
@@ -67,9 +66,9 @@ class Mpv {
 
     #unlisten: UnlistenFn[] = [];
     #scalerDefaults: Record<string, string> | null = null;
-    #listeners = new Set<(e: MpvEvent) => void>();
+    #listeners = new Set<(e: PlayerEvent) => void>();
 
-    onEvent(fn: (e: MpvEvent) => void) {
+    onEvent(fn: (e: PlayerEvent) => void) {
         this.#listeners.add(fn);
         return () => this.#listeners.delete(fn);
     }
@@ -102,12 +101,14 @@ class Mpv {
         }
     }
 
-    async start(options: Record<string, string>) {
+    async start(settings: StartSettings) {
+        const options = buildOptions(settings);
+        this.#rtx = options.hwdec === 'd3d11va';
         if (!inTauri) throw new Error('Playback needs the desktop app.');
         if (!this.#unlisten.length) {
             this.#unlisten.push(
                 await listen<{ name: string; value: string | null }>('mpv://prop', (e) => this.#apply(e.payload.name, e.payload.value)),
-                await listen<MpvEvent>('mpv://event', (e) => {
+                await listen<PlayerEvent>('mpv://event', (e) => {
                     const ev = e.payload;
                     if (ev.kind === 'file-loaded') {
                         this.loaded = true;
@@ -172,6 +173,10 @@ class Mpv {
         return this.set('pause', !this.paused);
     }
 
+    setPaused(paused: boolean) {
+        return this.set('pause', paused);
+    }
+
     seek(seconds: number) {
         this.time = Math.max(0, seconds);
         return this.command('seek', String(Math.max(0, seconds)), 'absolute');
@@ -187,6 +192,61 @@ class Mpv {
         playerPrefs.volume = clamped;
         return this.set('volume', clamped);
     }
+
+    setMuted(muted: boolean) {
+        return this.set('mute', muted);
+    }
+
+    setSpeed(speed: number) {
+        return this.set('speed', speed);
+    }
+
+    selectAudio(id: number) {
+        return this.set('aid', id);
+    }
+
+    selectSubtitle(id: number | 'no') {
+        return this.set('sid', id);
+    }
+
+    addSubtitle(url: string, opts: { select: boolean; title: string; lang?: string }) {
+        const args = ['sub-add', url, opts.select ? 'select' : 'auto', opts.title];
+        if (opts.lang) args.push(opts.lang);
+        return this.command(...args);
+    }
+
+    async chapters(): Promise<RawChapter[]> {
+        try {
+            const json = await this.get('chapter-list');
+            const list = json ? JSON.parse(json) : [];
+            return Array.isArray(list) ? list : [];
+        } catch {
+            return [];
+        }
+    }
+
+    async bufferedAhead() {
+        return Number(await this.get('demuxer-cache-duration').catch(() => 0)) || 0;
+    }
+
+    async setHdrPassthrough(on: boolean) {
+        await this.set('target-colorspace-hint', on);
+    }
+
+    async setAudioPassthrough(on: boolean) {
+        await this.set('audio-spdif', on ? SPDIF : '');
+    }
+
+    /** Switches upscaler; RTX needs native d3d11 decoding, so switching to or from it changes the decoder. */
+    async setUpscaler(kind: Upscaler) {
+        const rtx = kind === 'rtx';
+        if (rtx !== this.#rtx) {
+            this.#rtx = rtx;
+            await this.set('hwdec', rtx ? 'd3d11va' : 'auto-safe').catch(() => {});
+        }
+        await this.applyUpscaler(kind);
+    }
+    #rtx = false;
 
     /** Applies (or clears) the chosen upscaler for the current video. */
     async applyUpscaler(kind: Upscaler) {
@@ -210,7 +270,7 @@ class Mpv {
         }
     }
 
-    async stop() {
+    async stop(): Promise<void> {
         this.loaded = false;
         await invoke('mpv_stop').catch(() => {});
     }
@@ -223,12 +283,10 @@ class Mpv {
 
 export const mpv = new Mpv();
 
+const SPDIF = 'ac3,eac3,dts,dts-hd,truehd';
+
 /** mpv options from Stremio's synced settings plus this app's player prefs. */
-export function buildOptions(settings: {
-    hardwareDecoding?: boolean;
-    audioLanguage?: string | null;
-    subtitlesLanguage?: string | null;
-}): Record<string, string> {
+function buildOptions(settings: StartSettings): Record<string, string> {
     const o: Record<string, string> = {
         // libplacebo renderer: better HDR handling and scaling than the legacy one.
         vo: 'gpu-next',
@@ -257,7 +315,7 @@ export function buildOptions(settings: {
     // Don't turn on subtitles in the language you're already hearing (dubs),
     // apart from forced ones (signs and songs).
     o['subs-with-matching-audio'] = 'no';
-    if (playerPrefs.audioPassthrough) o['audio-spdif'] = 'ac3,eac3,dts,dts-hd,truehd';
+    if (playerPrefs.audioPassthrough) o['audio-spdif'] = SPDIF;
     return o;
 }
 

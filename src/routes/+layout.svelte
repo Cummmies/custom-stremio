@@ -3,8 +3,7 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
-    import { invoke } from '@tauri-apps/api/core';
-    import { inTauri } from '$lib/player/mpv.svelte';
+    import { canPlay, player } from '$lib/player/player';
     import { app } from '$lib/app.svelte';
     import { installContextMenu } from '$lib/contextmenu';
     import TopNav from '$lib/components/TopNav.svelte';
@@ -25,7 +24,7 @@
     onMount(() => {
         app.start();
         // A reload skips the player's cleanup; make sure no video keeps playing unseen.
-        if (!inPlayer && inTauri) invoke('mpv_stop').catch(() => {});
+        if (!inPlayer && canPlay) player.stop();
         // Release builds look for updates shortly after launch.
         if (import.meta.env.PROD) setTimeout(() => updates.check({ quiet: true }), 8000);
         return installContextMenu();
