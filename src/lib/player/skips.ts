@@ -88,27 +88,52 @@ export function parseChapters(chapterListJson: string | null): Chapter[] {
     }
 }
 
-/** Seek-bar marks from known sections, for files without chapters of their own. */
 // Seek-bar names: only the intro and outro get one.
 const SECTION_NAME: Record<SkipKind, string> = { intro: 'Intro', recap: '', credits: 'Outro', preview: '' };
 
-export function chaptersFromSegments(segments: Segment[], duration: number): Chapter[] {
-    const name = SECTION_NAME;
-    const out: Chapter[] = [];
-    for (const s of [...segments].sort((a, b) => a.start - b.start)) {
-        // A section starting where the last one ended replaces that end mark.
-        if (out.at(-1)?.time === s.start) out.pop();
-        out.push({ time: s.start, title: name[s.kind] });
-        if (s.end < duration - 1) out.push({ time: s.end, title: '' });
+/**
+ * Seek-bar marks for the intro and the outro only: the bar splits where each
+ * starts and ends, and nowhere else. Taken from the file's chapters when they
+ * name them ("Opening", "Ending"…, or a generic chapter a known section
+ * covers), otherwise from the known sections.
+ */
+export function introOutroMarks(chapters: Chapter[], segments: Segment[], duration: number): Chapter[] {
+    type Section = { title: string; start: number; end: number };
+    let sections: Section[] = [];
+    if (chapters.length >= 2) {
+        const named = nameChapters(chapters, segments, duration);
+        sections = named
+            .map((c, i) => ({ title: c.title, start: c.time, end: named[i + 1]?.time ?? duration }))
+            .filter((x) => x.title);
     }
+    if (!sections.length) {
+        sections = segments
+            .filter((x) => x.kind === 'intro' || x.kind === 'credits')
+            .map((x) => ({ title: SECTION_NAME[x.kind], start: x.start, end: x.end }));
+    }
+    const out: Chapter[] = [];
+    const push = (x: Section) => {
+        if (out.at(-1)?.time === x.start) out.pop();
+        out.push({ time: x.start, title: x.title });
+        if (x.end < duration - 1) out.push({ time: x.end, title: '' });
+    };
+    let last: Section | null = null;
+    for (const x of sections.sort((a, b) => a.start - b.start)) {
+        // An intro split over two chapters is still one intro.
+        if (last && last.title === x.title && x.start - last.end < 1) {
+            last.end = Math.max(last.end, x.end);
+            continue;
+        }
+        if (last) push(last);
+        last = { ...x };
+    }
+    if (last) push(last);
     return out;
 }
 
 /**
- * The seek bar only names the intro and the outro; every other chapter shows
- * the time alone ("Episode", "Scene 1", "Part B" are noise there). A chapter
- * counts as the intro/outro by its own name ("Opening", "ED"…) or when a known
- * section covers most of it.
+ * Names a chapter "Intro" or "Outro" by its own title ("Opening", "ED"…) or when
+ * a known section covers most of it; every other chapter gets no name.
  */
 export function nameChapters(chapters: Chapter[], segments: Segment[], duration: number): Chapter[] {
     return chapters.map((c, i) => {

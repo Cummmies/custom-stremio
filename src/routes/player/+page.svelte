@@ -25,7 +25,7 @@
     import { parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
-    import { chaptersFromSegments, fromChapters, lookupSegments, nameChapters, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
+    import { fromChapters, introOutroMarks, lookupSegments, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
     import { fmtTime } from '$lib/player/format';
@@ -533,8 +533,7 @@
         if (forVideo === videoId) segments = found;
     }
 
-    // Chapter marks on the seek bar: the file's own chapters, or else the known
-    // intro / recap / credits sections.
+    // The file's chapters, for the intro/outro marks on the seek bar.
     let fileChapters = $state<Chapter[]>([]);
     let chaptersFor: string | null = null;
     $effect(() => {
@@ -548,13 +547,8 @@
             })
             .catch(() => {});
     });
-    const seekChapters = $derived(
-        !mpv.duration
-            ? []
-            : fileChapters.length >= 2
-              ? nameChapters(fileChapters, segments, mpv.duration)
-              : chaptersFromSegments(segments, mpv.duration)
-    );
+    // Only the intro and outro split the bar, and only for episodes (movies get one bar).
+    const seekChapters = $derived(!mpv.duration || type === 'movie' ? [] : introOutroMarks(fileChapters, segments, mpv.duration));
 
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
     const currentSegment = $derived(segments.find((s) => mpv.time >= s.start && mpv.time < s.end - 0.75) ?? null);
