@@ -10,6 +10,7 @@
     import Icon from './Icon.svelte';
     import Avatar from './Avatar.svelte';
     import Toggle from './Toggle.svelte';
+    import logo from '$lib/assets/logo.png';
 
     let dialog = $state<HTMLDialogElement>();
     let view = $state<'pick' | 'add' | 'edit'>(profiles.pickerView);
@@ -172,7 +173,7 @@
 
     {#if view === 'pick'}
         <header class="bar">
-            <span class="brand">Stremio</span>
+            <span class="brand"><img src={logo} alt="" width="28" height="28" />Stremio</span>
             <div class="bar-actions">
                 <button class="pill" onclick={() => (managing = !managing)} aria-pressed={managing}>
                     {managing ? 'Done' : 'Manage Profiles'}
@@ -395,10 +396,17 @@
         padding: 20px 28px;
     }
     .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         font-family: var(--font-display);
         font-size: 20px;
         font-weight: 700;
         letter-spacing: -0.01em;
+    }
+    .brand img {
+        display: block;
+        border-radius: 7px;
     }
     .bar-actions {
         display: flex;

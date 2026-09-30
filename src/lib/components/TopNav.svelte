@@ -1,4 +1,5 @@
 <script lang="ts">
+    import logo from '$lib/assets/logo.png';
     // Floating navigation over the hero: brand, a pill of sections, search and account.
     // Transparent at rest; picks up a glass backing once content scrolls under it.
     import { goto } from '$app/navigation';
@@ -90,7 +91,7 @@
 </script>
 
 <header class="nav" class:scrolled>
-    <a class="brand" href="/" aria-label="Stremio home">Stremio</a>
+    <a class="brand" href="/" aria-label="Stremio home"><img src={logo} alt="" width="28" height="28" />Stremio</a>
 
     <nav class="pill" aria-label="Sections">
         {#each sections as s (s.href)}
@@ -174,6 +175,9 @@
     }
     .brand {
         justify-self: start;
+        display: flex;
+        align-items: center;
+        gap: 10px;
         font-family: var(--font-display);
         font-weight: 700;
         font-size: 20px;
@@ -181,6 +185,10 @@
         color: var(--label);
         text-decoration: none;
         border-radius: 4px;
+    }
+    .brand img {
+        display: block;
+        border-radius: 7px;
     }
     .pill {
         display: flex;
