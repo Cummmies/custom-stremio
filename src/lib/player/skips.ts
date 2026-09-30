@@ -102,12 +102,16 @@ export function chaptersFromSegments(segments: Segment[], duration: number): Cha
 }
 
 /**
- * Files often name their chapters "Chapter 1", "Chapter 2"… Rename those from the
+ * Files often name their chapters "Chapter 1", "Scene 2"… Rename those from the
  * known sections: a chapter mostly covered by the intro becomes "Intro", and so on;
  * the rest go nameless (the time alone is shown). Real names are kept.
  */
 export function nameChapters(chapters: Chapter[], segments: Segment[], duration: number): Chapter[] {
-    const generic = (t: string) => !t || /^(chapter|ch\.?|part|kapitel|chapitre|cap[ií]tulo)\s*\d+$/i.test(t) || /^\d+$/.test(t);
+    // "Chapter 1", "Scene 01", "Segment 3", "Act 2", "Ch. 4", "#5", "07"…
+    const generic = (t: string) =>
+        !t ||
+        /^(chapter|ch\.?|scene|segment|section|act|part|kapitel|chapitre|cap[ií]tulo|escena|szene)\s*#?\s*\d+$/i.test(t) ||
+        /^#?\s*\d+$/.test(t);
     return chapters.map((c, i) => {
         if (!generic(c.title)) return c;
         const end = chapters[i + 1]?.time ?? duration;
