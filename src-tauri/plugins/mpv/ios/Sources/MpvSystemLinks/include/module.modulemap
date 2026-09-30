@@ -1,0 +1,23 @@
+// System libraries MPVKit's static libraries use. Importing this module from
+// Swift embeds auto-link entries, so the app's linker adds them by itself
+// (MPVKit's own linker settings don't carry over to a Tauri plugin).
+module MpvSystemLinks {
+    header "MpvSystemLinks.h"
+    link "xml2"
+    link "z"
+    link "iconv"
+    link "bz2"
+    link "expat"
+    link "resolv"
+    link "c++"
+    link framework "VideoToolbox"
+    link framework "AudioToolbox"
+    link framework "CoreAudio"
+    link framework "CoreMedia"
+    link framework "CoreVideo"
+    link framework "Metal"
+    link framework "QuartzCore"
+    link framework "IOSurface"
+    link framework "AVFoundation"
+    export *
+}

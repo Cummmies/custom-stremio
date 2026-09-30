@@ -13,6 +13,7 @@
 import AVFoundation
 import Foundation
 import Libmpv
+import MpvSystemLinks
 import Tauri
 import UIKit
 import WebKit

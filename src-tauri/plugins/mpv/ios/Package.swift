@@ -19,8 +19,10 @@ let package = Package(
             dependencies: [
                 .byName(name: "Tauri"),
                 .product(name: "MPVKit", package: "MPVKit"),
+                "MpvSystemLinks",
             ],
             path: "Sources/MpvPlugin"
         ),
+        .target(name: "MpvSystemLinks", path: "Sources/MpvSystemLinks"),
     ]
 )
