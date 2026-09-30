@@ -372,7 +372,7 @@
             <div class="row">
                 <div>
                     <div class="title">Customize Home</div>
-                    <div class="sub">Reorder, rename, merge or hide Home’s rows, including Continue Watching and Top 10.</div>
+                    <div class="sub">Reorder, rename, merge or hide Home’s rows, including Continue Watching.</div>
                 </div>
                 <a class="btn" href="/customize">Customize…</a>
             </div>

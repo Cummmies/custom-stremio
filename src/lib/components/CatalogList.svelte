@@ -8,7 +8,7 @@
     /** Anchor for a customized Home row (for the category tiles to jump to). */
     export const rowAnchor = (key: string) => `row-${key.replace(/[^a-z0-9]+/gi, '-')}`;
 
-    /** A row in a customized order: built in (Continue Watching, Top 10) or drawn from catalogs. */
+    /** A row in a customized order: built in (Continue Watching) or drawn from catalogs. */
     export type ListRow = { key: string; title: string; special?: boolean; indices: number[] };
 </script>
 
@@ -24,18 +24,15 @@
         model,
         catalogs,
         type = null,
-        continueFrom = null,
         rows = null,
         special,
     }: {
         model: string;
         catalogs: Catalog[];
         type?: string | null;
-        /** Start one catalog's row after its first `skip` items (they're shown elsewhere). */
-        continueFrom?: { index: number; skip: number } | null;
         /** A customized order (Customize Home). Without it: every catalog, in addon order. */
         rows?: ListRow[] | null;
-        /** Draws a built-in row (Continue Watching, Top 10) where it sits in `rows`. */
+        /** Draws a built-in row (Continue Watching) where it sits in `rows`. */
         special?: Snippet<[string]>;
     } = $props();
 
@@ -48,11 +45,11 @@
 
     function rowItems(catalog: Catalog, index: number) {
         if (catalog.content?.type !== 'Ready') return null;
-        return continueFrom?.index === index ? catalog.content.content.slice(continueFrom.skip) : catalog.content.content;
+        return catalog.content.content;
     }
 
     function rowTitle(catalog: Catalog, index: number) {
-        return continueFrom?.index === index ? `More ${catalogTitle(catalog)}` : catalogTitle(catalog);
+        return catalogTitle(catalog);
     }
 
     const PRELOAD_ROWS = 2;
@@ -116,7 +113,7 @@
                 <div data-index={row.indices.join(',')} use:observe>
                     <CatalogRow
                         id={rowAnchor(row.key)}
-                        title={row.indices.length === 1 && continueFrom?.index === row.indices[0] ? `More ${row.title}` : row.title}
+                        title={row.title}
                         {items}
                         loading={!items || items.length === 0}
                     />

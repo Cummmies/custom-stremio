@@ -3,7 +3,6 @@
 //
 // Row keys:
 //   "cw"                      Continue Watching
-//   "top10"                   Top 10
 //   "cat:<addon>/<type>/<id>" one addon catalog (e.g. cat:com.linvo.cinemeta/movie/top)
 //   "merge:<id>"              a merged row; its catalogs are in `merges`
 // Rows the layout doesn't know yet (a new addon) are added at the end, shown.
@@ -14,8 +13,8 @@ export type RowEntry = { key: string; hidden?: boolean; name?: string };
 export type Merge = { name: string; parts: string[] };
 type Layout = { order: RowEntry[]; merges: Record<string, Merge> };
 
-export type SpecialKey = 'cw' | 'top10';
-export const SPECIAL_NAMES: Record<SpecialKey, string> = { cw: 'Continue Watching', top10: 'Top 10' };
+export type SpecialKey = 'cw';
+export const SPECIAL_NAMES: Record<SpecialKey, string> = { cw: 'Continue Watching' };
 
 /** A catalog as the board lists it (id, type and addon come from core). */
 export type BoardCatalog = Catalog & { id?: string; addon?: { manifest?: { id?: string; name?: string } } };
@@ -112,7 +111,7 @@ class HomeLayout {
             let kind: ResolvedRow['kind'];
             let defaultName: string;
             let parts: string[] = [];
-            if (key === 'cw' || key === 'top10') {
+            if (key === 'cw') {
                 kind = 'special';
                 defaultName = SPECIAL_NAMES[key];
             } else if (key.startsWith('merge:')) {
@@ -146,11 +145,11 @@ class HomeLayout {
             }
         }
         // New rows: the built-in ones first (their usual place), then catalogs in addon order.
-        const fresh = ['cw', 'top10', ...catalogs.map(catalogKey)].filter((k) => !seen.has(k));
+        const fresh = ['cw', ...catalogs.map(catalogKey)].filter((k) => !seen.has(k));
         for (const key of fresh) {
             const row = make({ key });
             if (!row) continue;
-            if ((key === 'cw' || key === 'top10') && !this.layout.order.length) rows.splice(key === 'cw' ? 0 : 1, 0, row);
+            if (key === 'cw' && !this.layout.order.length) rows.unshift(row);
             else rows.push(row);
             seen.add(key);
         }

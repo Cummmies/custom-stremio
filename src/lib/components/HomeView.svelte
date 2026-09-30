@@ -7,7 +7,6 @@
     import Hero from './Hero.svelte';
     import Shelf from './Shelf.svelte';
     import WideCard from './WideCard.svelte';
-    import RankCard from './RankCard.svelte';
     import CategoryTiles from './CategoryTiles.svelte';
     import CatalogList, { catalogTitle, isEmptyCatalog, rowAnchor, type ListRow } from './CatalogList.svelte';
     import { catalogKey, homeLayout, type BoardCatalog } from '$lib/homeLayout.svelte';
@@ -46,18 +45,6 @@
         return first ? readyItems(first.index).filter((m) => backgroundOf(m)).slice(0, 6) : [];
     });
 
-    // Top 10: the first catalog of this kind, which is the most popular one.
-    const top10 = $derived.by(() => {
-        const first = ofType.find(({ index }) => readyItems(index).length > 0);
-        return first
-            ? {
-                  index: first.index,
-                  items: readyItems(first.index).slice(0, 10),
-                  title: `Top 10 ${first.c.type === 'series' ? 'Series' : 'Movies'} Today`,
-              }
-            : null;
-    });
-
     const cwItems = $derived((continueWatching?.items ?? []).filter((i) => !type || i.type === type));
 
     // Rows in the order set in Customize Home (per profile): hidden ones left out,
@@ -80,7 +67,6 @@
             })
             .filter((r) => r.special || r.indices.length > 0)
     );
-    const top10Shown = $derived(rows.some((r) => r.key === 'top10') && !!top10 && top10.items.length >= 5);
 
     const tiles = $derived(
         rows
@@ -112,25 +98,17 @@
             <p>None of your addons provide {type === 'series' ? 'series' : type === 'movie' ? 'movie' : ''} catalogs. Install an addon like Cinemeta to fill this page.</p>
         </EmptyState>
     {:else}
-        <!-- The Top 10 already shows that catalog's first ten; its row continues from #11. -->
         <CatalogList
             model="board"
             {catalogs}
             {type}
             {rows}
-            continueFrom={top10Shown && top10 ? { index: top10.index, skip: top10.items.length } : null}
         >
             {#snippet special(key)}
                 {#if key === 'cw' && cwItems.length > 0}
                     <Shelf title={resolved.find((r) => r.key === 'cw')?.name ?? 'Continue Watching'} href="/library" itemWidth="clamp(240px, 21vw, 320px)">
                         {#each cwItems as item (item._id)}
                             <WideCard {item} />
-                        {/each}
-                    </Shelf>
-                {:else if key === 'top10' && top10Shown && top10}
-                    <Shelf title={top10.title} itemWidth="max-content" gap="20px">
-                        {#each top10.items as item, i (item.id)}
-                            <RankCard {item} rank={i + 1} />
                         {/each}
                     </Shelf>
                 {/if}
