@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "tauri-plugin-mpv",
-    platforms: [.iOS(.v15), .macOS(.v12)],
+    platforms: [.iOS("18.0"), .macOS(.v12)],
     products: [
         .library(name: "tauri-plugin-mpv", type: .static, targets: ["MpvPlugin"]),
     ],

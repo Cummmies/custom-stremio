@@ -42,7 +42,7 @@
     ],
     "createUpdaterArtifacts": true,
     "iOS": {
-      "minimumSystemVersion": "15.0"
+      "minimumSystemVersion": "18.0"
     }
   },
   "plugins": {
