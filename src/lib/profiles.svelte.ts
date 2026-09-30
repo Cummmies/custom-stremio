@@ -50,6 +50,8 @@ function nameFromEmail(email: string) {
 class Profiles {
     list = $state<SavedProfile[]>(load(KEY, []));
     pickerOpen = $state(false);
+    /** Which screen the picker opens on. */
+    pickerView = $state<'pick' | 'add'>('pick');
     /** uid being switched to, while it's in progress. */
     switching = $state<string | null>(null);
     error = $state<string | null>(null);

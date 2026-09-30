@@ -89,9 +89,10 @@ class AppState {
     }
 
     /** Sign in to another account; it's saved as a new profile. */
+    /** Opens the profiles screen straight on Add Profile. */
     addProfile() {
-        this.loginMode = 'add';
-        this.loginOpen = true;
+        profiles.pickerView = 'add';
+        profiles.pickerOpen = true;
     }
 
     openLogin() {

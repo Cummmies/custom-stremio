@@ -1,21 +1,22 @@
 <script lang="ts">
+    // Full-screen profiles: "Who's watching?", Add Profile and Edit Profile.
+    // A profile is a Stremio account saved on this PC, so adding one is a log-in.
+    // A modal task with an obvious way out: Esc, the close button, Back or Cancel.
     import { goto } from '$app/navigation';
     import { app } from '$lib/app.svelte';
-    import { profiles, type SavedProfile } from '$lib/profiles.svelte';
+    import { core } from '$lib/core';
+    import { imageToAvatar, profiles, PROFILE_COLORS, type SavedProfile } from '$lib/profiles.svelte';
+    import { menu } from '$lib/menu.svelte';
     import Icon from './Icon.svelte';
     import Avatar from './Avatar.svelte';
-    import PhotoControls from './PhotoControls.svelte';
     import Toggle from './Toggle.svelte';
 
     let dialog = $state<HTMLDialogElement>();
+    let view = $state<'pick' | 'add' | 'edit'>(profiles.pickerView);
     let managing = $state(false);
-    let editing = $state<string | null>(null);
-    let confirmRemove = $state(false);
-    let draftName = $state('');
 
     const currentUid = $derived(app.user?._id ?? null);
     const sorted = $derived([...profiles.list].sort((a, b) => a.name.localeCompare(b.name)));
-    const editingProfile = $derived(profiles.list.find((p) => p.uid === editing) ?? null);
 
     $effect(() => {
         dialog?.showModal();
@@ -24,6 +25,13 @@
     function close() {
         dialog?.close();
     }
+
+    function onclose() {
+        profiles.pickerOpen = false;
+        profiles.pickerView = 'pick';
+    }
+
+    // --- Who's watching --------------------------------------------------------
 
     async function pick(p: SavedProfile) {
         if (managing) return startEdit(p);
@@ -35,125 +43,287 @@
         }
     }
 
+    // --- Add / Edit --------------------------------------------------------------
+
+    let editingUid = $state<string | null>(null);
+    let draftName = $state('');
+    let draftColor = $state(PROFILE_COLORS[0]);
+    let draftAvatar = $state<string | undefined>(undefined);
+    let email = $state('');
+    let password = $state('');
+    let error = $state('');
+    let busy = $state(false);
+    let confirmRemove = $state(false);
+    let fileInput = $state<HTMLInputElement>();
+    let nameInput = $state<HTMLInputElement>();
+
+    const editing = $derived(profiles.list.find((p) => p.uid === editingUid) ?? null);
+    const draft = $derived({ name: draftName || email || '?', color: draftColor, avatar: draftAvatar });
+
+    function startAdd() {
+        view = 'add';
+        editingUid = null;
+        draftName = '';
+        draftColor = PROFILE_COLORS[profiles.list.length % PROFILE_COLORS.length];
+        draftAvatar = undefined;
+        email = password = error = '';
+        busy = false;
+        focusName();
+    }
+
     function startEdit(p: SavedProfile) {
-        editing = p.uid;
+        view = 'edit';
+        editingUid = p.uid;
         draftName = p.name;
+        draftColor = p.color;
+        draftAvatar = p.avatar;
+        error = '';
         confirmRemove = false;
+        focusName();
     }
 
-    function saveName() {
-        const name = draftName.trim();
-        if (editing && name) profiles.update(editing, { name });
+    function focusName() {
+        queueMicrotask(() => nameInput?.focus());
     }
 
-    function remove(p: SavedProfile) {
-        if (!confirmRemove) return (confirmRemove = true);
-        if (p.uid === currentUid) app.logout();
-        else profiles.remove(p.uid);
-        editing = null;
-        confirmRemove = false;
+    function back() {
+        view = 'pick';
+        busy = false;
     }
 
-    function add() {
+    // Opened straight into Add Profile (e.g. from a menu).
+    $effect(() => {
+        if (profiles.pickerView === 'add' && view === 'add' && !email && !draftName) startAdd();
+    });
+
+    function pictureMenu(e: MouseEvent) {
+        if (!draftAvatar) return fileInput?.click();
+        menu.toggleFor(
+            e.currentTarget as HTMLElement,
+            [
+                { label: 'Upload New Photo…', onselect: () => fileInput?.click() },
+                { label: 'Remove Photo', destructive: true, onselect: () => (draftAvatar = undefined) },
+            ],
+            'end'
+        );
+    }
+
+    async function onfile() {
+        const file = fileInput?.files?.[0];
+        if (fileInput) fileInput.value = '';
+        if (!file) return;
+        try {
+            draftAvatar = await imageToAvatar(file);
+            error = '';
+        } catch {
+            error = 'That picture couldn’t be used. Try a JPG or PNG.';
+        }
+    }
+
+    // Adding logs in to the account; once Stremio answers and the profile is saved,
+    // it gets the name, color and picture chosen here.
+    let pendingDraft: { name: string; color: string; avatar?: string } | null = null;
+    $effect(() =>
+        core.onEvent((event, args) => {
+            if (!busy || view !== 'add') return;
+            if (event === 'Error' && args?.source?.event === 'UserAuthenticated') {
+                error = args.error?.message ?? 'Couldn’t log in. Check the email and password.';
+                busy = false;
+                pendingDraft = null;
+            }
+        })
+    );
+    $effect(() => {
+        const uid = app.user?._id;
+        if (!pendingDraft || !uid || !profiles.get(uid) || app.user?.email?.toLowerCase() !== email.trim().toLowerCase()) return;
+        const { name, color, avatar } = pendingDraft;
+        pendingDraft = null;
+        profiles.update(uid, { ...(name ? { name } : {}), color, ...(avatar ? { avatar } : {}) });
+        busy = false;
         close();
-        app.addProfile();
+        goto('/');
+    });
+
+    function submit(e: SubmitEvent) {
+        e.preventDefault();
+        if (view === 'edit') {
+            if (editing) profiles.update(editing.uid, { name: draftName.trim() || editing.name, color: draftColor, avatar: draftAvatar });
+            return back();
+        }
+        error = '';
+        busy = true;
+        pendingDraft = { name: draftName.trim(), color: draftColor, avatar: draftAvatar };
+        core.dispatch({ action: 'Ctx', args: { action: 'Authenticate', args: { type: 'Login', email: email.trim(), password } } });
+    }
+
+    function remove() {
+        if (!editing) return;
+        if (!confirmRemove) return (confirmRemove = true);
+        if (editing.uid === currentUid) app.logout();
+        else profiles.remove(editing.uid);
+        confirmRemove = false;
+        back();
     }
 </script>
 
-<dialog bind:this={dialog} class="picker" aria-labelledby="picker-title" onclose={() => (profiles.pickerOpen = false)}>
-    <button class="close" onclick={close} aria-label="Close"><Icon name="close" size={18} /></button>
+<dialog bind:this={dialog} class="picker" aria-labelledby="picker-title" {onclose}>
+    <!-- Brand backdrop: never a profile's own shows. -->
+    <div class="art" aria-hidden="true"><span></span><span></span><span></span></div>
 
-    <div class="content">
-        <h1 id="picker-title">{managing ? 'Manage Profiles' : 'Who’s watching?'}</h1>
-
-        <ul class="grid">
-            {#each sorted as p (p.uid)}
-                {@const current = p.uid === currentUid}
-                {@const busy = profiles.switching === p.uid}
-                <li>
-                    <button
-                        class="tile"
-                        class:current
-                        class:editing={editing === p.uid}
-                        onclick={() => pick(p)}
-                        disabled={!!profiles.switching && !busy}
-                        aria-label={managing ? `Edit ${p.name}` : current ? `${p.name} (current profile)` : `Switch to ${p.name}`}
-                        aria-busy={busy}
-                    >
-                        <span class="avatar">
-                            <Avatar profile={p} size={132} rounded />
-                            {#if busy}<span class="spinner" aria-hidden="true"></span>{/if}
-                            {#if current && !managing}<span class="check" aria-hidden="true"><Icon name="check" size={14} /></span>{/if}
-                        </span>
-                        <span class="name">{p.name}</span>
-                        <span class="email">{p.email}</span>
-                    </button>
-                </li>
-            {/each}
-            {#if !managing}
-                <li>
-                    <button class="tile" onclick={add} disabled={!!profiles.switching}>
-                        <span class="avatar add"><Icon name="plus" size={36} /></span>
-                        <span class="name">Add Profile</span>
-                        <span class="email">Another Stremio account</span>
-                    </button>
-                </li>
-            {/if}
-        </ul>
-
-        {#if profiles.error}
-            <div class="error" role="alert">
-                <span>{profiles.error}</span>
-                <button onclick={add}>Log In Again</button>
-            </div>
-        {/if}
-
-        {#if managing && editingProfile}
-            <div class="editor">
-                <label class="field">
-                    <span>Name</span>
-                    <input bind:value={draftName} onblur={saveName} onkeydown={(e) => e.key === 'Enter' && (saveName(), (e.currentTarget as HTMLInputElement).blur())} maxlength="24" />
-                </label>
-                <div class="field">
-                    <span>Picture</span>
-                    <PhotoControls uid={editingProfile.uid} />
-                </div>
-                <button class="remove" onclick={() => remove(editingProfile)}>
-                    {#if confirmRemove}
-                        {editingProfile.uid === currentUid ? 'Log Out and Remove' : 'Remove from This PC'}
-                    {:else}
-                        <Icon name="trash" size={15} /> Remove Profile
-                    {/if}
+    {#if view === 'pick'}
+        <header class="bar">
+            <span class="brand">Stremio</span>
+            <div class="bar-actions">
+                <button class="pill" onclick={() => (managing = !managing)} aria-pressed={managing}>
+                    {managing ? 'Done' : 'Manage Profiles'}
                 </button>
-                <p class="hint">
-                    {#if editingProfile.uid === currentUid}
-                        This is the profile you’re using, so removing it also logs you out.
-                    {:else}
-                        Removes it from this PC only. The Stremio account and its library stay as they are.
-                    {/if}
-                </p>
+                <button class="icon-btn" onclick={close} aria-label="Close"><Icon name="close" size={18} /></button>
             </div>
-        {/if}
+        </header>
 
-        <div class="footer">
-            <button
-                class="secondary"
-                onclick={() => {
-                    managing = !managing;
-                    editing = null;
-                    confirmRemove = false;
-                }}
-            >
-                {managing ? 'Done' : 'Manage Profiles'}
-            </button>
-            {#if !managing}
+        <div class="content">
+            <h1 id="picker-title">{managing ? 'Manage Profiles' : 'Who’s watching?'}</h1>
+
+            <ul class="grid">
+                {#each sorted as p, i (p.uid)}
+                    {@const current = p.uid === currentUid}
+                    {@const busyTile = profiles.switching === p.uid}
+                    <li>
+                        <!-- Opening puts focus on your profile (or the first), not the toolbar. -->
+                        <!-- svelte-ignore a11y_autofocus -->
+                        <button
+                            autofocus={current || (!currentUid && i === 0)}
+                            class="tile"
+                            class:current
+                            onclick={() => pick(p)}
+                            disabled={!!profiles.switching && !busyTile}
+                            aria-label={managing ? `Edit ${p.name}` : current ? `${p.name}, current profile` : `Switch to ${p.name}`}
+                            aria-busy={busyTile}
+                            title={p.email}
+                        >
+                            <span class="face">
+                                <Avatar profile={p} size={current && !managing ? 132 : 120} />
+                                {#if busyTile}<span class="spinner" aria-hidden="true"></span>{/if}
+                                {#if managing}<span class="badge" aria-hidden="true"><Icon name="pencil" size={15} /></span>{/if}
+                            </span>
+                            <span class="name">{p.name}</span>
+                        </button>
+                    </li>
+                {/each}
+                {#if !managing}
+                    <li>
+                        <button class="tile" onclick={startAdd} disabled={!!profiles.switching}>
+                            <span class="face add"><Icon name="plus" size={30} /></span>
+                            <span class="name">Add Profile</span>
+                        </button>
+                    </li>
+                {/if}
+            </ul>
+
+            {#if profiles.error}
+                <div class="error" role="alert">
+                    <span>{profiles.error}</span>
+                    <button onclick={startAdd}>Log In Again</button>
+                </div>
+            {/if}
+
+            {#if managing}
+                <p class="note">Choose a profile to change its name, picture or color, or to remove it from this PC.</p>
+            {:else}
                 <div class="launch">
                     <Toggle label="Ask who’s watching when the app opens" checked={profiles.askOnLaunch} onchange={(v) => profiles.setAskOnLaunch(v)} />
-                    <span aria-hidden="true">Ask when the app opens</span>
+                    <span aria-hidden="true">Ask who’s watching when the app opens</span>
                 </div>
             {/if}
         </div>
-    </div>
+    {:else}
+        <header class="bar">
+            <button class="icon-btn" onclick={back} aria-label="Back" disabled={busy}><Icon name="back" size={20} /></button>
+        </header>
+
+        <form class="content form" onsubmit={submit}>
+            {#if view === 'add'}
+                <p class="eyebrow">Another Stremio account</p>
+            {:else}
+                <p class="eyebrow email">{editing?.email}</p>
+            {/if}
+            <h1 id="picker-title">{view === 'add' ? 'Add Profile' : 'Edit Profile'}</h1>
+
+            <div class="portrait">
+                {#if !draftAvatar && !draftName.trim()}
+                    <!-- No name or picture yet: a person silhouette on the chosen color. -->
+                    <span class="blank" style:--c={draftColor} aria-hidden="true"><Icon name="user" size={84} /></span>
+                {:else}
+                    <Avatar profile={draft} size={168} />
+                {/if}
+                <button
+                    type="button"
+                    class="pencil"
+                    onclick={pictureMenu}
+                    aria-label={draftAvatar ? 'Change or remove picture' : 'Choose a picture'}
+                    aria-haspopup={draftAvatar ? 'menu' : undefined}
+                    title="Picture"
+                >
+                    <Icon name="pencil" size={17} />
+                </button>
+                <input bind:this={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange={onfile} hidden />
+            </div>
+
+            {#if !draftAvatar}
+                <div class="swatches" role="radiogroup" aria-label="Color">
+                    {#each PROFILE_COLORS as c (c)}
+                        <button
+                            type="button"
+                            role="radio"
+                            aria-checked={draftColor === c}
+                            aria-label={`Color ${PROFILE_COLORS.indexOf(c) + 1}`}
+                            class="swatch"
+                            class:on={draftColor === c}
+                            style:--c={c}
+                            onclick={() => (draftColor = c)}
+                        ></button>
+                    {/each}
+                </div>
+            {/if}
+
+            <div class="fields">
+                <input bind:this={nameInput} class="field" bind:value={draftName} placeholder="Name" aria-label="Name" maxlength="24" disabled={busy} />
+                {#if view === 'add'}
+                    <input class="field" type="email" bind:value={email} placeholder="Stremio email" aria-label="Stremio email" autocomplete="email" required disabled={busy} />
+                    <input class="field" type="password" bind:value={password} placeholder="Password" aria-label="Password" autocomplete="current-password" required disabled={busy} />
+                    <p class="hint">Saved on this PC, so you can switch to it later without logging in again.</p>
+                {/if}
+            </div>
+
+            {#if error}<p class="form-error" role="alert">{error}</p>{/if}
+
+            <div class="actions">
+                <button type="button" class="pill" onclick={back} disabled={busy}>Cancel</button>
+                {#if view === 'add'}
+                    <button type="submit" class="pill primary" disabled={busy || !email.trim() || !password}>{busy ? 'Adding…' : 'Add Profile'}</button>
+                {:else}
+                    <button type="submit" class="pill primary">Save</button>
+                {/if}
+            </div>
+
+            {#if view === 'edit' && editing}
+                <button type="button" class="remove" onclick={remove}>
+                    {#if confirmRemove}
+                        {editing.uid === currentUid ? 'Log Out and Remove' : 'Remove from This PC'}
+                    {:else}
+                        Remove Profile…
+                    {/if}
+                </button>
+                {#if confirmRemove}
+                    <p class="hint">
+                        {editing.uid === currentUid
+                            ? 'This is the profile you’re using, so removing it also logs you out.'
+                            : 'The Stremio account and its library stay as they are.'}
+                    </p>
+                {/if}
+            {/if}
+        </form>
+    {/if}
 </dialog>
 
 <style>
@@ -166,13 +336,11 @@
         padding: 0;
         border: 0;
         color: var(--label);
-        background:
-            radial-gradient(1200px 600px at 50% 0%, rgb(109 74 240 / 0.18), transparent 70%),
-            rgb(10 10 14 / 0.96);
+        background: var(--bg);
+        overflow: auto;
     }
     .picker::backdrop {
         background: rgb(0 0 0 / 0.6);
-        backdrop-filter: blur(12px);
     }
     .picker[open] {
         animation: fade var(--slow) var(--ease);
@@ -182,47 +350,122 @@
             opacity: 0;
         }
     }
-    .close {
+    /* Soft brand-colored shapes behind everything. */
+    .art {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
+    .art span {
         position: absolute;
-        top: 20px;
-        right: 20px;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: 0.35;
+    }
+    .art span:nth-child(1) {
+        width: 60vw;
+        height: 50vh;
+        left: 10vw;
+        top: -20vh;
+        background: #6d4af0;
+    }
+    .art span:nth-child(2) {
+        width: 40vw;
+        height: 40vh;
+        right: -10vw;
+        top: 5vh;
+        background: #2d8cf0;
+        opacity: 0.2;
+    }
+    .art span:nth-child(3) {
+        width: 50vw;
+        height: 40vh;
+        left: -15vw;
+        bottom: -20vh;
+        background: #c04ae0;
+        opacity: 0.15;
+    }
+
+    .bar {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 28px;
+    }
+    .brand {
+        font-family: var(--font-display);
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+    }
+    .bar-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .icon-btn {
         display: grid;
         place-items: center;
-        width: 40px;
-        height: 40px;
+        width: 44px;
+        height: 44px;
         border: 0;
         border-radius: 50%;
         background: var(--fill);
-        color: var(--label-2);
-        cursor: pointer;
-    }
-    .close:hover {
-        background: var(--fill-hover);
         color: var(--label);
+        cursor: pointer;
+        transition: background var(--fast);
     }
+    .icon-btn:hover:not(:disabled) {
+        background: var(--fill-hover);
+    }
+    .pill {
+        height: 44px;
+        padding: 0 22px;
+        border: 1px solid rgb(255 255 255 / 0.2);
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.08);
+        color: var(--label);
+        font-size: var(--text-callout);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background var(--fast);
+    }
+    .pill:hover:not(:disabled) {
+        background: rgb(255 255 255 / 0.16);
+    }
+    .pill.primary {
+        border-color: transparent;
+        background: var(--label);
+        color: var(--bg);
+    }
+    .pill.primary:hover:not(:disabled) {
+        background: white;
+    }
+    .pill:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }
+
     .content {
-        min-height: 100%;
+        position: relative;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
         gap: 36px;
-        padding: 64px 24px;
+        padding: 4vh 24px 64px;
     }
     h1 {
         margin: 0;
         font-family: var(--font-display);
-        font-size: clamp(30px, 4vw, 44px);
+        font-size: clamp(32px, 4vw, 48px);
         font-weight: 700;
         letter-spacing: -0.02em;
-        animation: rise var(--slow) var(--ease);
+        text-align: center;
     }
-    @keyframes rise {
-        from {
-            opacity: 0;
-            transform: translateY(8px);
-        }
-    }
+
+    /* Who's watching */
     .grid {
         list-style: none;
         margin: 0;
@@ -230,8 +473,9 @@
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 28px;
-        max-width: 900px;
+        align-items: flex-start;
+        gap: 36px;
+        max-width: 960px;
     }
     .tile {
         all: unset;
@@ -239,63 +483,61 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 6px;
-        width: 148px;
-        border-radius: 20px;
-        padding: 6px;
+        gap: 12px;
+        width: 140px;
+        border-radius: 16px;
     }
     .tile:disabled {
         cursor: default;
         opacity: 0.5;
     }
-    .avatar {
+    .face {
         position: relative;
         display: grid;
         place-items: center;
         width: 132px;
         height: 132px;
-        margin-bottom: 8px;
-        border-radius: 30px;
-        box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+    }
+    .face :global(.avatar) {
+        box-shadow: 0 10px 30px rgb(0 0 0 / 0.4);
         transition:
             transform var(--fast) var(--ease),
             box-shadow var(--fast) var(--ease);
     }
-    .tile:hover:not(:disabled) .avatar,
-    .tile:focus-visible .avatar,
-    .tile.editing .avatar {
-        transform: translateY(-4px) scale(1.03);
+    .tile:hover:not(:disabled) .face :global(.avatar),
+    .tile:focus-visible .face :global(.avatar),
+    .tile:hover:not(:disabled) .face.add,
+    .tile:focus-visible .face.add {
+        transform: scale(1.05);
         box-shadow:
             0 0 0 3px var(--label),
-            0 16px 36px rgb(0 0 0 / 0.45);
+            0 16px 36px rgb(0 0 0 / 0.5);
     }
-    .tile.current .avatar {
-        box-shadow:
-            0 0 0 3px rgb(255 255 255 / 0.35),
-            0 10px 30px rgb(0 0 0 / 0.35);
+    .tile:focus-visible {
+        outline: none;
     }
-    .avatar.add {
-        background: transparent;
-        border: 2px dashed rgb(255 255 255 / 0.25);
-        box-shadow: none;
-        color: var(--label-2);
-    }
-    .tile:hover .avatar.add {
-        border-color: var(--label);
+    .face.add {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: rgb(255 255 255 / 0.1);
         color: var(--label);
+        transition:
+            transform var(--fast) var(--ease),
+            box-shadow var(--fast) var(--ease);
     }
-    .check {
+    .badge {
         position: absolute;
-        right: -6px;
-        bottom: -6px;
+        right: 8px;
+        bottom: 8px;
         display: grid;
         place-items: center;
-        width: 28px;
-        height: 28px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
         background: var(--label);
         color: var(--bg);
-        box-shadow: 0 0 0 3px rgb(10 10 14);
+        box-shadow: 0 0 0 3px var(--bg);
     }
     .spinner {
         position: absolute;
@@ -314,20 +556,31 @@
         }
     }
     .name {
-        font-weight: 600;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: var(--text-callout);
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .email {
-        font-size: var(--text-caption);
+        font-weight: 500;
         color: var(--label-2);
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    }
+    .tile.current .name {
+        font-weight: 700;
+        color: var(--label);
+    }
+    .launch {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        color: var(--label-2);
+    }
+    .note {
+        margin: 0;
+        max-width: 420px;
+        text-align: center;
+        font-size: 14px;
+        color: var(--label-2);
     }
     .error {
         display: flex;
@@ -340,7 +593,7 @@
         font-size: 13px;
     }
     .error button {
-        height: 30px;
+        height: 32px;
         padding: 0 12px;
         border: 0;
         border-radius: 999px;
@@ -350,90 +603,145 @@
         cursor: pointer;
         white-space: nowrap;
     }
-    .editor {
+
+    /* Add / Edit */
+    .form {
+        gap: 20px;
+        padding-top: 0;
+    }
+    .eyebrow {
+        margin: 0 0 -12px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--label-2);
+    }
+    .portrait {
+        position: relative;
+        margin: 8px 0 4px;
+    }
+    .eyebrow.email {
+        text-transform: none;
+        letter-spacing: 0;
+        font-size: 13px;
+    }
+    .blank {
+        display: grid;
+        place-items: center;
+        width: 168px;
+        height: 168px;
+        border-radius: 50%;
+        color: rgb(255 255 255 / 0.85);
+        background: linear-gradient(145deg, color-mix(in srgb, var(--c) 100%, white 18%), color-mix(in srgb, var(--c) 100%, black 32%));
+        box-shadow: 0 16px 40px rgb(0 0 0 / 0.45);
+    }
+    .portrait :global(.avatar) {
+        box-shadow: 0 16px 40px rgb(0 0 0 / 0.45);
+    }
+    .pencil {
+        position: absolute;
+        right: 4px;
+        bottom: 4px;
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--label);
+        color: var(--bg);
+        box-shadow: 0 0 0 4px var(--bg);
+        cursor: pointer;
+    }
+    .pencil:hover {
+        background: white;
+    }
+    .swatches {
+        display: flex;
+        gap: 10px;
+    }
+    .swatch {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--c);
+        cursor: pointer;
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.15);
+    }
+    .swatch.on {
+        box-shadow:
+            0 0 0 2px var(--bg),
+            0 0 0 4px var(--label);
+    }
+    .fields {
         width: min(420px, 100%);
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        padding: 20px;
-        border-radius: var(--radius-l);
-        background: var(--elevated);
-        border: 1px solid var(--separator);
-        animation: rise var(--slow) var(--ease);
+        gap: 12px;
     }
     .field {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--label-2);
-    }
-    .field input {
-        height: 40px;
-        padding: 0 12px;
-        border-radius: var(--radius);
-        border: 1px solid var(--separator);
-        background: var(--bg);
+        height: 52px;
+        padding: 0 22px;
+        border-radius: 999px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        background: rgb(255 255 255 / 0.06);
         color: var(--label);
         font-size: var(--text-body);
     }
-    .field input:focus {
+    .field::placeholder {
+        color: var(--label-2);
+    }
+    .field:focus {
         outline: none;
         border-color: var(--accent-hover);
+        background: rgb(255 255 255 / 0.09);
+    }
+    .hint {
+        margin: 0;
+        text-align: center;
+        font-size: 13px;
+        color: var(--label-2);
+    }
+    .form-error {
+        margin: 0;
+        max-width: 420px;
+        text-align: center;
+        font-size: 13px;
+        color: #ff6961;
+    }
+    .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 4px;
+    }
+    .actions .pill {
+        min-width: 120px;
     }
     .remove {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        height: 36px;
+        margin-top: 8px;
+        height: 40px;
+        padding: 0 18px;
         border: 0;
-        border-radius: var(--radius);
-        background: rgb(255 69 58 / 0.14);
+        border-radius: 999px;
+        background: transparent;
         color: #ff6961;
         font-weight: 600;
         cursor: pointer;
     }
     .remove:hover {
-        background: var(--bad);
-        color: white;
+        background: rgb(255 69 58 / 0.12);
     }
-    .hint {
-        margin: -6px 0 0;
-        font-size: var(--text-caption);
-        color: var(--label-2);
-        text-align: center;
-    }
-    .footer {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 14px;
-    }
-    .secondary {
-        height: 40px;
-        padding: 0 22px;
-        border: 1px solid rgb(255 255 255 / 0.25);
-        border-radius: 999px;
-        background: transparent;
-        color: var(--label);
-        font-weight: 600;
-        cursor: pointer;
-    }
-    .secondary:hover {
-        background: var(--fill-hover);
-    }
-    .launch {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 13px;
-        color: var(--label-2);
-    }
+
     @media (prefers-reduced-motion: reduce) {
         .spinner {
             animation-duration: 2s;
+        }
+        .face :global(.avatar),
+        .face.add {
+            transition: none;
         }
     }
 </style>
