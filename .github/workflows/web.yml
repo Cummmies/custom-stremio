@@ -3,10 +3,8 @@
 # reach the phone without re-sideloading.
 #
 # The files go to a pre-release named "web" (never "latest", which the desktop
-# updater reads) in the public Cummmies/custom-stremio-updates repo, since
-# this one is private. Needs repository secrets:
-#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (updater key)
-#   UPDATES_REPO_TOKEN  (token with Contents: read and write on the updates repo)
+# updater reads). Signed with the updater key:
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 name: Web update
 
 on:
@@ -65,13 +63,8 @@ jobs:
 
       - name: Publish
         env:
-          GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
-          GH_REPO: Cummmies/custom-stremio-updates
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Add the repository secret UPDATES_REPO_TOKEN (a GitHub token with Contents: read and write on $GH_REPO)."
-            exit 1
-          fi
           gh release view web >/dev/null 2>&1 || gh release create web --prerelease --latest=false \
             --title "Web updates (iOS)" \
             --notes "The iOS app downloads its screens from here. Not an installable release."
