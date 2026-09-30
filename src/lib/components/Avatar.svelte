@@ -59,5 +59,8 @@
         font-weight: 700;
         line-height: 1;
         color: white;
+        /* Center the letter's capital height, not the font's line box (whose
+           extra space above/below differs between Windows' and Apple's fonts). */
+        text-box: trim-both cap alphabetic;
     }
 </style>

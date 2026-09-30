@@ -39,10 +39,14 @@
             updates.check({ quiet: true });
         };
         if (isIOS && import.meta.env.PROD) document.addEventListener('visibilitychange', onVisible);
+        // iOS ignores user-scalable=no in some cases; pinch gestures are ours to refuse.
+        const noPinch = (e: Event) => e.preventDefault();
+        if (isIOS) document.addEventListener('gesturestart', noPinch);
         const offMenu = installContextMenu();
         return () => {
             offMenu?.();
             document.removeEventListener('visibilitychange', onVisible);
+            document.removeEventListener('gesturestart', noPinch);
         };
     });
 

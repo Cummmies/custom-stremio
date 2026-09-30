@@ -1039,13 +1039,13 @@
     {#if touchUI && !pip && !loadingVideo && !startError && !player.error}
         <div class="center-controls">
             <button class="icon ten" onclick={() => (player.seekBy(-10), poke())} aria-label="Back 10 seconds">
-                <Icon name="replay" size={30} /><span>10</span>
+                <Icon name="replay" size={34} /><span>10</span>
             </button>
             <button class="icon huge" onclick={() => (player.togglePause(), poke())} aria-label={player.paused ? 'Play' : 'Pause'}>
                 <Icon name={player.paused ? 'play' : 'pause'} size={38} filled />
             </button>
             <button class="icon ten" onclick={() => (player.seekBy(10), poke())} aria-label="Forward 10 seconds">
-                <Icon name="forward" size={30} /><span>10</span>
+                <Icon name="forward" size={34} /><span>10</span>
             </button>
         </div>
     {/if}
@@ -1682,9 +1682,11 @@
         inset: 0;
         display: grid;
         place-items: center;
-        padding-top: 3px;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        text-box: trim-both cap alphabetic;
     }
     .tap-skip {
         position: absolute;
@@ -1736,6 +1738,15 @@
     .touch .bar .big,
     .touch .volume {
         display: none;
+    }
+    /* Without the controls, Skip sits near the bottom instead of floating
+       where the bar would be. */
+    .touch .skip {
+        right: max(20px, env(safe-area-inset-right));
+        transition: bottom 240ms var(--ease);
+    }
+    .touch.hidden .skip {
+        bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px));
     }
     .touch .time {
         margin-left: 4px;

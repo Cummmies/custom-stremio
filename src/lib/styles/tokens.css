@@ -161,3 +161,26 @@ input {
         overscroll-behavior: none;
     }
 }
+
+/* Touch screens: no grey flash on tapped buttons, no pinch-zoom of the app,
+   and no accidental text selection or callouts on long-press (text fields
+   still select). */
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+@media (hover: none) and (pointer: coarse) {
+    html {
+        touch-action: pan-x pan-y;
+    }
+    body {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+    input,
+    textarea,
+    [contenteditable] {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
