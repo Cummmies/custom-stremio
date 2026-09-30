@@ -579,12 +579,16 @@
         margin: 0 0 14px;
         padding: 0;
     }
+    /* Outlined, nearly square tags (same as the Home banner). */
     .chips li {
-        padding: 3px 9px;
-        border-radius: 6px;
-        border: 1px solid rgb(255 255 255 / 0.28);
-        font-size: var(--text-caption);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgb(255 255 255 / 0.4);
+        font-size: 11px;
         font-weight: 600;
+        line-height: 1.4;
+        letter-spacing: 0.02em;
+        color: rgb(255 255 255 / 0.92);
     }
     .description {
         margin: 0;

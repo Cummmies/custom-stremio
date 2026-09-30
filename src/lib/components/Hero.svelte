@@ -6,7 +6,7 @@
     import Icon from './Icon.svelte';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
-    import { heroPreview } from '$lib/heroPreview.svelte';
+    import { fetchDetails, heroPreview, merge, needsDetails } from '$lib/heroPreview.svelte';
     import { onDestroy } from 'svelte';
 
     let { items }: { items: MetaItemPreview[] } = $props();
@@ -20,7 +20,18 @@
 
     // A hovered title card takes over the banner; otherwise it cycles through `items`.
     const previewing = $derived(!!heroPreview.item);
-    const item = $derived(heroPreview.item ?? items[index] ?? items[0] ?? null);
+    const base = $derived(heroPreview.item ?? items[index] ?? items[0] ?? null);
+    // Catalogs often leave out the rating and genres (and Continue Watching the
+    // description too): fill them in from Cinemeta so every title shows the same.
+    let extras = $state<Record<string, Partial<MetaItemPreview>>>({});
+    $effect(() => {
+        const it = base;
+        if (!it || extras[it.id] || !needsDetails(it)) return;
+        fetchDetails(it).then((extra) => {
+            if (extra) extras = { ...extras, [it.id]: extra };
+        });
+    });
+    const item = $derived(base && extras[base.id] ? merge(base, extras[base.id]) : base);
     onDestroy(() => heroPreview.clear());
 
     // Crossfade layers: the previous artwork stays until the next has loaded.
@@ -252,12 +263,16 @@
         margin: 0 0 12px;
         padding: 0;
     }
+    /* Outlined, nearly square tags (same as the title page). */
     .meta li {
-        padding: 3px 9px;
-        border-radius: 999px;
-        background: rgb(255 255 255 / 0.12);
-        font-size: var(--text-caption);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgb(255 255 255 / 0.4);
+        font-size: 11px;
         font-weight: 600;
+        line-height: 1.4;
+        letter-spacing: 0.02em;
+        color: rgb(255 255 255 / 0.92);
     }
     .description {
         margin: 0 0 22px;
