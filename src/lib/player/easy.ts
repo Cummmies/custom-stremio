@@ -142,20 +142,28 @@ class EasyQueue {
     }
 
     /**
-     * The playing source has no audio in your language: the next source whose
-     * name says it has that language (cached first), then cached ones that might
-     * have it, up to 10 tries. When none is left, the first source that played,
-     * to go back to; null when there's nothing to do.
+     * The playing source has no audio in your language: the next most likely
+     * source to have it (see the order below), up to 10 tries. When none is
+     * left, the first source that played, to go back to; null when there's
+     * nothing to do.
      */
     nextForLanguage(): { pick: Pick; returning: boolean } | null {
         if (this.languageSearchDone || !this.current) return null;
         this.#fallback ??= this.current;
         const tried = new Set(this.tried.map((p) => p.href));
+        // Most likely first: says your language (cached, then not), might have it
+        // (dual/multi audio, streaming-service releases), then cached sources that
+        // don't say (some dubs aren't labelled). Never ones marked as another language.
+        const order: ((p: Pick) => boolean)[] = [
+            (p) => p.cached && p.audio === 'match',
+            (p) => p.audio === 'match',
+            (p) => p.cached && p.audio === 'maybe',
+            (p) => p.audio === 'maybe',
+            (p) => p.cached && p.audio === 'unknown',
+        ];
         const candidate =
             this.#languageTries < 10
-                ? (this.#all.find((p) => p.cached && p.audio === 'match' && !tried.has(p.href)) ??
-                  this.#all.find((p) => p.audio === 'match' && !tried.has(p.href)) ??
-                  this.#all.find((p) => p.cached && p.audio === 'maybe' && !tried.has(p.href)))
+                ? order.map((ok) => this.#all.find((p) => ok(p) && !tried.has(p.href))).find(Boolean)
                 : undefined;
         if (candidate) {
             this.#languageTries++;
