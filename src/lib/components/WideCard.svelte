@@ -1,7 +1,7 @@
 <script lang="ts">
     // Continue Watching card: 16:9 artwork, progress, and where you are.
     import type { LibraryItem } from '$lib/core/types';
-    import { episodeLabel, libraryItemPreview } from '$lib/library';
+    import { episodeLabel, libraryItemPreview, resumePosition } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
@@ -9,12 +9,17 @@
     import { inTauri } from '$lib/player/mpv.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { tmdb } from '$lib/tmdb.svelte';
+    import { seasonArt } from '$lib/seasonArt.svelte';
 
     let { item }: { item: LibraryItem } = $props();
 
     const isImdb = $derived(/^tt\d+$/.test(item._id));
+    // Art for the season you're on when there is some (Fanart.tv, AniList), else TMDB's, else Stremio's.
+    const position = $derived(resumePosition(item));
     const art = $derived(
-        tmdb.backdrop(item._id, 'w780') ?? (isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster)
+        seasonArt.card(item._id, position?.season ?? null, position?.episode) ??
+            tmdb.backdrop(item._id, 'w780') ??
+            (isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster)
     );
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
     const detail = $derived(episodeLabel(item) ?? '');
