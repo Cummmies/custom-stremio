@@ -304,4 +304,12 @@
             display: none;
         }
     }
+    /* Phones: the whole title page scrolls instead of this list. */
+    @media (max-width: 700px) {
+        .episodes {
+            overflow: visible;
+            mask-image: none;
+            -webkit-mask-image: none;
+        }
+    }
 </style>

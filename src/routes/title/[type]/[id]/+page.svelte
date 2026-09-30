@@ -841,4 +841,78 @@
     .extra-title {
         font-weight: 600;
     }
+
+    /* Phones: art on top, title and buttons centered over its lower part, and
+       the whole page scrolls (no fixed-height screen with inner scrolling). */
+    @media (max-width: 700px) {
+        .art {
+            height: 62vh;
+        }
+        .art img {
+            object-position: center 25%;
+        }
+        .art img.show {
+            opacity: 0.9;
+        }
+        .scrim {
+            background:
+                linear-gradient(to top, var(--bg) 6%, rgb(13 13 18 / 0.7) 38%, transparent 70%),
+                linear-gradient(to bottom, rgb(13 13 18 / 0.5), transparent 20%);
+        }
+        .screen {
+            height: auto;
+            min-height: 0;
+        }
+        .hero {
+            padding: calc(var(--nav-h) + 30vh) var(--gutter) 12px;
+        }
+        .back {
+            top: calc(var(--nav-h) + 4px);
+            width: 36px;
+            height: 36px;
+        }
+        .copy {
+            max-width: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .logo {
+            max-width: 72%;
+            max-height: 96px;
+            object-position: center bottom;
+        }
+        h1 {
+            font-size: 30px;
+        }
+        .chips {
+            justify-content: center;
+        }
+        .description {
+            font-size: 15px;
+        }
+        .actions {
+            width: 100%;
+            margin-top: 18px;
+        }
+        .play {
+            flex: 1;
+            justify-content: center;
+            height: 48px;
+        }
+        .round {
+            width: 48px;
+            height: 48px;
+        }
+        .columns {
+            grid-template-rows: auto;
+            padding-top: 12px;
+        }
+        .side,
+        .details-tab,
+        .extras {
+            overflow: visible;
+        }
+    }
 </style>
