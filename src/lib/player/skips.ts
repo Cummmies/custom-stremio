@@ -89,12 +89,15 @@ export function parseChapters(chapterListJson: string | null): Chapter[] {
 }
 
 /** Seek-bar marks from known sections, for files without chapters of their own. */
-const SECTION_NAME: Record<SkipKind, string> = { intro: 'Intro', recap: 'Recap', credits: 'Outro', preview: 'Preview' };
+// Seek-bar names: only the intro and outro get one.
+const SECTION_NAME: Record<SkipKind, string> = { intro: 'Intro', recap: '', credits: 'Outro', preview: '' };
 
 export function chaptersFromSegments(segments: Segment[], duration: number): Chapter[] {
     const name = SECTION_NAME;
     const out: Chapter[] = [];
     for (const s of [...segments].sort((a, b) => a.start - b.start)) {
+        // A section starting where the last one ended replaces that end mark.
+        if (out.at(-1)?.time === s.start) out.pop();
         out.push({ time: s.start, title: name[s.kind] });
         if (s.end < duration - 1) out.push({ time: s.end, title: '' });
     }
@@ -102,22 +105,19 @@ export function chaptersFromSegments(segments: Segment[], duration: number): Cha
 }
 
 /**
- * Files often name their chapters "Chapter 1", "Scene 2"… Rename those from the
- * known sections: a chapter mostly covered by the intro becomes "Intro", and so on;
- * the rest go nameless (the time alone is shown). Real names are kept.
+ * The seek bar only names the intro and the outro; every other chapter shows
+ * the time alone ("Episode", "Scene 1", "Part B" are noise there). A chapter
+ * counts as the intro/outro by its own name ("Opening", "ED"…) or when a known
+ * section covers most of it.
  */
 export function nameChapters(chapters: Chapter[], segments: Segment[], duration: number): Chapter[] {
-    // "Chapter 1", "Scene 01", "Segment 3", "Act 2", "Ch. 4", "#5", "07"…
-    const generic = (t: string) =>
-        !t ||
-        /^(chapter|ch\.?|scene|segment|section|act|part|kapitel|chapitre|cap[ií]tulo|escena|szene)\s*#?\s*\d+$/i.test(t) ||
-        /^#?\s*\d+$/.test(t);
     return chapters.map((c, i) => {
-        if (!generic(c.title)) return c;
         const end = chapters[i + 1]?.time ?? duration;
         const len = Math.max(1, end - c.time);
-        const match = segments.find((s) => (Math.min(end, s.end) - Math.max(c.time, s.start)) / len >= 0.6);
-        return { time: c.time, title: match ? SECTION_NAME[match.kind] : '' };
+        const kind =
+            CHAPTER_KINDS.find(([re]) => re.test(c.title))?.[1] ??
+            segments.find((s) => (Math.min(end, s.end) - Math.max(c.time, s.start)) / len >= 0.6)?.kind;
+        return { time: c.time, title: kind ? SECTION_NAME[kind] : '' };
     });
 }
 
