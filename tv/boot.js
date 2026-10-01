@@ -105,6 +105,16 @@
     window.__tvBundle = { version: chosen.version, downloaded: chosen !== installed };
     step('boot: version ' + chosen.version + (chosen === installed ? ' (installed)' : ' (downloaded)') + ', ' + navigator.userAgent);
     step('page: ' + location.href + '  base: ' + document.baseURI);
+    // The newer engine (use.uwe in config.xml) reads ?. and class fields; the
+    // TV's old one (Chromium 69) can't load the app.
+    var modern = false;
+    try {
+        new Function('var a = null; return a?.b ?? 1; class A { #x = 1 }');
+        modern = true;
+    } catch (e) {
+        modern = false;
+    }
+    step('engine: ' + (modern ? 'newer (reads ?. and class fields)' : 'OLD (no ?. or class fields): the app can’t run on it'));
 
     var importer = null;
     /**
