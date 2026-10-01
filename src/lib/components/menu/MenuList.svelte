@@ -334,11 +334,21 @@
     /* Touch: finger-sized rows (44pt, Apple's minimum) and no keyboard shortcuts. */
     @media (hover: none) and (pointer: coarse) {
         .item {
-            min-height: 44px;
+            height: 44px;
             font-size: 16px;
         }
         kbd {
             display: none;
+        }
+        /* Opening a menu focuses its first item (for keyboards); on touch only
+           the item under your finger lights up. */
+        .item:focus:not(.open) {
+            background: none;
+            color: inherit;
+        }
+        .item:active {
+            background: var(--accent);
+            color: white;
         }
     }
 </style>
