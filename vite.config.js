@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import process from "node:process";
+import tvLegacyCss from "./scripts/tv-legacy-css.mjs";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
@@ -26,14 +27,20 @@ export default defineConfig(() => ({
       "@stremio/stremio-core-web/stremio_core_web.js",
     ],
   },
-  worker: { format: /** @type {const} */ ("es") },
+  // The TV build's worker is a classic script: the TV's built-in engine
+  // (Chromium 69) has no module workers.
+  worker: { format: process.env.TV_BUILD ? /** @type {const} */ ("iife") : /** @type {const} */ ("es") },
+  define: { "import.meta.env.TV_BUILD": JSON.stringify(!!process.env.TV_BUILD) },
 
-  // The Samsung TV's engine is about Chromium 94 (missing APIs: src/lib/polyfills.ts).
-  build: process.env.TV_BUILD ? { target: "chrome94" } : undefined,
+  // Samsung TVs from 2020 sometimes run apps on their built-in Chromium 69 and
+  // sometimes on the newer, upgradeable one, so the TV build targets 69
+  // (missing APIs: src/lib/polyfills.ts).
+  build: process.env.TV_BUILD ? { target: "chrome69" } : undefined,
 
   // The TV app is zoomed (src/lib/styles/tv.css), and under zoom vh/vw units
   // come out zoom times too big; they become calc() with --tv-vh / --tv-vw.
-  css: process.env.TV_BUILD ? { postcss: { plugins: [tvViewportUnits()] } } : undefined,
+  // Then CSS for Chromium 69 (scripts/tv-legacy-css.mjs).
+  css: process.env.TV_BUILD ? { postcss: { plugins: [tvViewportUnits(), tvLegacyCss()] } } : undefined,
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

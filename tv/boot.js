@@ -13,6 +13,73 @@
     'use strict';
     // The TV look and scale (src/lib/styles/tv.css) from the first frame.
     document.documentElement.classList.add('tv');
+    // Engines without flex gap and aspect-ratio (Chromium 69) get stand-ins
+    // for them (scripts/tv-legacy-css.mjs).
+    if (!(window.CSS && CSS.supports && CSS.supports('aspect-ratio', '1 / 1'))) {
+        document.documentElement.classList.add('tv-legacy');
+    }
+
+    // --- built-ins the TV's Chromium 69 lacks ------------------------------------
+    // Needed while the app's modules load, so before them; the rest is in
+    // src/lib/polyfills.ts.
+    function define(target, name, value) {
+        if (!(name in target)) Object.defineProperty(target, name, { value: value, writable: true, configurable: true });
+    }
+    if (typeof globalThis === 'undefined') window.globalThis = window;
+    define(window, 'queueMicrotask', function (fn) {
+        Promise.resolve().then(fn).catch(function (e) {
+            setTimeout(function () {
+                throw e;
+            });
+        });
+    });
+    define(Object, 'fromEntries', function (entries) {
+        var out = {};
+        Array.from(entries, function (kv) {
+            out[kv[0]] = kv[1];
+        });
+        return out;
+    });
+    define(Object, 'hasOwn', function (o, k) {
+        return Object.prototype.hasOwnProperty.call(o, k);
+    });
+    define(Promise, 'allSettled', function (items) {
+        return Promise.all(Array.from(items, function (p) {
+            return Promise.resolve(p).then(function (value) {
+                return { status: 'fulfilled', value: value };
+            }, function (reason) {
+                return { status: 'rejected', reason: reason };
+            });
+        }));
+    });
+    define(Promise, 'any', function (items) {
+        return new Promise(function (resolve, reject) {
+            var list = Array.from(items);
+            var left = list.length;
+            if (!left) reject(new Error('All promises were rejected'));
+            list.forEach(function (p) {
+                Promise.resolve(p).then(resolve, function () {
+                    if (--left === 0) reject(new Error('All promises were rejected'));
+                });
+            });
+        });
+    });
+    define(String.prototype, 'replaceAll', function (search, replacement) {
+        if (search instanceof RegExp) return this.replace(search, replacement);
+        return this.split(search).join(typeof replacement === 'function' ? replacement(search) : replacement);
+    });
+    function at(i) {
+        var n = Math.trunc(i) || 0;
+        if (n < 0) n += this.length;
+        return n < 0 || n >= this.length ? undefined : this[n];
+    }
+    define(Array.prototype, 'at', at);
+    define(String.prototype, 'at', at);
+    [Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array, Float32Array, Float64Array].forEach(function (T) {
+        define(T.prototype, 'at', at);
+    });
+    define(String.prototype, 'trimStart', String.prototype.trimLeft);
+    define(String.prototype, 'trimEnd', String.prototype.trimRight);
 
     // --- start-up report -----------------------------------------------------
     // If the app hasn't started after a while, show what happened on screen (a

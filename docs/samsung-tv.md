@@ -157,6 +157,35 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
   E-AC-3 English, AC-3 Japanese, the embedded English subtitle), and
   `setExternalSubtitlePath` with a URL is accepted. The app's own Node 16.5
   service starts (launched with `launchAppControl`) and listens.
+- **But the TV doesn't always pick the newer engine**: the installed app has
+  started on it once and on Chromium 69 another time (the start-up report
+  said "engine: OLD"). So the TV build runs on Chromium 69 too:
+  - JavaScript: Vite's `chrome69` target; module workers become classic ones
+    (`worker.format: 'iife'`); a few built-ins are polyfilled in `tv/boot.js`
+    (before the app loads) and `src/lib/polyfills.ts`.
+  - WebAssembly: Chromium 69 has only the 2017 basics, sign extension and
+    mutable globals. `scripts/build-core-tv.sh` also turns off bulk memory,
+    non-trapping float-to-int and multi-value, then lowers what Rust's
+    prebuilt standard library still uses with binaryen's `wasm-opt`, and
+    checks the result with wabt.
+  - CSS: `scripts/tv-legacy-css.mjs` rewrites `:where()`, `:is()` and
+    `:focus-visible` (each makes Chromium 69 drop the whole rule; Svelte puts
+    `:where()` on every component style), adds fixed values before
+    `min()`/`max()`/`clamp()`, turns `translate`/`scale`/`rotate` into
+    `transform`, and adds stand-ins for flex `gap` and `aspect-ratio` under
+    `html.tv-legacy` (set by `tv/boot.js` when the engine lacks
+    `aspect-ratio`).
+  - Tested in Chromium 69 (snapshot 576713) and 94 (snapshot 911577) over the
+    DevTools protocol with the TV's user agent and fake catalogs: Home, a
+    title, its sources, the player (up to AVPlay, which only the TV has),
+    search and the menus, all by arrow keys and OK.
+- **The remote's OK sends a keydown and no keypress**, and buttons only click
+  on keypress, so Play and other buttons did nothing. `$lib/tv/remote.ts`
+  clicks the focused control on OK.
+- **Hash routing**: the route and its query live in the address's hash
+  (`#/title/…?video=…`), so `page.url.pathname` and `page.url.searchParams`
+  are empty on the TV. Code reads them through `appUrl(page.url)`
+  (`$lib/nav`).
 - **Loading updates**: navigating the installed app to a page served by its
   service (`http://127.0.0.1:8090/…`) gives a black screen, even with
   `tizen:allow-navigation`; dropped. A copy written to `wgt-private` and

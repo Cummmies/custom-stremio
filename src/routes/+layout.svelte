@@ -1,7 +1,7 @@
 <script lang="ts">
     import '$lib/styles/tokens.css';
     import { onMount } from 'svelte';
-    import { goto, installHashLinks } from '$lib/nav';
+    import { goto, installHashLinks, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { canPlay, player } from '$lib/player/player';
     import { app } from '$lib/app.svelte';
@@ -24,14 +24,14 @@
 
     let nav = $state<TopNav>();
     let scrolled = $state(false);
-    const inPlayer = $derived(page.url.pathname === '/player');
+    const inPlayer = $derived(appUrl(page.url).pathname === '/player');
 
     onMount(() => {
         // The TV's start-up report (tv/boot.js) stays hidden once this is set.
         document.documentElement.setAttribute('data-started', '1');
         if (isTV) {
             installHashLinks();
-            startRemote({ atHome: () => page.url.pathname === '/', back: () => history.back() });
+            startRemote({ atHome: () => appUrl(page.url).pathname === '/', back: () => history.back() });
             focusPrimary();
         }
         app.start();

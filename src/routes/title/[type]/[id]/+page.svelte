@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { goto } from '$lib/nav';
+    import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { core } from '$lib/core';
     import type { ContinueWatchingPreview, MetaDetails, MetaItem, Video } from '$lib/core/types';
@@ -21,7 +21,7 @@
 
     const type = $derived(page.params.type ?? '');
     const id = $derived(page.params.id ?? '');
-    const videoId = $derived(page.url.searchParams.get('video'));
+    const videoId = $derived(appUrl(page.url).searchParams.get('video'));
 
     let details = $state<MetaDetails | null>(null);
     let season = $state(1);
@@ -120,7 +120,7 @@
 
     // Arriving from a Play button: jump straight to sources.
     $effect(() => {
-        if (meta && page.url.searchParams.get('play')) play(true);
+        if (meta && appUrl(page.url).searchParams.get('play')) play(true);
     });
 
     function openSources(target: string, replace = false) {
@@ -137,17 +137,17 @@
     }
 
     // --- Easy Mode: choose a source as addons answer ------------------------
-    const auto = $derived(!!page.url.searchParams.get('auto'));
+    const auto = $derived(!!appUrl(page.url).searchParams.get('auto'));
     // Set by the player's Next Episode: keep to the same addon and quality.
     const like = $derived.by((): Like | null => {
-        const addonUrl = page.url.searchParams.get('likeAddon');
-        const res = Number(page.url.searchParams.get('likeRes'));
+        const addonUrl = appUrl(page.url).searchParams.get('likeAddon');
+        const res = Number(appUrl(page.url).searchParams.get('likeRes'));
         return addonUrl ? { addonUrl, resolution: res || null } : null;
     });
     const easyNotice = $derived(
-        page.url.searchParams.get('failed')
+        appUrl(page.url).searchParams.get('failed')
             ? 'Easy Mode couldn’t play any of the best sources for this one. Pick one below.'
-            : page.url.searchParams.get('nomatch')
+            : appUrl(page.url).searchParams.get('nomatch')
               ? 'No source matched your Easy Mode preferences. Pick one below.'
               : null
     );

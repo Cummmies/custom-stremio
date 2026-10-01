@@ -39,6 +39,14 @@ html.tv a.card:focus :is(.poster, .art) {
         0 14px 32px rgb(0 0 0 / 0.75);
 }
 
+/* Rows: room above and below for the lift and its shadow. */
+html.tv .track {
+    padding-top: 18px;
+    padding-bottom: 30px;
+    margin-top: -18px;
+    margin-bottom: -22px;
+}
+
 /* Buttons, tabs, chips, links: turn white (the tvOS focused button), with a
    slight lift. Text and icons inside go dark. */
 html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem'], select):focus {
@@ -53,10 +61,30 @@ html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuite
     color: #111 !important;
 }
 
+/* The current tab, while focus is elsewhere: lit, not white (white is focus). */
+html.tv header .pill a.active:not(:focus) {
+    background: rgb(255 255 255 / 0.16) !important;
+    color: #fff !important;
+}
+
 /* Text fields: a white frame; typing starts with OK (remote.ts). */
 html.tv :is(input, textarea):focus {
     box-shadow: 0 0 0 3px #fff !important;
     border-color: #fff !important;
+}
+
+/* The top bar's search field: its pill is the frame. */
+html.tv header .search input:focus {
+    box-shadow: none !important;
+}
+html.tv header .search:focus-within {
+    border-color: #fff !important;
+    box-shadow: 0 0 0 2px #fff !important;
+}
+
+/* No keyboard shortcuts on a remote. */
+html.tv [data-menu] kbd {
+    display: none;
 }
 
 /* The video surface in the player: never a highlight over the picture. */

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { page } from '$app/state';
-    import { goto } from '$lib/nav';
+    import { goto, appUrl } from '$lib/nav';
     import Icon from '$lib/components/Icon.svelte';
     import { isIOS, isTV } from '$lib/platform';
     import { core } from '$lib/core';
@@ -9,7 +9,7 @@
     import EmptyState from '$lib/components/EmptyState.svelte';
 
     let results = $state<Board | null>(null);
-    const query = $derived(page.url.searchParams.get('q')?.trim() ?? '');
+    const query = $derived(appUrl(page.url).searchParams.get('q')?.trim() ?? '');
 
     $effect(() => core.watch<Board>('search', (s) => (results = s)));
 

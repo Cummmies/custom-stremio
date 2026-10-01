@@ -13,6 +13,18 @@ export function appHref(path: string): string {
     return isTV && path.startsWith('/') ? '#' + path : path;
 }
 
+/**
+ * The app's own address: path and query. On the TV the page's address is the
+ * installed file and the route lives in its hash (`#/title/…?video=…`), so
+ * `page.url.pathname` and `page.url.searchParams` say nothing there.
+ * Use `appUrl(page.url)` for them.
+ */
+export function appUrl(url: URL): URL {
+    if (!isTV) return url;
+    const route = url.hash.replace(/^#/, '').split('#')[0] || '/';
+    return new URL(route.startsWith('/') ? route : '/' + route, 'http://app.invalid');
+}
+
 export function goto(url: string | URL, opts?: GotoOptions) {
     return kitGoto(typeof url === 'string' ? appHref(url) : url, opts);
 }

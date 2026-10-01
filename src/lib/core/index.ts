@@ -14,7 +14,11 @@ const plain = <T>(value: T): T => (value === undefined ? value : JSON.parse(JSON
 const stateListeners = new Set<StateListener>();
 const eventListeners = new Set<EventListener>();
 
-const worker = new Worker(new URL('./core.worker.ts', import.meta.url), { type: 'module' });
+// The TV build's worker is a classic script (vite.config.js: Chromium 69 has
+// no module workers); everywhere else it's a module.
+const worker = import.meta.env.TV_BUILD
+    ? new Worker(new URL('./core.worker.ts', import.meta.url))
+    : new Worker(new URL('./core.worker.ts', import.meta.url), { type: 'module' });
 const bridge = new Bridge(window, worker);
 
 // Must exist before init: the core starts emitting events while initializing.

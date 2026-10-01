@@ -2,6 +2,7 @@
     // Phones: the sections live in a bottom tab bar, where thumbs are (iOS HIG,
     // Tab bars). Hidden on wider screens, which use the top pill instead.
     import { page } from '$app/state';
+    import { appUrl } from '$lib/nav';
     import Icon, { type IconName } from './Icon.svelte';
 
     const tabs: { href: string; label: string; icon: IconName }[] = [
@@ -11,7 +12,7 @@
         { href: '/library', label: 'Library', icon: 'library' },
         { href: '/search', label: 'Search', icon: 'search' },
     ];
-    const path = $derived(page.url.pathname);
+    const path = $derived(appUrl(page.url).pathname);
     const isActive = (href: string) => (href === '/' ? path === '/' || path === '/customize' : path.startsWith(href));
 
     /** Tapping the tab you're on scrolls back to the top, as in iOS apps. */

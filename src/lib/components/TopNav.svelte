@@ -2,7 +2,7 @@
     import logo from '$lib/assets/logo.png';
     // Floating navigation over the hero: brand, a pill of sections, search and account.
     // Transparent at rest; picks up a glass backing once content scrolls under it.
-    import { goto } from '$lib/nav';
+    import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { app } from '$lib/app.svelte';
     import { isTV } from '$lib/platform';
@@ -20,20 +20,20 @@
         { href: '/series', label: 'Series' },
         { href: '/library', label: 'Library' },
     ];
-    const isActive = (href: string) => (href === '/' ? page.url.pathname === '/' || page.url.pathname === '/customize' : page.url.pathname.startsWith(href));
+    const isActive = (href: string) => (href === '/' ? appUrl(page.url).pathname === '/' || appUrl(page.url).pathname === '/customize' : appUrl(page.url).pathname.startsWith(href));
 
     let input = $state<HTMLInputElement>();
     let query = $state('');
     let searchOpen = $state(false);
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const onSearchPage = $derived(page.url.pathname === '/search');
+    const onSearchPage = $derived(appUrl(page.url).pathname === '/search');
     const expanded = $derived(searchOpen || onSearchPage);
     // TVs never have a server; nothing to warn about.
     const serverTrouble = $derived(!isTV && (app.server.state === 'missing' || app.server.state === 'failed'));
 
     $effect(() => {
-        if (onSearchPage) query = page.url.searchParams.get('q') ?? '';
+        if (onSearchPage) query = appUrl(page.url).searchParams.get('q') ?? '';
     });
 
     function search(q: string) {

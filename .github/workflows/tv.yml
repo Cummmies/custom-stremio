@@ -22,7 +22,9 @@ on:
       - 'vite.config.js'
       - 'scripts/build-core-tv.sh'
       - 'scripts/strip-wasm-section.py'
+      - 'scripts/check-wasm-features.mjs'
       - 'scripts/tv-boot.mjs'
+      - 'scripts/tv-legacy-css.mjs'
       - 'tv/**'
       - '.github/workflows/tv.yml'
   workflow_dispatch:
@@ -62,7 +64,7 @@ jobs:
 
       - run: npm ci
 
-      # Stremio's core without WebAssembly reference types (scripts/build-core-tv.sh),
+      # Stremio's core built for the TVs' WebAssembly (scripts/build-core-tv.sh),
       # cached per core version.
       - name: Core version
         id: core
@@ -74,7 +76,7 @@ jobs:
         id: core-cache
         with:
           path: ${{ steps.core.outputs.dir }}
-          key: core-tv-${{ steps.core.outputs.version }}-${{ hashFiles('scripts/build-core-tv.sh', 'scripts/strip-wasm-section.py') }}
+          key: core-tv-${{ steps.core.outputs.version }}-${{ hashFiles('scripts/build-core-tv.sh', 'scripts/strip-wasm-section.py', 'scripts/check-wasm-features.mjs') }}
 
       - name: Get the core's source
         if: steps.core-cache.outputs.cache-hit != 'true'

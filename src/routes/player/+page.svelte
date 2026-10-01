@@ -9,7 +9,7 @@
     // Full-window player. mpv draws the video underneath this transparent page;
     // everything you see here is the control layer on top of it.
     import { onMount, untrack } from 'svelte';
-    import { goto } from '$lib/nav';
+    import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
@@ -65,7 +65,7 @@
             | null;
     };
 
-    const params = $derived(page.url.searchParams);
+    const params = $derived(appUrl(page.url).searchParams);
     const type = $derived(params.get('type'));
     const id = $derived(params.get('id'));
     const videoId = $derived(cleanVideoId(params.get('video')));
@@ -271,7 +271,7 @@
             switching = null;
             return false;
         }
-        easyQueue.adopt(forVideo, picks, page.url.pathname + page.url.search, isAnime);
+        easyQueue.adopt(forVideo, picks, appUrl(page.url).pathname + appUrl(page.url).search, isAnime);
         return true;
     }
 
@@ -1099,7 +1099,10 @@
             <p class="err-title">Can’t play this stream</p>
             <p class="err-body">{startError ?? player.error}</p>
             <div class="err-actions">
-                <button onclick={() => (type && id ? changeSource() : exit())}>Choose Another Source</button>
+                <!-- TV: the way out gets focus, so OK takes it. -->
+                <button {@attach (el) => void (isTV && setTimeout(() => el.focus()))} onclick={() => (type && id ? changeSource() : exit())}>
+                    Choose Another Source
+                </button>
             </div>
         </div>
     {:else if loadingVideo}

@@ -8,6 +8,7 @@
     // code, ReadData asks whether it has been confirmed yet, and the answer is an
     // auth key to log in with.
     import { core } from '$lib/core';
+    import { isTV } from '$lib/platform';
 
     type Loadable<T> = { type: 'Loading' } | { type: 'Ready'; content: T } | { type: 'Err'; content: { type: string; content?: unknown } };
     type AuthLink = {
@@ -70,7 +71,8 @@
         <p class="status">Logging in…</p>
     {:else if failed}
         <p class="status">Couldn’t get a code from Stremio.</p>
-        <button type="button" class="retry" onclick={newCode}>Try Again</button>
+        <!-- TV: focus goes to the way forward. -->
+        <button type="button" class="retry" {@attach (el) => void (isTV && setTimeout(() => el.focus()))} onclick={newCode}>Try Again</button>
     {:else if code}
         <div class="qr">
             {#if qr}<img src={qr} alt="QR code for the link below" />{/if}

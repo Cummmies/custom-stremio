@@ -2,10 +2,10 @@
     // Side sheet listing every addon's streams for one movie or episode.
     // A focused, dismissible task: Esc, the close button or the backdrop all close it.
     import type { MetaDetails, Stream } from '$lib/core/types';
-    import { goto } from '$lib/nav';
+    import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { openExternal } from '$lib/links';
-    import { canPlay } from '$lib/platform';
+    import { canPlay, isTV } from '$lib/platform';
     import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
     import { easyQueue } from '$lib/player/easy';
     import { parseStream } from '$lib/player/ranking';
@@ -89,7 +89,7 @@
         if (!link || !url) return;
         // Coming back from the player should land on the title, not reopen this
         // sheet: take the picked video out of this page's address first.
-        const here = new URL(page.url);
+        const here = new URL(appUrl(page.url));
         ['video', 'play', 'auto', 'failed', 'nomatch'].forEach((k) => here.searchParams.delete(k));
         goto(here.pathname + here.search, { replaceState: true, noScroll: true, keepFocus: true }).then(() => goto(playerHref(link, url)));
     }
@@ -152,16 +152,20 @@
                                             </button>
                                         {:else if linkOf(stream)}
                                             <div class="buttons">
-                                                <button
-                                                    class="icon-action"
-                                                    onclick={() => copy(stream, key)}
-                                                    aria-label={copied === key ? 'Link copied' : 'Copy stream link'}
-                                                    title={copied === key ? 'Copied' : 'Copy Link'}
-                                                >
-                                                    <Icon name={copied === key ? 'check' : 'link'} size={15} />
-                                                </button>
+                                                <!-- A TV has nowhere to paste a link. -->
+                                                {#if !isTV}
+                                                    <button
+                                                        class="icon-action"
+                                                        onclick={() => copy(stream, key)}
+                                                        aria-label={copied === key ? 'Link copied' : 'Copy stream link'}
+                                                        title={copied === key ? 'Copied' : 'Copy Link'}
+                                                    >
+                                                        <Icon name={copied === key ? 'check' : 'link'} size={15} />
+                                                    </button>
+                                                {/if}
                                                 {#if playable(stream)}
-                                                    <button class="action play" onclick={() => play(stream)}>
+                                                    <!-- On a TV the sheet opens on the first Play. -->
+                                                    <button class="action play" data-tv-focus onclick={() => play(stream)}>
                                                         <Icon name="play" size={13} filled />
                                                         Play
                                                     </button>

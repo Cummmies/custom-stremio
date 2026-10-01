@@ -50,6 +50,9 @@ function visible(el: HTMLElement): DOMRect | null {
 
 /** Where focus can go now: inside an open dialog only, when one is open. */
 function scope(): ParentNode {
+    // An open menu (the newest submenu last), then a dialog, holds focus.
+    const menus = [...document.querySelectorAll<HTMLElement>('[data-menu]')].filter((m) => visible(m));
+    if (menus.length) return menus.at(-1)!;
     const dialogs = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')];
     return dialogs.at(-1) ?? document;
 }
@@ -204,9 +207,11 @@ function exitApp() {
     }
 }
 
-/** Elements that do something on OK by themselves. */
-function activatesOnEnter(el: Element) {
-    return el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement || el.tagName === 'SUMMARY';
+/** Elements OK should click: not text fields or pickers, which open the TV's own. */
+function clicksOnOk(el: HTMLElement) {
+    if (el instanceof HTMLSelectElement || isTextField(el)) return false;
+    // The player's video takes OK as play/pause.
+    return !el.classList.contains('surface');
 }
 
 const isTextField = (el: Element | null): el is HTMLInputElement | HTMLTextAreaElement =>
@@ -232,7 +237,9 @@ const KEYBOARD_CANCEL = 65385;
  * content. Waits for content that's still loading; never takes focus away from
  * something the person already moved to.
  */
-export function focusPrimary(root: ParentNode = document.querySelector('main') ?? document) {
+export function focusPrimary(root: ParentNode = document.querySelector('main') ?? document, takeOver = false) {
+    // A dialog that's open has its own (it may have opened with this navigation).
+    if (!takeOver && document.querySelector('dialog[open]')) return;
     const started = Date.now();
     const generation = ++primaryGeneration;
     /** What this call focused itself (it may still trade it for the marked one). */
@@ -240,7 +247,10 @@ export function focusPrimary(root: ParentNode = document.querySelector('main') ?
     const attempt = () => {
         if (generation !== primaryGeneration || pressedSince(started)) return;
         const active = document.activeElement;
-        const free = !active || active === document.body || !document.contains(active) || active === ours;
+        // Focus that only filled in for an item the page took away (stopgap)
+        // gives way too.
+        const free =
+            takeOver || !active || active === document.body || !document.contains(active) || active === ours || active === stopgap;
         // Something already has focus (a tab in the top bar keeps it, as on tvOS).
         if (!free) return;
         const marked = [...root.querySelectorAll<HTMLElement>('[data-tv-focus]')].find((el) => visible(el));
@@ -248,7 +258,8 @@ export function focusPrimary(root: ParentNode = document.querySelector('main') ?
             if (marked !== active) focusEl(marked);
             return;
         }
-        if (!ours) {
+        // takeOver (a dialog) keeps the browser's pick until a marked one shows.
+        if (!ours && !takeOver) {
             const el = first(candidates().filter(({ el }) => root.contains(el)));
             if (el) {
                 focusEl(el);
@@ -262,11 +273,21 @@ export function focusPrimary(root: ParentNode = document.querySelector('main') ?
 }
 
 let primaryGeneration = 0;
+/** Where focus last went because the focused item disappeared. */
+let stopgap: Element | null = null;
 let lastPress = 0;
 const pressedSince = (t: number) => lastPress > t;
 
 export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
     document.documentElement.classList.add('tv');
+
+    // A sheet or dialog opens on its main action (marked data-tv-focus, as a
+    // page's is), not on whatever the browser picks (its Close button).
+    new MutationObserver((records) => {
+        for (const { target } of records) {
+            if (target instanceof HTMLDialogElement && target.open) focusPrimary(target, true);
+        }
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
 
     // Text fields: arriving by the arrows doesn't start typing (read-only keeps
     // the TV's keyboard closed); OK does. Focus the app gives a field itself
@@ -294,6 +315,7 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             movingFocus = true;
             best.el.focus({ preventScroll: true });
             movingFocus = false;
+            stopgap = best.el;
         });
     });
     document.addEventListener('focusin', (e) => {
@@ -315,6 +337,7 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
         'keydown',
         (e) => {
             lastPress = Date.now();
+            stopgap = null;
             if (e.defaultPrevented) return;
             // The player owns the arrows while the video (not a control) has focus.
             const playerOnVideo =
@@ -329,12 +352,6 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
                 unlock(active);
                 active.blur();
                 active.focus();
-                return;
-            }
-            // OK on something that's clickable but not a button or link.
-            if (e.key === 'Enter' && active && active !== document.body && !activatesOnEnter(active) && !playerOnVideo) {
-                e.preventDefault();
-                (active as HTMLElement).click();
                 return;
             }
             // The TV's keyboard closed: arrows move focus again.
@@ -389,4 +406,16 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
         // Before the screens' own handlers, so a move here is marked handled.
         { capture: true }
     );
+
+    // OK clicks what has focus. The remote's OK sends a keydown and no
+    // keypress, and buttons only click on keypress, so they'd do nothing. This
+    // runs after the screens' own handlers: one that used OK itself (a menu
+    // item, the player) has marked the event handled.
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.defaultPrevented || e.repeat) return;
+        const active = document.activeElement;
+        if (!(active instanceof HTMLElement) || active === document.body || !clicksOnOk(active)) return;
+        e.preventDefault();
+        active.click();
+    });
 }
