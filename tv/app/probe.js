@@ -13,6 +13,8 @@
     var moduleMatch = location.pathname.match(/\/module\/([^/]+)\/(.*\/)?[^/]*$/);
     var packaged = location.protocol === 'file:';
     var servedByUs = location.host === '127.0.0.1:8090' || location.host === '127.0.0.1:8091';
+    // A copy of this page in the app's own storage (button 8), not the installed files.
+    var fromStorage = packaged && location.pathname.indexOf('/res/wgt/') < 0;
     var CDN_BASE = moduleMatch
         ? 'https://cdn.jsdelivr.net/' + decodeURIComponent(moduleMatch[1]) + '/' + (moduleMatch[2] || '')
         : packaged || servedByUs ? JSD_APP : new URL('./', location.href).href;
@@ -96,7 +98,7 @@
     row('Device', 'Tizen (from UA)', tizenVer || '?');
     row('Device', 'Screen', screen.width + '×' + screen.height + ' @' + window.devicePixelRatio);
     row('Device', 'Window', window.innerWidth + '×' + window.innerHeight);
-    row('Device', 'Running as', moduleMatch ? 'TizenBrew module' : packaged ? 'Installed app' : servedByUs ? 'App, page from service' : 'Browser', 'ok');
+    row('Device', 'Running as', moduleMatch ? 'TizenBrew module' : fromStorage ? 'App, page from storage' : packaged ? 'Installed app' : servedByUs ? 'App, page from service' : 'Browser', 'ok');
     row('Device', 'Memory (deviceMemory)', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'n/a', 'dim');
     row('Device', 'CPU threads', navigator.hardwareConcurrency || 'n/a', 'dim');
 
@@ -340,7 +342,7 @@
         else if (e.keyCode === 10009) {
             e.preventDefault();
             if (video || avplayOpen) return stopAll();
-            if (servedByUs) return history.back();
+            if (servedByUs || fromStorage) return history.back();
             if (packaged) { try { tizen.application.getCurrentApplication().exit(); } catch (err) { /* stay */ } }
         }
         else if (e.keyCode === 10252 || e.keyCode === 415 || e.keyCode === 19) { togglePause(); }
@@ -490,6 +492,43 @@
         } catch (e) { log('switch audio: ' + e.message); }
     }
 
+    // Button 8: what an update would do. Download the page's files into the
+    // app's private storage, then open that copy.
+    var PAGE_FILES = ['index.html', 'probe.js', 'module-test.js', 'worker-test.js', 'module-worker-test.js'];
+    function copyToStorage() {
+        if (fromStorage) return log('Already the copy in storage');
+        if (!run(function () { return tizen.filesystem; })) return log('No tizen.filesystem here');
+        var t0 = Date.now();
+        Promise.all(PAGE_FILES.map(function (f) {
+            return fetch(JSD_APP + f + '?t=' + t0).then(function (r) {
+                if (!r.ok) throw new Error(f + ': HTTP ' + r.status);
+                return r.text();
+            });
+        })).then(function (texts) {
+            log('Downloaded ' + texts.length + ' files in ' + (Date.now() - t0) + ' ms');
+            tizen.filesystem.resolve('wgt-private', function (dir) {
+                var i = 0;
+                (function next() {
+                    if (i === PAGE_FILES.length) {
+                        var url = dir.toURI().replace(/\/$/, '') + '/index.html';
+                        log('Opening ' + url);
+                        location.href = url;
+                        return;
+                    }
+                    var name = PAGE_FILES[i], text = texts[i];
+                    i++;
+                    var file;
+                    try { file = dir.resolve(name); } catch (e) { file = dir.createFile(name); }
+                    file.openStream('w', function (stream) {
+                        stream.write(text);
+                        stream.close();
+                        next();
+                    }, function (e) { log('write ' + name + ': ' + e.message); }, 'UTF-8');
+                })();
+            }, function (e) { log('storage: ' + e.message); }, 'rw');
+        }).catch(function (e) { log('download: ' + e.message); });
+    }
+
     function runTest(name) {
         if (name === 'html5-h264') html5('h264.mp4', true);
         else if (name === 'html5-hevc') html5('hevc-hdr10.mkv', false);
@@ -497,6 +536,7 @@
         else if (name === 'avplay-hevc') avplay('hevc-hdr10.mkv');
         else if (name === 'avplay-audio') avplayAudio2();
         else if (name === 'stop') stopAll();
+        else if (name === 'storage') copyToStorage();
         else if (name === 'served') {
             if (servedByUs) return log('Already the served page');
             location.href = SERVICE + '/app/index.html';

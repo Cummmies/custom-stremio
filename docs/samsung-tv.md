@@ -89,16 +89,20 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
   works (IntroDB needs it, CORS). With
   `v8.setFlagsFromString('--experimental-wasm-reftypes')` the published
   core compiles there in 1.3 s, a fallback if the rebuilt core has trouble.
-- **As an installed app (.wgt, TizenBrew Installer)**: `webapis.avplay` is
-  there and works: H.264 MP4 and the HEVC HDR10 MKV both play, and
-  `getTotalTrackInfo` lists every track (HEVC video, E-AC-3 English, AC-3
-  Japanese, the embedded English subtitle); `setExternalSubtitlePath` with
-  a URL is accepted. **But** the page got the old engine (Chromium 69:
-  no `?.`, no class fields, no flex gap, no bulk memory / non-trapping
-  WebAssembly), unlike under TizenBrew. TizenBrew's `config.xml` sets the
-  undocumented `http://samsung.com/tv/metadata/use.uwe` metadata; being
-  tested in ours. The app's own Node service didn't come up yet (being
-  diagnosed through a message port).
+- **As an installed app (.wgt, TizenBrew Installer)** with the undocumented
+  `http://samsung.com/tv/metadata/use.uwe` metadata (TizenBrew sets it too):
+  the newer engine (`?.`, class/private fields, flex gap, module workers,
+  bulk memory / non-trapping WebAssembly) **and** `webapis.avplay`. Without
+  that metadata the app gets Chromium 69. AVPlay plays H.264 MP4 and the
+  HEVC HDR10 MKV, `getTotalTrackInfo` lists every track (HEVC video,
+  E-AC-3 English, AC-3 Japanese, the embedded English subtitle), and
+  `setExternalSubtitlePath` with a URL is accepted. The app's own Node 16.5
+  service starts (launched with `launchAppControl`) and listens.
+- **Loading updates**: navigating the installed app to a page served by its
+  service (`http://127.0.0.1:8090/…`) gave a black screen (testing
+  `tizen:allow-navigation`). Also testing the iPhone-like way: download the
+  new files into the app's own storage (`wgt-private`) and open them from
+  there, which keeps the page local (AVPlay, same-origin workers).
 - **Memory**: 1 GB, little free. Keep the TV build lean.
 - Network from the page: Cinemeta, the Stremio API and TheIntroDB work
   directly; IntroDB needs the service proxy.

@@ -82,7 +82,8 @@ var server = http.createServer(function (req, res) {
             cpus: (os.cpus() || []).length,
             hasWebAssembly: typeof WebAssembly !== 'undefined',
             // Which copy answered: TizenBrew's service or the app's own.
-            owner: (process.argv || []).join(' ').indexOf('CStremioTV') >= 0 ? 'app' : 'TizenBrew'
+            // TizenBrew runs this file in a vm sandbox without __filename.
+            owner: typeof __filename !== 'undefined' ? 'app' : 'TizenBrew'
         };
         return send(res, 200, 'application/json', JSON.stringify(info));
     }
