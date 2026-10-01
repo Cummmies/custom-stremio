@@ -2,9 +2,11 @@
 // the banner; moving off the cards goes back to the banner's own cycle. Moving
 // from a card up onto the banner keeps the preview, so its buttons can be used.
 import type { MetaItemPreview } from '$lib/core/types';
+import { isTV } from '$lib/platform';
 
 const ENTER_MS = 180; // brief, so sweeping the mouse across a row doesn't flicker the banner
 const LEAVE_MS = 600; // time to move from a card up onto the banner
+const TV_SETTLE_MS = 450;
 
 // Continue Watching and Library cards only know a title's name and poster, so
 // the rest (description, year, runtime, rating, genres) is fetched once from
@@ -59,7 +61,9 @@ class HeroPreview {
     show(item: MetaItemPreview) {
         clearTimeout(this.#leave);
         clearTimeout(this.#enter);
-        this.#enter = setTimeout(() => (this.item = item), this.item ? 0 : ENTER_MS);
+        // TV: moving along a row with the remote shouldn't redraw the banner at
+        // every step, only where focus settles.
+        this.#enter = setTimeout(() => (this.item = item), isTV ? TV_SETTLE_MS : this.item ? 0 : ENTER_MS);
         if (needsDetails(item)) {
             fetchDetails(item).then((extra) => {
                 if (extra && this.item?.id === item.id) this.item = merge(this.item, extra);

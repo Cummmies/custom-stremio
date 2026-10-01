@@ -289,7 +289,7 @@
                 {/if}
 
                 <div class="actions">
-                    <button class="play" onclick={() => play()}>
+                    <button class="play" data-tv-focus onclick={() => play()}>
                         <Icon name="play" size={16} filled />
                         {playLabel}
                     </button>

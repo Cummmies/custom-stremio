@@ -1,27 +1,88 @@
-/* The TV app (html.tv, set by $lib/tv/remote.ts). Everything is reached with
-   the remote's arrows, so focus has to be obvious from the sofa. The outline
-   sits inside the item: scrolling rows would clip one drawn outside. */
+/* The TV app (html.tv, set before the app starts by tv/boot.js and again by
+   $lib/tv/remote.ts). Designed after Apple's tvOS guidelines: read from across
+   the room, driven by focus.
+
+   Scale. A TV is 1920 points wide and tvOS sets body text at 29 pt; the app's
+   desktop body text is 14 px. The whole app is zoomed so it lays out as a
+   ~1100 px wide window (its desktop layout) at about 1.75× the size. Under
+   zoom, vh/vw come out zoom times too big, so the TV build turns them into
+   --tv-vh / --tv-vw (vite.config.js, tvViewportUnits).
+
+   Focus. tvOS doesn't draw rings: the focused item lifts toward you (it grows
+   and casts a shadow) and focused buttons turn white. Every element is
+   reachable with the arrows ($lib/tv/remote.ts). */
+html.tv {
+    --tv-zoom: 1.75;
+    zoom: 1.75;
+    --tv-vh: calc(1vh / 1.75);
+    --tv-vw: calc(1vw / 1.75);
+}
+
+/* --- focus --------------------------------------------------------------- */
+
 html.tv :focus,
 html.tv :focus-visible {
-    outline: 4px solid #fff;
-    outline-offset: -4px;
-    box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6), 0 0 24px rgb(255 255 255 / 0.35);
+    outline: none !important;
 }
 
-/* Fields show their own focus (the caret and the TV keyboard). */
-html.tv input:focus,
-html.tv textarea:focus {
-    outline-offset: 0;
+/* Posters and wide cards: lift, don't outline. */
+html.tv a.card {
+    transition: transform 0.16s ease-out;
+}
+html.tv a.card:focus {
+    transform: scale(1.07);
+    z-index: 2;
+}
+html.tv a.card:focus :is(.poster, .art) {
+    box-shadow:
+        0 0 0 3px #fff,
+        0 14px 32px rgb(0 0 0 / 0.75);
 }
 
-/* The video surface in the player: no ring over the picture. */
+/* Buttons, tabs, chips, links: turn white (the tvOS focused button), with a
+   slight lift. Text and icons inside go dark. */
+html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem'], select):focus {
+    background: #fff !important;
+    color: #111 !important;
+    border-color: #fff !important;
+    box-shadow: 0 8px 22px rgb(0 0 0 / 0.55) !important;
+    transform: scale(1.05);
+    transition: transform 0.12s ease-out;
+}
+html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem']):focus :is(svg, span, strong, small) {
+    color: #111 !important;
+}
+
+/* Text fields: a white frame; typing starts with OK (remote.ts). */
+html.tv :is(input, textarea):focus {
+    box-shadow: 0 0 0 3px #fff !important;
+    border-color: #fff !important;
+}
+
+/* The video surface in the player: never a highlight over the picture. */
 html.tv .player .surface:focus {
-    outline: none;
-    box-shadow: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none;
+}
+
+/* --- performance --------------------------------------------------------- */
+
+/* Background blur is costly on a TV's GPU and makes scrolling stutter. */
+html.tv *,
+html.tv *::before,
+html.tv *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
 }
 
 /* No mouse on a TV. */
 html.tv,
 html.tv * {
     cursor: none !important;
+}
+
+/* Without the blur, see-through bars show the rows passing under them: solid. */
+html.tv header.nav.scrolled {
+    background: var(--bg) !important;
 }

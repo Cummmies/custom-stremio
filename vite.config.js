@@ -31,6 +31,10 @@ export default defineConfig(() => ({
   // The Samsung TV's engine is about Chromium 94 (missing APIs: src/lib/polyfills.ts).
   build: process.env.TV_BUILD ? { target: "chrome94" } : undefined,
 
+  // The TV app is zoomed (src/lib/styles/tv.css), and under zoom vh/vw units
+  // come out zoom times too big; they become calc() with --tv-vh / --tv-vw.
+  css: process.env.TV_BUILD ? { postcss: { plugins: [tvViewportUnits()] } } : undefined,
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
@@ -54,3 +58,19 @@ export default defineConfig(() => ({
   },
 }));
 
+/** TV build: `100vh` → `calc(100 * var(--tv-vh, 1vh))` (and vw, dvh, svh, lvh). */
+function tvViewportUnits() {
+  const unit = /(-?(?:\d+\.?\d*|\.\d+))[dsl]?v([hw])\b/g;
+  return {
+    postcssPlugin: "tv-viewport-units",
+    /** @param {{ value: string }} decl */
+    Declaration(decl) {
+      // Already converted (the fallback inside var() would match again).
+      if (decl.value.includes("--tv-v")) return;
+      if (unit.test(decl.value)) {
+        decl.value = decl.value.replace(unit, (_, n, axis) => `calc(${n} * var(--tv-v${axis}, 1v${axis}))`);
+      }
+      unit.lastIndex = 0;
+    },
+  };
+}

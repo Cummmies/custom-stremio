@@ -11,6 +11,8 @@
 // Plain ES2017: this must run on any TV.
 (function () {
     'use strict';
+    // The TV look and scale (src/lib/styles/tv.css) from the first frame.
+    document.documentElement.classList.add('tv');
 
     // --- start-up report -----------------------------------------------------
     // If the app hasn't started after a while, show what happened on screen (a

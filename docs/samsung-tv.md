@@ -49,7 +49,17 @@ describes what was built.
   built-ins the app and Svelte use (`structuredClone`, `findLast`, …) and the
   TV build targets `chrome94`. Error pages show the real error
   (`src/hooks.client.ts`).
-- **Not yet**: a TV-sized layout (it uses the desktop layout at 1920×1080).
+- **TV design** (after Apple's tvOS guidelines; `src/lib/styles/tv.css`): the
+  app is zoomed 1.75× (desktop layout at ~1100 px wide; tvOS body text is
+  29 pt on a 1920-pt screen, the app's 14 px), with vh/vw rewritten for zoom by
+  the TV build (`tvViewportUnits` in vite.config.js; Chromium 94 sizes vh/vw
+  zoom times too big). Focus lifts posters and turns buttons white instead of
+  drawing rings; no backdrop blur (slow on a TV GPU). Navigation
+  (`src/lib/tv/remote.ts`): left/right stay in the row, rows remember their
+  item, reversing up/down returns where you came from, each page focuses its
+  main action (`data-tv-focus`), a vanished focus moves to what's in its
+  place, text fields open the keyboard only on OK, OK clicks anything
+  focusable, scrolling is instant. Tested in Chromium 94 with a fake catalog.
 
 ## The short version
 

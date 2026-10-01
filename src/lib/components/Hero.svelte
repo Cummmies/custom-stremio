@@ -170,7 +170,7 @@
 
                 <div class="actions">
                     <!-- Phones: the title page (pick an episode or source there); wider: straight to playing. -->
-                    <a class="play" href={titleHref(item.type, item.id, phone ? {} : { play: '1' })}>
+                    <a class="play" data-tv-focus href={titleHref(item.type, item.id, phone ? {} : { play: '1' })}>
                         <Icon name="play" size={16} filled />
                         Play
                     </a>
@@ -254,6 +254,12 @@
     }
     .placeholder {
         pointer-events: none;
+    }
+    /* TV (zoomed, see tv.css): a shorter banner, so its buttons and the first
+       row share the opening screen, like tvOS's top shelf. */
+    :global(html.tv) .hero {
+        min-height: calc(56 * var(--tv-vh, 1vh));
+        padding-bottom: 20px;
     }
     .copy {
         max-width: 560px;

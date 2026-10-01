@@ -1,7 +1,12 @@
-// The TV remote: arrows move focus to the nearest item in that direction (any
-// button, link or field on screen), OK clicks it (the browser does that for a
-// focused button or link), Back closes what's open or goes back, and the media
-// keys reach the player as the keyboard keys it already handles.
+// The TV remote, after tvOS: arrows move focus to the nearest item in that
+// direction (any button, link or field on screen), OK activates it, Back closes
+// what's open or goes back, and the media keys reach the player as the
+// keyboard keys it already handles.
+//
+// - A row (anything that scrolls sideways) remembers its focused item: moving
+//   back into the row returns to it.
+// - Text fields don't open the keyboard when focus lands on them, only on OK
+//   (the TV's keyboard would otherwise pop up while just passing by).
 //
 // Screens don't need to know about it: whatever they make focusable is
 // reachable. A screen that wants the arrows itself (the player, over the
@@ -31,9 +36,12 @@ const FOCUSABLE =
 type Dir = 'left' | 'right' | 'up' | 'down';
 const ARROWS: Record<string, Dir> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
 
+/** Thinner than this (CSS px) either way isn't a TV target: page dots and the like. */
+const MIN_TARGET = 16;
+
 function visible(el: HTMLElement): DOMRect | null {
     const r = el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2) return null;
+    if (r.width < MIN_TARGET || r.height < MIN_TARGET) return null;
     if (el.closest('[inert], [aria-hidden="true"]')) return null;
     const style = getComputedStyle(el);
     if (style.visibility === 'hidden' || style.pointerEvents === 'none' || Number(style.opacity) === 0) return null;
@@ -89,6 +97,9 @@ function nearest(from: DOMRect, dir: Dir, list: { el: HTMLElement; r: DOMRect }[
         }
         // Allow a little overlap (items in the same row aren't pixel-aligned).
         if (along < -Math.min(r.width, r.height, 24) / 2) continue;
+        // Left and right stay in the row: the item has to share the current
+        // one's height band. At the end of a row, nothing happens (as on tvOS).
+        if ((dir === 'left' || dir === 'right') && (r.bottom <= from.top + from.height * 0.25 || r.top >= from.bottom - from.height * 0.25)) continue;
         const score = Math.max(0, along) + side * (dir === 'left' || dir === 'right' ? 3 : 2);
         if (score < bestScore) {
             bestScore = score;
@@ -98,9 +109,55 @@ function nearest(from: DOMRect, dir: Dir, list: { el: HTMLElement; r: DOMRect }[
     return best;
 }
 
+/** Focus set by moving with the arrows (not by an app action or OK). */
+let movingFocus = false;
+
 function focusEl(el: HTMLElement) {
-    el.focus({ preventScroll: true });
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    movingFocus = true;
+    try {
+        el.focus({ preventScroll: true });
+    } finally {
+        movingFocus = false;
+    }
+    // Rows scroll just enough; the page keeps the focused row in the middle.
+    // Instantly: smooth scrolling falls behind on a TV (and stops short when
+    // the next press comes before it ends).
+    el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    // Within the first screen (the Home banner, a title's header): show the
+    // page from the top, as tvOS does, instead of centring the item.
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const r = el.getBoundingClientRect();
+    const top = r.top - document.body.getBoundingClientRect().top;
+    if (top + r.height < (innerHeight / zoom) * 0.85) window.scrollTo(0, 0);
+}
+
+// --- rows remember their focused item ------------------------------------------
+
+const rowMemory = new WeakMap<Element, HTMLElement>();
+/** Row (or item) → the item focus came from when it arrived from above / below. */
+const cameFromAbove = new WeakMap<Element, HTMLElement>();
+const cameFromBelow = new WeakMap<Element, HTMLElement>();
+
+/** The sideways-scrolling container an item sits in, if any. */
+function rowOf(el: Element): Element | null {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const o = getComputedStyle(p).overflowX;
+        if ((o === 'auto' || o === 'scroll') && p.scrollWidth > p.clientWidth + 1) return p;
+    }
+    return null;
+}
+
+function remember(el: HTMLElement) {
+    const row = rowOf(el);
+    if (row) rowMemory.set(row, el);
+}
+
+/** Moving up or down into a row: the item it last had, if it's still there. */
+function recalled(target: HTMLElement, current: Element | null): HTMLElement {
+    const row = rowOf(target);
+    if (!row || (current && row.contains(current))) return target;
+    const last = rowMemory.get(row);
+    return last && last.isConnected && visible(last) ? last : target;
 }
 
 /** The item to start from when nothing (or the page itself) has focus: top left. */
@@ -119,7 +176,15 @@ function move(dir: Dir): boolean {
         if (el) focusEl(el);
         return !!el;
     }
-    const next = nearest(active!.getBoundingClientRect(), dir, list, active);
+    // Reversing a vertical move goes back where you came from (as on tvOS).
+    const key = rowOf(active!) ?? active!;
+    const back = dir === 'up' ? cameFromAbove.get(key) : dir === 'down' ? cameFromBelow.get(key) : undefined;
+    let next = back && back.isConnected && visible(back) ? back : nearest(active!.getBoundingClientRect(), dir, list, active);
+    if (next && next !== back && (dir === 'up' || dir === 'down')) next = recalled(next, active);
+    if (next && (dir === 'up' || dir === 'down')) {
+        const nextKey = rowOf(next) ?? next;
+        (dir === 'down' ? cameFromAbove : cameFromBelow).set(nextKey, active!);
+    }
     if (next) focusEl(next);
     return !!next;
 }
@@ -139,8 +204,107 @@ function exitApp() {
     }
 }
 
+/** Elements that do something on OK by themselves. */
+function activatesOnEnter(el: Element) {
+    return el instanceof HTMLButtonElement || el instanceof HTMLAnchorElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement || el.tagName === 'SUMMARY';
+}
+
+const isTextField = (el: Element | null): el is HTMLInputElement | HTMLTextAreaElement =>
+    el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'range', 'submit', 'reset', 'file', 'color'].includes(el.type));
+
+/** Read-only while focus passes through (keeps the TV's keyboard closed). */
+function lock(el: HTMLInputElement | HTMLTextAreaElement) {
+    el.readOnly = true;
+    el.dataset.tvLocked = '';
+}
+function unlock(el: HTMLInputElement | HTMLTextAreaElement) {
+    el.readOnly = false;
+    delete el.dataset.tvLocked;
+}
+
+/** Keys the TV's on-screen keyboard sends when it closes. */
+const KEYBOARD_DONE = 65376;
+const KEYBOARD_CANCEL = 65385;
+
+/**
+ * Focus a page's main action when it opens (tvOS always has something
+ * focused): an element marked data-tv-focus, else the first item in the main
+ * content. Waits for content that's still loading; never takes focus away from
+ * something the person already moved to.
+ */
+export function focusPrimary(root: ParentNode = document.querySelector('main') ?? document) {
+    const started = Date.now();
+    const generation = ++primaryGeneration;
+    /** What this call focused itself (it may still trade it for the marked one). */
+    let ours: HTMLElement | null = null;
+    const attempt = () => {
+        if (generation !== primaryGeneration || pressedSince(started)) return;
+        const active = document.activeElement;
+        const free = !active || active === document.body || !document.contains(active) || active === ours;
+        // Something already has focus (a tab in the top bar keeps it, as on tvOS).
+        if (!free) return;
+        const marked = [...root.querySelectorAll<HTMLElement>('[data-tv-focus]')].find((el) => visible(el));
+        if (marked) {
+            if (marked !== active) focusEl(marked);
+            return;
+        }
+        if (!ours) {
+            const el = first(candidates().filter(({ el }) => root.contains(el)));
+            if (el) {
+                focusEl(el);
+                ours = el;
+            }
+        }
+        // The main action may still be loading (the Home banner): keep looking.
+        if (Date.now() - started < 4000) setTimeout(attempt, 250);
+    };
+    setTimeout(attempt, 150);
+}
+
+let primaryGeneration = 0;
+let lastPress = 0;
+const pressedSince = (t: number) => lastPress > t;
+
 export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
     document.documentElement.classList.add('tv');
+
+    // Text fields: arriving by the arrows doesn't start typing (read-only keeps
+    // the TV's keyboard closed); OK does. Focus the app gives a field itself
+    // (opening search, say) types right away.
+    // The focused item went away (the banner moved to its next title, a list
+    // re-rendered): focus what's now in its place, so focus never vanishes.
+    document.addEventListener('focusout', (e) => {
+        const gone = e.target as HTMLElement;
+        const rect = gone.getBoundingClientRect();
+        requestAnimationFrame(() => {
+            if (gone.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
+            const list = candidates();
+            if (!list.length) return;
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            let best = list[0];
+            let bestD = Infinity;
+            for (const c of list) {
+                const d = Math.hypot(c.r.left + c.r.width / 2 - cx, c.r.top + c.r.height / 2 - cy);
+                if (d < bestD) {
+                    bestD = d;
+                    best = c;
+                }
+            }
+            movingFocus = true;
+            best.el.focus({ preventScroll: true });
+            movingFocus = false;
+        });
+    });
+    document.addEventListener('focusin', (e) => {
+        const el = e.target as Element;
+        if (isTextField(el) && movingFocus && !el.readOnly) lock(el);
+        if (el instanceof HTMLElement) remember(el);
+    });
+    document.addEventListener('focusout', (e) => {
+        const el = e.target as Element;
+        if (isTextField(el) && el.dataset.tvLocked !== undefined) unlock(el);
+    });
     try {
         for (const k of REGISTER) tizen()?.tvinputdevice?.registerKey(k);
     } catch {
@@ -150,18 +314,41 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
     window.addEventListener(
         'keydown',
         (e) => {
+            lastPress = Date.now();
             if (e.defaultPrevented) return;
             // The player owns the arrows while the video (not a control) has focus.
             const playerOnVideo =
                 document.documentElement.classList.contains('player-active') &&
                 (document.activeElement === document.body || document.activeElement?.classList.contains('surface'));
 
+            const active = document.activeElement;
+
+            // OK on a text field that isn't typing yet: start typing.
+            if (e.key === 'Enter' && isTextField(active) && active.dataset.tvLocked !== undefined) {
+                e.preventDefault();
+                unlock(active);
+                active.blur();
+                active.focus();
+                return;
+            }
+            // OK on something that's clickable but not a button or link.
+            if (e.key === 'Enter' && active && active !== document.body && !activatesOnEnter(active) && !playerOnVideo) {
+                e.preventDefault();
+                (active as HTMLElement).click();
+                return;
+            }
+            // The TV's keyboard closed: arrows move focus again.
+            if ((e.keyCode === KEYBOARD_DONE || e.keyCode === KEYBOARD_CANCEL) && isTextField(active) && !active.readOnly) {
+                lock(active);
+                return;
+            }
+
             const dir = ARROWS[e.key];
             if (dir) {
                 if (playerOnVideo) return;
                 const el = document.activeElement;
-                // Text fields keep left/right for the cursor.
-                if ((dir === 'left' || dir === 'right') && el instanceof HTMLInputElement && el.type !== 'range' && el.type !== 'checkbox') return;
+                // A field being typed in keeps left/right for the cursor.
+                if ((dir === 'left' || dir === 'right') && isTextField(el) && el.dataset.tvLocked === undefined && !el.readOnly) return;
                 // Sliders keep left/right for their value.
                 if ((dir === 'left' || dir === 'right') && el instanceof HTMLInputElement && el.type === 'range') return;
                 if (move(dir)) e.preventDefault();
