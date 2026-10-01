@@ -955,6 +955,19 @@
         });
     }
 
+    /**
+     * TV: a prompt that appears over the video (Skip Intro, Up Next) takes
+     * focus from it, as on tvOS, so OK answers it; not while you're using the
+     * controls. When it goes, focus returns to the video ($lib/tv/remote.ts).
+     */
+    function tvPrompt(el: HTMLElement) {
+        if (!isTV) return;
+        setTimeout(() => {
+            const using = document.activeElement?.closest('.player footer, .player .top, [data-menu]');
+            if (!using) el.focus();
+        });
+    }
+
     /** TV: focus is on the video itself, not on one of the controls. */
     const onVideo = () => document.activeElement === surface || document.activeElement === document.body;
 
@@ -1174,6 +1187,7 @@
     {#if skipVisible && currentSegment}
         <button
             class="skip"
+            {@attach tvPrompt}
             onclick={() => skip(currentSegment!)}
             title={`${skipLabel[currentSegment.kind]} (Tab)`}
             out:fade={{ duration: 200 }}
@@ -1191,7 +1205,8 @@
         <div class="still" role="alertdialog" aria-labelledby="still-title" aria-describedby="still-sub">
             <p id="still-title" class="still-title">Are you still watching?</p>
             <p class="still-show">{heading}{#if subheading} · {subheading}{/if}</p>
-            <button class="still-button" onclick={keepWatching}>
+            <!-- TV: it asks, so it takes focus whatever had it. -->
+            <button class="still-button" {@attach (el) => void (isTV && setTimeout(() => el.focus()))} onclick={keepWatching}>
                 <Icon name="play" size={14} filled /> Continue Watching
             </button>
             <p id="still-sub" class="still-sub" aria-live="polite">
@@ -1207,14 +1222,15 @@
             {/if}
             <div class="next-body">
                 <span class="next-eyebrow">
-                    Up Next{#if autoplayIn != null}<span class="next-countdown"> · Playing in {Math.ceil(autoplayIn)}s</span>{/if}
+                    Up Next{#if autoplayIn != null}<span class="next-countdown">{' · '}Playing in {Math.ceil(autoplayIn)}s</span>{/if}
                 </span>
                 <span class="next-title">
-                    {#if model.nextVideo.season != null}S{model.nextVideo.season} · E{model.nextVideo.episode} · {/if}{model.nextVideo.title}
+                    {#if model.nextVideo.season != null}S{model.nextVideo.season} · E{model.nextVideo.episode}{' · '}{/if}{model.nextVideo.title}
                 </span>
                 <div class="next-actions">
                     <button
                         class="primary"
+                        {@attach tvPrompt}
                         class:counting={autoplayIn != null}
                         style:--left={autoplayIn != null && autoplayTotal > 0 ? autoplayIn / autoplayTotal : 0}
                         onclick={playNext}
@@ -1850,6 +1866,23 @@
     /* TV: the remote has its own volume. */
     :global(html.tv) .volume {
         display: none;
+    }
+    /* TV: inside tvOS's safe area (80 pt at the sides, 60 at the top and
+       bottom, about 60 and 44 of the zoomed page's units), where TVs don't
+       crop and everything reads from the couch. */
+    :global(html.tv) .top {
+        padding: 32px 60px 48px;
+    }
+    :global(html.tv) .bottom {
+        padding: 64px 60px 40px;
+    }
+    :global(html.tv) .skip {
+        right: 60px;
+        bottom: 142px;
+    }
+    :global(html.tv) .next {
+        right: 60px;
+        bottom: 144px;
     }
     /* Without the controls, Skip sits near the bottom instead of floating
        where the bar would be. */
