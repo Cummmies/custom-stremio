@@ -118,7 +118,7 @@
     <section>
         <h2>Account</h2>
         <div class="group">
-            <div class="row">
+            <div class="row account-row">
                 <div class="account">
                     <Avatar profile={myProfile} fallbackName={app.user?.email ?? '?'} size={48} />
                     <div>
@@ -133,7 +133,7 @@
                 {/if}
             </div>
             {#if myProfile}
-                <div class="row">
+                <div class="row stack">
                     <div>
                         <div class="title">Profile name</div>
                         <div class="sub">How this profile appears in the app.</div>
@@ -154,7 +154,7 @@
                 <div class="row">
                     <div>
                         <div class="title">Profile picture</div>
-                        <div class="sub">Saved on this PC.</div>
+                        <div class="sub">Syncs with your Stremio account.</div>
                     </div>
                     <PhotoControls uid={myProfile.uid} />
                 </div>
@@ -628,6 +628,38 @@
         .row > div:first-child {
             flex: 1;
             min-width: 0;
+        }
+    }
+    /* Phones: the account (picture, name, email) gets the full width with
+       its button underneath; the name field sits under its label. */
+    @media (max-width: 700px) {
+        .account-row {
+            flex-wrap: wrap;
+        }
+        .account {
+            flex: 1 1 100%;
+        }
+        .account > div {
+            min-width: 0;
+        }
+        .account .sub {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .account-row .btn {
+            flex: 1 1 100%;
+            height: 40px;
+        }
+        .row.stack {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+        }
+        .row.stack .name-input {
+            width: 100%;
+            height: 40px;
+            box-sizing: border-box;
         }
     }
 </style>

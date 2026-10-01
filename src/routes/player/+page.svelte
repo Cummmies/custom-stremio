@@ -109,7 +109,16 @@
     onMount(() => {
         document.documentElement.classList.add('player-active');
         // iPhone: landscape while watching, back to portrait after.
-        if (isIOS) invoke('plugin:mpv|orientation', { landscape: true }).catch(() => {});
+        const landscape = () => isIOS && invoke('plugin:mpv|orientation', { landscape: true }).catch(() => {});
+        landscape();
+        // Back from the app switcher: iOS may have reset the orientation and
+        // sizes, so ask for landscape again and bring the controls back up.
+        const onVisible = () => {
+            if (document.visibilityState !== 'visible') return;
+            landscape();
+            poke();
+        };
+        document.addEventListener('visibilitychange', onVisible);
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
         const offEvents = player.onEvent(onPlayerEvent);
         // Play/pause from the Windows media overlay or the keyboard's media keys.
@@ -140,6 +149,7 @@
             offEvents();
             offMedia.then((off) => off());
             offWindow.then((offs) => offs.forEach((off) => off()));
+            document.removeEventListener('visibilitychange', onVisible);
             if (isIOS) invoke('plugin:mpv|orientation', { landscape: false }).catch(() => {});
             if (isDesktop) invoke('media_clear').catch(() => {});
             if (isDesktop) invoke('discord_clear').catch(() => {});

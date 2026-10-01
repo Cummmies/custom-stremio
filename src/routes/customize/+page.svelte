@@ -843,4 +843,26 @@
             display: none;
         }
     }
+    /* Phones: the Undo notice spans the width above the tab bar. */
+    @media (max-width: 700px) {
+        .toast {
+            left: 12px;
+            right: 12px;
+            bottom: calc(var(--tabbar-h) + 12px);
+            translate: none;
+            gap: 12px;
+            padding: 8px 8px 8px 16px;
+            border-radius: 16px;
+        }
+        .toast span {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .toast button {
+            flex: none;
+        }
+    }
 </style>
