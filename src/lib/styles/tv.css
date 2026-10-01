@@ -26,50 +26,62 @@ html.tv :focus-visible {
     outline: none !important;
 }
 
-/* Posters and wide cards: lift, don't outline. */
-html.tv a.card {
-    transition: transform 0.16s ease-out;
-}
-html.tv a.card:focus {
-    transform: scale(1.07);
-    z-index: 2;
-}
-html.tv a.card:focus :is(.poster, .art) {
-    box-shadow:
-        0 0 0 3px #fff,
-        0 14px 32px rgb(0 0 0 / 0.75);
+/* tvOS focus, two kinds:
+   - Content (posters, wide cards, catalog tiles, profile pictures) rises
+     toward you: larger, with a soft, deep shadow under it. Nothing is drawn
+     around it: no rings or frames.
+   - Controls (buttons, tabs, fields) become a white platter with dark
+     content, lifted slightly.
+   The more specific rules come first and override the generic button rule
+   further down (they're scoped more tightly, so they win by specificity). */
+html.tv {
+    --tv-lift: 0 22px 36px -10px rgb(0 0 0 / 0.85);
+    --tv-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Catalog tiles (artwork behind a label): lift like cards. */
-html.tv .tiles a {
-    transition: transform 0.16s ease-out;
+/* Posters and wide cards. The cards' own desktop hover ring and nudge are
+   switched off. */
+html.tv a.card {
+    transition: transform 0.2s var(--tv-ease);
 }
-/* More specific than the white-button rule below, so the artwork shows. */
+html.tv a.card:focus {
+    transform: scale(1.1);
+    z-index: 2;
+}
+html.tv a.card :is(.poster, .art) {
+    transition: box-shadow 0.2s var(--tv-ease);
+}
+html.tv a.card:focus :is(.poster, .art) {
+    transform: none !important;
+    box-shadow: var(--tv-lift) !important;
+}
+
+/* Catalog tiles (artwork behind a label). */
+html.tv .tiles a {
+    transition: transform 0.2s var(--tv-ease);
+}
 html.tv nav.tiles a:focus {
-    background: rgb(255 255 255 / 0.14) !important;
+    background: rgb(255 255 255 / 0.16) !important;
     color: #fff !important;
-    border-color: #fff !important;
-    transform: scale(1.06);
-    box-shadow:
-        0 0 0 2px #fff,
-        0 14px 32px rgb(0 0 0 / 0.75) !important;
+    border-color: transparent !important;
+    transform: scale(1.08);
+    box-shadow: var(--tv-lift) !important;
     z-index: 2;
 }
 html.tv nav.tiles a:focus img {
-    opacity: 0.6;
+    opacity: 0.7;
 }
 html.tv nav.tiles a:focus span {
     color: #fff !important;
 }
 
-/* Rows in a scrolling list (episodes): lit with a frame drawn inside, not
-   white and enlarged, which the list would clip and which hides the text.
-   More specific than the white-button rule below. */
+/* Episode rows: a lighter platter (they sit in a scrolling list, which would
+   clip anything that grows). */
 html.tv ol.episodes button.main:focus {
-    background: rgb(255 255 255 / 0.14) !important;
+    background: rgb(255 255 255 / 0.16) !important;
     color: var(--label) !important;
     border-color: transparent !important;
-    box-shadow: inset 0 0 0 3px #fff !important;
+    box-shadow: none !important;
     transform: none;
 }
 html.tv ol.episodes button.main:focus span {
@@ -83,15 +95,49 @@ html.tv ol.episodes button.main:focus svg {
     color: #fff !important;
 }
 
-/* Buttons, tabs, chips, links: turn white (the tvOS focused button), with a
-   slight lift. Text and icons inside go dark. */
+/* Who's watching: the picture rises, the name brightens. */
+html.tv dialog.picker button.tile:focus {
+    background: transparent !important;
+    color: var(--label) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    transform: none;
+}
+html.tv dialog.picker button.tile:focus :is(span, svg) {
+    color: inherit !important;
+}
+html.tv dialog.picker .tile .face {
+    border-radius: 50%;
+    transition:
+        transform 0.2s var(--tv-ease),
+        box-shadow 0.2s var(--tv-ease);
+}
+html.tv dialog.picker button.tile:focus .face {
+    transform: scale(1.14);
+    box-shadow: var(--tv-lift);
+}
+/* The picker's own desktop focus (a ring, a nudge) is off. */
+html.tv dialog.picker button.tile:focus .face .avatar,
+html.tv dialog.picker button.tile:focus .face.add {
+    transform: none !important;
+    box-shadow: none !important;
+}
+html.tv dialog.picker .tile .name {
+    color: var(--label-2);
+}
+html.tv dialog.picker button.tile:focus .name {
+    color: #fff !important;
+    font-weight: 600;
+}
+
+/* Buttons, tabs, chips, links: the white platter. */
 html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem'], select):focus {
     background: #fff !important;
     color: #111 !important;
     border-color: #fff !important;
-    box-shadow: 0 8px 22px rgb(0 0 0 / 0.55) !important;
-    transform: scale(1.05);
-    transition: transform 0.12s ease-out;
+    box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.7) !important;
+    transform: scale(1.06);
+    transition: transform 0.15s var(--tv-ease);
 }
 html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem']):focus :is(svg, span, strong, small) {
     color: #111 !important;
@@ -103,16 +149,20 @@ html.tv header .pill a.active:not(:focus) {
     color: #fff !important;
 }
 
-/* Text fields: a white frame; typing starts with OK (remote.ts). */
+/* Text fields: white with dark text (tvOS); typing starts with OK
+   (remote.ts). */
 html.tv :is(input, textarea):focus {
-    box-shadow: 0 0 0 3px #fff !important;
-    border-color: #fff !important;
+    background: #fff !important;
+    color: #111 !important;
+    border-color: transparent !important;
+    box-shadow: 0 10px 22px -8px rgb(0 0 0 / 0.7) !important;
 }
-
-/* The top bar's search field: its own pill is the frame (TopNav.svelte). */
-html.tv header .search input:focus {
-    border-color: #fff !important;
-    box-shadow: none !important;
+html.tv :is(input, textarea):focus::placeholder {
+    color: #666;
+}
+/* The top bar's search pill: its magnifier sits on the field. */
+html.tv header .search:focus-within .circle {
+    color: #111 !important;
 }
 
 /* No keyboard shortcuts on a remote. */

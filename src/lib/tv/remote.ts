@@ -60,6 +60,9 @@ function scope(): ParentNode {
 function candidates(): { el: HTMLElement; r: DOMRect }[] {
     const out: { el: HTMLElement; r: DOMRect }[] = [];
     for (const el of scope().querySelectorAll<HTMLElement>(FOCUSABLE)) {
+        // tabindex="-1": reachable by code only (the logo on the TV, a
+        // collapsed field).
+        if (el.tabIndex < 0) continue;
         const r = visible(el);
         if (r) out.push({ el, r });
     }

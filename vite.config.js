@@ -70,8 +70,11 @@ function tvViewportUnits() {
   const unit = /(-?(?:\d+\.?\d*|\.\d+))[dsl]?v([hw])\b/g;
   return {
     postcssPlugin: "tv-viewport-units",
-    /** @param {{ value: string }} decl */
+    /** @param {{ prop: string, value: string }} decl */
     Declaration(decl) {
+      // The units' own definitions (tv.css): rewritten, they'd refer to
+      // themselves, which makes them empty.
+      if (decl.prop.startsWith("--tv-v")) return;
       // Already converted (the fallback inside var() would match again).
       if (decl.value.includes("--tv-v")) return;
       if (unit.test(decl.value)) {

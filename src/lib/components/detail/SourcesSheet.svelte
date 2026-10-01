@@ -20,6 +20,7 @@
         streams,
         notice = null,
         anime = false,
+        passThrough = false,
         onclose,
     }: {
         title: string;
@@ -29,6 +30,12 @@
         notice?: string | null;
         /** Anime reads "Dubbed" / "Dual Audio" as an English dub. */
         anime?: boolean;
+        /**
+         * The title page was only a step on the way to playing (a Play button
+         * elsewhere): the player takes its place, so Back from the player
+         * returns to where you were.
+         */
+        passThrough?: boolean;
         onclose: () => void;
     } = $props();
 
@@ -87,6 +94,10 @@
         easyQueue.clear();
         easyQueue.handPicked = link?.videoId ?? null;
         if (!link || !url) return;
+        if (passThrough) {
+            goto(playerHref(link, url), { replaceState: true });
+            return;
+        }
         // Coming back from the player should land on the title, not reopen this
         // sheet: take the picked video out of this page's address first.
         const here = new URL(appUrl(page.url));

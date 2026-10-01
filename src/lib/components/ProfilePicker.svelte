@@ -10,6 +10,8 @@
     import Icon from './Icon.svelte';
     import Avatar from './Avatar.svelte';
     import Toggle from './Toggle.svelte';
+    import LinkLogin from './LinkLogin.svelte';
+    import { isTV } from '$lib/platform';
     import logo from '$lib/assets/logo.png';
 
     let dialog = $state<HTMLDialogElement>();
@@ -57,6 +59,14 @@
     let confirmRemove = $state(false);
     let fileInput = $state<HTMLInputElement>();
     let nameInput = $state<HTMLInputElement>();
+    /**
+     * TV: add an account with a code (QR) instead of typing an email and
+     * password with the remote; its name and color default, and Manage
+     * Profiles changes them.
+     */
+    let withCode = $state(false);
+    /** Who was logged in when adding started: a different account is the new one. */
+    let addStartUid: string | null = null;
 
     const editing = $derived(profiles.list.find((p) => p.uid === editingUid) ?? null);
     const draft = $derived({ name: draftName || email || '?', color: draftColor, avatar: draftAvatar });
@@ -69,6 +79,15 @@
         draftAvatar = undefined;
         email = password = error = '';
         busy = false;
+        withCode = isTV;
+        addStartUid = currentUid;
+        pendingDraft = withCode ? { name: '', color: draftColor } : null;
+        if (!withCode) focusName();
+    }
+
+    function useEmail() {
+        withCode = false;
+        pendingDraft = null;
         focusName();
     }
 
@@ -136,7 +155,10 @@
     );
     $effect(() => {
         const uid = app.user?._id;
-        if (!pendingDraft || !uid || !profiles.get(uid) || app.user?.email?.toLowerCase() !== email.trim().toLowerCase()) return;
+        // Logged in to the account being added: by email, that email; by code,
+        // whichever account isn't the one from before.
+        const isNew = withCode ? uid !== addStartUid : app.user?.email?.toLowerCase() === email.trim().toLowerCase();
+        if (!pendingDraft || !uid || !profiles.get(uid) || !isNew) return;
         const { name, color, avatar } = pendingDraft;
         pendingDraft = null;
         profiles.update(uid, { ...(name ? { name } : {}), color, ...(avatar ? { avatar } : {}) });
@@ -242,6 +264,17 @@
             <button class="icon-btn" onclick={back} aria-label="Back" disabled={busy}><Icon name="back" size={20} /></button>
         </header>
 
+        {#if view === 'add' && withCode}
+            <div class="content form code">
+                <p class="eyebrow">Another Stremio account</p>
+                <h1 id="picker-title">Add Profile</h1>
+                <LinkLogin />
+                <div class="actions">
+                    <button type="button" class="pill" onclick={useEmail}>Use Email Instead</button>
+                    <button type="button" class="pill" onclick={back}>Cancel</button>
+                </div>
+            </div>
+        {:else}
         <form class="content form" onsubmit={submit}>
             {#if view === 'add'}
                 <p class="eyebrow">Another Stremio account</p>
@@ -324,6 +357,7 @@
                 {/if}
             {/if}
         </form>
+        {/if}
     {/if}
 </dialog>
 

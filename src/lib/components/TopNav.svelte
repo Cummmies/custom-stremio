@@ -93,7 +93,8 @@
 </script>
 
 <header class="nav" class:scrolled>
-    <a class="brand" href="/" aria-label="Stremio home"><img src={logo} alt="" width="28" height="28" />Stremio</a>
+    <!-- TV: not a stop for the remote (Home is the first tab). -->
+    <a class="brand" href="/" aria-label="Stremio home" tabindex={isTV ? -1 : undefined}><img src={logo} alt="" width="28" height="28" />Stremio</a>
 
     <nav class="pill" aria-label="Sections">
         {#each sections as s (s.href)}
