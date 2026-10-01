@@ -1,6 +1,9 @@
 // Keeps this app's own data with your Stremio account: your profile's name,
-// color and picture, your Home layout (Customize Home) and the settings that
-// aren't about the device. Log in on another PC or your phone and it's there.
+// color and picture, your Home layout (Customize Home) and all its settings.
+// Log in on another PC or your phone and it's there. Settings about the device
+// (upscaling, HDR/audio passthrough, volume, window pausing) are kept per kind
+// of device and only applied to that kind: a new PC gets your PC's, a new
+// phone your phone's.
 //
 // Stremio has no place for an app's own data, but it does sync your addons,
 // manifests included. So the data rides in an addon of its own ("Custom
@@ -15,7 +18,11 @@ import { core } from '$lib/core';
 import { app } from '$lib/app.svelte';
 import { profiles } from '$lib/profiles.svelte';
 import { homeLayout, type Layout } from '$lib/homeLayout.svelte';
-import { playerPrefs, type SyncedPrefs } from '$lib/player/prefs.svelte';
+import { playerPrefs, type DevicePrefs, type SyncedPrefs } from '$lib/player/prefs.svelte';
+import { isDesktop, isIOS } from '$lib/platform';
+
+/** Which kind of device this is, for device settings. */
+const DEVICE_KIND = isDesktop ? 'desktop' : isIOS ? 'ios' : 'web';
 
 export const SYNC_ADDON_URL = 'https://sync.custom-stremio.invalid/manifest.json';
 const SYNC_ADDON_ID = 'community.customstremio.sync';
@@ -30,6 +37,8 @@ type Payload = {
     profile?: { name: string; color: string; avatar?: string };
     home?: Layout;
     prefs?: SyncedPrefs;
+    /** Device settings, by kind of device ('desktop', 'ios', …). */
+    devices?: Record<string, DevicePrefs>;
 };
 
 type Descriptor = {
@@ -92,6 +101,8 @@ class CloudSync {
     #uid: string | null = null;
     /** This device's synced data as last sent or received; equal means nothing to send. */
     #last = '';
+    /** Other kinds of devices' settings from the account, passed along untouched. */
+    #devices: Record<string, DevicePrefs> = {};
     #timer: ReturnType<typeof setTimeout> | undefined;
     #started = false;
 
@@ -129,6 +140,7 @@ class CloudSync {
             profile: p ? { name: p.name, color: p.color, avatar: p.avatar } : undefined,
             home: $state.snapshot(homeLayout.layout),
             prefs: playerPrefs.synced(),
+            device: playerPrefs.device(),
         });
     }
 
@@ -148,6 +160,9 @@ class CloudSync {
             homeLayout.replace(remote.home);
         }
         if (remote.prefs) playerPrefs.applySynced(remote.prefs);
+        this.#devices = remote.devices ?? {};
+        const mine = this.#devices[DEVICE_KIND];
+        if (mine) playerPrefs.applyDevice(mine);
         localStorage.setItem(stampKey(uid), String(remote.updated));
         this.#last = this.#snapshot(uid);
     }
@@ -160,9 +175,10 @@ class CloudSync {
 
         const state = this.#snapshot(uid);
         if (state === this.#last) return;
-        const data = JSON.parse(state) as Omit<Payload, 'v' | 'updated'>;
+        const { device, ...data } = JSON.parse(state) as Omit<Payload, 'v' | 'updated'> & { device: DevicePrefs };
         const updated = Date.now();
-        const payload: Payload = { v: 1, updated, ...data };
+        this.#devices = { ...(remote?.devices ?? this.#devices), [DEVICE_KIND]: device };
+        const payload: Payload = { v: 1, updated, ...data, devices: this.#devices };
         if (payload.profile?.avatar) payload.profile.avatar = await smallAvatar(payload.profile.avatar);
         if (app.user?._id !== uid) return;
         core.dispatch({
@@ -177,7 +193,7 @@ class CloudSync {
                         version: '1.0.0',
                         name: 'Custom Stremio Sync',
                         description:
-                            'Keeps Custom Stremio’s profile picture, Home rows and settings the same on all your devices. It has no catalogs or streams.',
+                            'Added by the Custom Stremio app to keep your profile picture, Home rows and app settings the same on every device you log in to. It stores those settings in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
                         contactEmail: encode(payload),
                         types: [],
                         resources: [],

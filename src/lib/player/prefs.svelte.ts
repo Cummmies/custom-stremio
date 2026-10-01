@@ -148,6 +148,18 @@ class PlayerPrefs {
         this.#save(patch);
     }
 
+    /** This device's own preferences (see DEVICE_PREFS). Reactive. */
+    device(): DevicePrefs {
+        return Object.fromEntries(DEVICE_PREFS.map((k) => [k, this.#p[k]])) as DevicePrefs;
+    }
+
+    /** Takes device preferences saved by another device of the same kind. */
+    applyDevice(p: Partial<DevicePrefs>) {
+        const patch: Partial<Prefs> = {};
+        for (const k of DEVICE_PREFS) if (k in p) (patch as any)[k] = p[k];
+        this.#save(patch);
+    }
+
     #save(patch: Partial<Prefs>) {
         this.#p = { ...this.#p, ...patch };
         try {
@@ -159,11 +171,15 @@ class PlayerPrefs {
 export const playerPrefs = new PlayerPrefs();
 
 /**
- * Preferences that follow your account between devices (cloudSync.svelte.ts).
- * The rest depend on the device: its screen, speakers, window and volume.
+ * Everything here follows your account (cloudSync.svelte.ts). These are the
+ * same on every device; DEVICE_PREFS are kept per kind of device (desktop,
+ * iPhone…) and only reach devices of that kind, since they're about its
+ * screen, speakers and window.
  */
 export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence'] as const;
 export type SyncedPrefs = Pick<Prefs, (typeof SYNCED_PREFS)[number]>;
+export const DEVICE_PREFS = ['upscaler', 'hdrPassthrough', 'audioPassthrough', 'volume', 'pauseOnMinimize', 'pauseOnLostFocus'] as const;
+export type DevicePrefs = Pick<Prefs, (typeof DEVICE_PREFS)[number]>;
 
 export const upscalerLabels: Record<Upscaler, string> = {
     off: 'Off',
