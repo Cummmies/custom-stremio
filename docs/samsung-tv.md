@@ -43,6 +43,23 @@ model code, e.g. `QE55Q80TAT` → the `T` is 2020.)
   core uses them, it has to be rebuilt without them. This is the biggest
   unknown and the first thing to check.
 
+## Our TV: UN55TU8200 (2020, Tizen 5.5, Chromium 69)
+
+Found so far:
+
+- **Stremio's core won't load as published.** `stremio-core-web` 0.63's
+  WebAssembly uses reference types (Chromium 96+), non-trapping float-to-int
+  and bulk memory (75+); Chromium 69 has only the 2017 basics. Fix: build the
+  core ourselves for plain WebAssembly (an older Rust toolchain or
+  `-C target-cpu=mvp` with `-Zbuild-std`, wasm-bindgen without reference
+  types), then binaryen's lowering passes (`--signext-lowering`,
+  `--llvm-nontrapping-fptoint-lowering`, `--llvm-memory-copy-fill-lowering`)
+  for anything left. Can be a CI job.
+- The app's JavaScript has to be compiled down to Chromium 69 and flex `gap`
+  replaced, as described below.
+- The test module in `tv/` (see `tv/README.md`) checks the rest on the TV:
+  AVPlay inside TizenBrew, formats, thumbnails, network, the Node service.
+
 ## 1. Platform
 
 - `src/lib/platform.ts`: add `isTV` (the `tizen` global exists) next to
