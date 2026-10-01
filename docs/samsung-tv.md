@@ -14,8 +14,23 @@ describes what was built.
   `build/` with `tv/wgt/config.xml` into `CustomStremio.wgt`, signs it with the
   certificate from `tv-cert.yml`, and attaches it to the **tv** release, which
   it marks as the latest (TizenBrew Installer takes the latest release's
-  `.wgt`). Every push that touches the app rebuilds it; updating the TV means
-  installing again.
+  `.wgt`). Every push that touches the app rebuilds it.
+- **Over-the-air updates** (`src/lib/tv/webUpdate.ts`, `tv/boot.js`): each
+  build's `_app/` files also go to the `tv-web` branch, and its manifest
+  (`tv-web.json`: version, native level, entry files, file list, commit) to
+  the tv release. The app checks it at launch and when it comes back to the
+  front, downloads a newer build into its storage (`wgt-private/web/<version>`;
+  files the installed app already has are copied, not downloaded), and offers
+  **Update ready · Reload**. `tv/boot.js`, in the installed `index.html`,
+  starts the newest copy: the page stays the installed one (Samsung's APIs and
+  permissions) and only the app's code comes from storage. A copy that fails to
+  load, or doesn't confirm it started, is dropped for the installed one.
+  `tv/wgt/native-api.txt`: bump it when the installed part changes (config.xml
+  privileges, boot.js); older installs then ignore new bundles until
+  reinstalled.
+- **Login with a code** (`src/lib/components/LinkLogin.svelte`), the default
+  on the TV: Stremio's link API through the core's `auth_link` model, a QR code
+  and a code to enter on another device; the TV logs in by itself.
 - **Platform**: `isTV` (`src/lib/platform.ts`): no streaming server (debrid
   links only), its own synced device settings (`tv`), skip lookups fetched
   directly (the installed app isn't bound by CORS).
@@ -30,8 +45,11 @@ describes what was built.
   button/link/field in that direction, Back sends Escape (closes menus, leaves
   the player) and otherwise goes back or exits at Home, the media keys reach
   the player. Focus outline in `src/lib/styles/tv.css`.
-- **Not yet**: TV-sized layout (it uses the desktop layout at 1920×1080),
-  over-the-air updates, link-code login.
+- **Older engine**: about Chromium 94. `src/lib/polyfills.ts` adds the newer
+  built-ins the app and Svelte use (`structuredClone`, `findLast`, …) and the
+  TV build targets `chrome94`. Error pages show the real error
+  (`src/hooks.client.ts`).
+- **Not yet**: a TV-sized layout (it uses the desktop layout at 1920×1080).
 
 ## The short version
 

@@ -44,7 +44,7 @@
             lastCheck = Date.now();
             updates.check({ quiet: true });
         };
-        if (isIOS && import.meta.env.PROD) document.addEventListener('visibilitychange', onVisible);
+        if ((isIOS || isTV) && import.meta.env.PROD) document.addEventListener('visibilitychange', onVisible);
         // iOS ignores user-scalable=no in some cases; pinch gestures are ours to refuse.
         const noPinch = (e: Event) => e.preventDefault();
         if (isIOS) document.addEventListener('gesturestart', noPinch);

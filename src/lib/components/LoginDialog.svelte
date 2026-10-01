@@ -2,6 +2,8 @@
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
     import Icon from './Icon.svelte';
+    import LinkLogin from './LinkLogin.svelte';
+    import { isTV } from '$lib/platform';
 
     let { onclose }: { onclose: () => void } = $props();
 
@@ -12,6 +14,8 @@
     let password = $state('');
     let error = $state('');
     let busy = $state(false);
+    // On a TV, typing with the remote is painful: log in with a code by default.
+    let withCode = $state(isTV);
     let dialog = $state<HTMLDialogElement>();
 
     // Native <dialog> gives focus trapping, Escape to close and a top layer for free.
@@ -49,12 +53,19 @@
         </button>
         {#if adding}
             <h2 id="login-title">Add a Profile</h2>
-            <p class="hint">Log in with another Stremio account. It’s saved on this PC, so you can switch between profiles anytime without logging in again.</p>
+            <p class="hint">Log in with another Stremio account. It’s saved on this {isTV ? 'TV' : 'PC'}, so you can switch between profiles anytime without logging in again.</p>
         {:else}
             <h2 id="login-title">Log In to Stremio</h2>
             <p class="hint">Your library, addons and watch progress stay in sync with your other Stremio apps.</p>
         {/if}
 
+        {#if withCode}
+            <LinkLogin />
+            <div class="actions">
+                <button type="button" class="secondary" onclick={() => (withCode = false)}>Use Email Instead</button>
+                <button type="button" class="secondary" onclick={() => dialog?.close()}>Cancel</button>
+            </div>
+        {:else}
         <label>
             <span>Email</span>
             <input type="email" autocomplete="email" bind:value={email} required disabled={busy} />
@@ -67,17 +78,19 @@
         {#if error}<p class="error" role="alert">{error}</p>{/if}
 
         <div class="actions">
+            <button type="button" class="secondary link-btn" onclick={() => (withCode = true)}>Log In With a Code</button>
             <button type="button" class="secondary" onclick={() => dialog?.close()}>Cancel</button>
             <button type="submit" class="primary" disabled={busy || !email || !password}>
                 {busy ? 'Logging In…' : 'Log In'}
             </button>
         </div>
+        {/if}
     </form>
 </dialog>
 
 <style>
     dialog {
-        width: min(400px, calc(100vw - 32px));
+        width: min(560px, calc(100vw - 32px));
         padding: 0;
         border: 1px solid var(--separator);
         border-radius: var(--radius-l);
@@ -175,6 +188,9 @@
     }
     .secondary {
         background: var(--fill);
+    }
+    .link-btn {
+        margin-right: auto;
     }
     .secondary:hover {
         background: var(--fill-hover);

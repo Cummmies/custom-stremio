@@ -3,10 +3,12 @@
 //
 // Desktop: the whole app (Tauri's updater). iOS: the web side only, over the
 // air (src-tauri/src/web_update.rs); a Reload switches to it. Native changes
-// on iOS still come as a new .ipa.
+// on iOS still come as a new .ipa. Samsung TV: the same idea
+// (src/lib/tv/webUpdate.ts); installed-app changes need a reinstall.
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
-import { inTauri, isDesktop, isIOS } from '$lib/platform';
+import { inTauri, isDesktop, isIOS, isTV } from '$lib/platform';
+import * as tvUpdate from '$lib/tv/webUpdate';
 
 type Phase = 'idle' | 'checking' | 'downloading' | 'ready' | 'up-to-date' | 'error';
 
@@ -21,15 +23,16 @@ class Updates {
     #update: { downloadAndInstall: Function; download: Function; install: () => Promise<void> } | null = null;
 
     /** Whether this update installs with a page reload (iOS) rather than a restart. */
-    readonly reloads = isIOS;
+    readonly reloads = isIOS || isTV;
 
     get supported() {
-        return isDesktop || isIOS;
+        return isDesktop || isIOS || (isTV && tvUpdate.canUpdate());
     }
 
     async check({ quiet = false } = {}) {
         if (!this.supported || this.phase === 'checking' || this.phase === 'downloading') return;
         if (isIOS) return this.#checkWeb(quiet);
+        if (isTV) return this.#checkTV(quiet);
         this.current ??= await getVersion().catch(() => null);
         this.phase = 'checking';
         this.error = null;
@@ -72,7 +75,27 @@ class Updates {
         }
     }
 
+    async #checkTV(quiet: boolean) {
+        this.phase = 'checking';
+        this.error = null;
+        try {
+            const ready = await tvUpdate.checkAndDownload((p) => {
+                this.phase = 'downloading';
+                this.progress = p;
+            });
+            this.version = ready ? tvUpdate.versionLabel(ready) : null;
+            this.phase = ready ? 'ready' : 'up-to-date';
+        } catch (e) {
+            this.phase = quiet ? 'idle' : 'error';
+            this.error = String(e);
+        }
+    }
+
     async restartToUpdate() {
+        if (isTV) {
+            if (this.phase === 'ready') location.reload();
+            return;
+        }
         if (this.reloads) {
             if (this.phase !== 'ready') return;
             await invoke('web_update_apply');
@@ -94,4 +117,5 @@ export const updates = new Updates();
  */
 export function confirmWebBundle() {
     if (isIOS && inTauri) invoke('web_update_confirm').catch(() => {});
+    if (isTV) tvUpdate.confirmStarted();
 }

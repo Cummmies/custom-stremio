@@ -4,6 +4,8 @@
 #   the TV's WebAssembly), packages it as an installable TV app (.wgt) signed
 #   with the certificate from tv-cert.yml, and publishes it as the repository's
 #   latest release, where TizenBrew Installer finds it: Cummmies/custom-stremio.
+#   The same build is the over-the-air update (src/lib/tv/webUpdate.ts): its
+#   files go to the tv-web branch and its manifest, tv-web.json, to the release.
 # purge: the tv/ test module is loaded by TizenBrew through jsDelivr, which
 #   caches a branch's files for up to 12 hours; this clears that cache.
 name: TV
@@ -20,6 +22,7 @@ on:
       - 'vite.config.js'
       - 'scripts/build-core-tv.sh'
       - 'scripts/strip-wasm-section.py'
+      - 'scripts/tv-boot.mjs'
       - 'tv/**'
       - '.github/workflows/tv.yml'
   workflow_dispatch:
@@ -110,9 +113,9 @@ jobs:
           # Hash routing allows no page options; ssr = false is implied there.
           sed -i '/export const ssr/d' src/routes/+layout.ts
           npm run build
-          # The app opens from a local file: start from paths relative to it.
-          sed -i 's#"/_app/#"./_app/#g; s#href="/favicon#href="./favicon#' build/index.html
-          grep -c '"./_app/' build/index.html
+          # Relative paths, the boot script (installed or downloaded copy), the
+          # update manifest. The version is the commit's time, like iOS's.
+          node scripts/tv-boot.mjs build "$(git log -1 --format=%ct)"
 
       - name: Install Tizen Studio (command line)
         run: |
@@ -184,19 +187,35 @@ jobs:
           name: CustomStremio-tv
           path: CustomStremio.wgt
 
-      # TizenBrew Installer installs the first .wgt of the latest release.
+      # TizenBrew Installer installs the first .wgt of the latest release; the
+      # installed app updates from tv-web.json (files on the tv-web branch).
       - name: Publish
         if: steps.secrets.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The update's files first, so the manifest never points at missing ones.
+          rm -rf "$RUNNER_TEMP/tv-web" && mkdir "$RUNNER_TEMP/tv-web"
+          cp -r build/_app "$RUNNER_TEMP/tv-web/"
+          (
+            cd "$RUNNER_TEMP/tv-web"
+            git init -q -b tv-web
+            git add -A
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "TV web bundle for ${GITHUB_SHA::7}"
+            git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" tv-web
+            git rev-parse HEAD > ../tv-web-commit
+          )
+          jq --arg c "$(cat "$RUNNER_TEMP/tv-web-commit")" '.commit = $c' build/tv-web.json > tv-web.json
+          jq '{version, native, commit, files: (.files | length)}' tv-web.json
+
           if ! gh release view tv >/dev/null 2>&1; then
             gh release create tv --target "$GITHUB_SHA" --latest --title "Samsung TV" \
               --notes "The Samsung TV app. Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
           fi
           gh release edit tv --title "Samsung TV" --latest \
             --notes "The Samsung TV app ($(git log -1 --format=%h)). Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
-          gh release upload tv CustomStremio.wgt --clobber
+          gh release upload tv CustomStremio.wgt tv-web.json --clobber
 
   purge:
     runs-on: ubuntu-latest
