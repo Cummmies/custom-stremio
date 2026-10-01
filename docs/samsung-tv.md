@@ -54,10 +54,26 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
 - **Stremio's core is blocked by one thing**: its WebAssembly uses reference
   types (`externref`), which this V8 (9.4) only has behind a flag. Bulk
   memory, non-trapping float-to-int, sign extension and multi-value are
-  fine. Fix: build `stremio-core-web` without reference types (Rust
-  `-C target-feature=-reference-types`, strip `target_features` so
-  wasm-bindgen doesn't use `externref`, then `wasm-opt` without
-  reference types to re-encode). Can be a CI job.
+  fine. **Fixed by rebuilding it** (tested: validates without reference
+  types, same exports, the app runs on it in Chromium):
+
+  ```sh
+  git clone https://github.com/Stremio/stremio-core && cd stremio-core
+  git checkout stremio-core-web-v0.63.2 && cd stremio-core-web
+  RUSTFLAGS="-C target-feature=-reference-types" \
+    cargo build --release --target wasm32-unknown-unknown -F wasm
+  # Rust's prebuilt std still marks reference-types in the target_features
+  # section, which makes wasm-bindgen use externref; drop that section.
+  python3 strip_section.py ../target/wasm32-unknown-unknown/release/stremio_core_web.wasm \
+    stremio_core_web.wasm target_features
+  cargo install wasm-bindgen-cli --version 0.2.121 --locked
+  wasm-bindgen --target web --no-typescript --out-dir out stremio_core_web.wasm
+  ```
+
+  wasm-bindgen also re-encodes the `call_indirect`s the prebuilt std wrote
+  in the newer form. Output: 6.5 MB (published: 5.1 MB after `wasm-opt`;
+  optional). The same build works everywhere, so desktop and iOS can use it
+  too.
 - **No AVPlay in a TizenBrew module**: `webapis.js` loads (`productinfo`,
   `avinfo`, `tvinfo`, `network`…, HDR TV: yes) but has no `avplay`, even
   with a player element on the page.
