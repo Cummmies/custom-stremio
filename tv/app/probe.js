@@ -7,9 +7,9 @@
     // --- where files are ---------------------------------------------------------
     // Under TizenBrew the page is http://127.0.0.1:8081/module/<gh%2F...>/app/index.html;
     // jsDelivr serves the same files directly (with Range requests and CORS).
-    var moduleMatch = location.pathname.match(/\/module\/([^/]+)\//);
+    var moduleMatch = location.pathname.match(/\/module\/([^/]+)\/(.*\/)?[^/]*$/);
     var CDN_BASE = moduleMatch
-        ? 'https://cdn.jsdelivr.net/' + decodeURIComponent(moduleMatch[1]) + '/app/'
+        ? 'https://cdn.jsdelivr.net/' + decodeURIComponent(moduleMatch[1]) + '/' + (moduleMatch[2] || '')
         : new URL('./', location.href).href;
     var CORE_WASM = 'https://cdn.jsdelivr.net/npm/@stremio/stremio-core-web@0.63.2/stremio_core_web_bg.wasm';
     var SERVICE = 'http://127.0.0.1:8090';
