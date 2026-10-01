@@ -43,22 +43,32 @@ model code, e.g. `QE55Q80TAT` → the `T` is 2020.)
   core uses them, it has to be rebuilt without them. This is the biggest
   unknown and the first thing to check.
 
-## Our TV: UN55TU8200 (2020, Tizen 5.5, Chromium 69)
+## Our TV: UN55TU8200 (2020, Tizen 5.5)
 
-Found so far:
+First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
 
-- **Stremio's core won't load as published.** `stremio-core-web` 0.63's
-  WebAssembly uses reference types (Chromium 96+), non-trapping float-to-int
-  and bulk memory (75+); Chromium 69 has only the 2017 basics. Fix: build the
-  core ourselves for plain WebAssembly (an older Rust toolchain or
-  `-C target-cpu=mvp` with `-Zbuild-std`, wasm-bindgen without reference
-  types), then binaryen's lowering passes (`--signext-lowering`,
-  `--llvm-nontrapping-fptoint-lowering`, `--llvm-memory-copy-fill-lowering`)
-  for anything left. Can be a CI job.
-- The app's JavaScript has to be compiled down to Chromium 69 and flex `gap`
-  replaced, as described below.
-- The test module in `tv/` (see `tv/README.md`) checks the rest on the TV:
-  AVPlay inside TizenBrew, formats, thumbnails, network, the Node service.
+- **The browser is newer than Tizen 5.5's original Chromium 69**: optional
+  chaining, class/private fields, static blocks, `Array.at`, flex `gap`,
+  `:focus-visible` and module workers all work (about Chromium 94; no
+  `structuredClone`). The app's code and CSS need little or no lowering.
+- **Stremio's core is blocked by one thing**: its WebAssembly uses reference
+  types (`externref`), which this V8 (9.4) only has behind a flag. Bulk
+  memory, non-trapping float-to-int, sign extension and multi-value are
+  fine. Fix: build `stremio-core-web` without reference types (Rust
+  `-C target-feature=-reference-types`, strip `target_features` so
+  wasm-bindgen doesn't use `externref`, then `wasm-opt` without
+  reference types to re-encode). Can be a CI job.
+- **AVPlay isn't exposed** to a TizenBrew module: `webapis.js` loads
+  (`productinfo`, `avinfo` work, HDR TV: yes) but `webapis.avplay` is
+  missing. Being checked: whether it appears with a player element.
+  Otherwise HTML5 video, which reports H.264, HEVC, AV1, VP9, AAC, AC-3,
+  E-AC-3 and Opus (MSE too); not DTS, and MKV by type check.
+- **Node.js service**: Node 16.5 (V8 9.4), WebAssembly yes, its proxy
+  works (IntroDB needs it, CORS). Being checked: the core compiled in Node
+  with `--experimental-wasm-reftypes`.
+- **Memory**: 1 GB, little free. Keep the TV build lean.
+- Network from the page: Cinemeta, the Stremio API and TheIntroDB work
+  directly; IntroDB needs the service proxy.
 
 ## 1. Platform
 
