@@ -26,6 +26,8 @@
     const inPlayer = $derived(page.url.pathname === '/player');
 
     onMount(() => {
+        // The TV's start-up report (tv/boot.js) stays hidden once this is set.
+        document.documentElement.setAttribute('data-started', '1');
         if (isTV) {
             installHashLinks();
             startRemote({ atHome: () => page.url.pathname === '/', back: () => history.back() });

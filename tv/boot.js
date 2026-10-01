@@ -11,6 +11,70 @@
 // Plain ES2017: this must run on any TV.
 (function () {
     'use strict';
+
+    // --- start-up report -----------------------------------------------------
+    // If the app hasn't started after a while, show what happened on screen (a
+    // TV has no developer console): the steps, and any errors.
+    var steps = [];
+    var t0 = Date.now();
+    function step(text) {
+        steps.push(((Date.now() - t0) / 1000).toFixed(1) + 's  ' + text);
+        if (reportEl) render();
+    }
+    window.__tvStep = step;
+    window.addEventListener('error', function (e) {
+        step('ERROR ' + (e.message || e) + (e.filename ? ' @ ' + e.filename.split('/').slice(-2).join('/') + ':' + e.lineno : ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        step('REJECTED ' + ((r && (r.stack || r.message)) || r));
+    });
+    var origError = console.error;
+    console.error = function () {
+        try {
+            step('console.error ' + [].map.call(arguments, function (a) { return (a && (a.stack || a.message)) || String(a); }).join(' ').slice(0, 400));
+        } catch (e) {
+            /* never break logging */
+        }
+        return origError.apply(console, arguments);
+    };
+
+    var reportEl = null;
+    function render() {
+        reportEl.querySelector('pre').textContent = steps.join('\n');
+    }
+    function report(title) {
+        if (reportEl || document.documentElement.getAttribute('data-started')) return;
+        reportEl = document.createElement('div');
+        reportEl.setAttribute('style', 'position:fixed;inset:40px;z-index:99999;background:#1b1b24;color:#eee;font:20px/1.4 sans-serif;padding:32px;border:3px solid #f87171;border-radius:16px;overflow:hidden');
+        reportEl.innerHTML = '<h2 style="margin:0 0 12px;color:#f87171"></h2><pre style="white-space:pre-wrap;font:17px/1.35 monospace;margin:0 0 16px;max-height:780px;overflow:hidden"></pre>';
+        reportEl.querySelector('h2').textContent = title + ' (version ' + chosen.version + (chosen === installed ? ', installed' : ', downloaded') + ')';
+        var reload = document.createElement('button');
+        reload.textContent = 'Reload';
+        var useInstalled = document.createElement('button');
+        useInstalled.textContent = 'Use Installed Version';
+        [reload, useInstalled].forEach(function (b) {
+            b.setAttribute('style', 'font:22px sans-serif;padding:12px 24px;margin-right:16px;border-radius:10px;border:3px solid transparent;background:#333;color:#fff');
+            b.addEventListener('focus', function () { b.style.borderColor = '#fff'; });
+            b.addEventListener('blur', function () { b.style.borderColor = 'transparent'; });
+            reportEl.appendChild(b);
+        });
+        reload.onclick = function () { location.reload(); };
+        useInstalled.onclick = function () {
+            localStorage.removeItem('tv.bundle');
+            location.reload();
+        };
+        document.body.appendChild(reportEl);
+        render();
+        reload.focus();
+        document.addEventListener('keydown', function (e) {
+            if (e.keyCode === 37 || e.keyCode === 39) (document.activeElement === reload ? useInstalled : reload).focus();
+        });
+    }
+    setTimeout(function () { report('The app didn’t start'); }, 15000);
+    window.__tvReport = report;
+
+    // --- which copy to start ---------------------------------------------------
     var entry = window.__tvEntry;
     var installed = { version: entry.version, base: './', start: entry.start, app: entry.app, css: entry.css || [] };
     var chosen = installed;
@@ -39,7 +103,9 @@
     }
 
     window.__tvBundle = { version: chosen.version, downloaded: chosen !== installed };
+    step('boot: version ' + chosen.version + (chosen === installed ? ' (installed)' : ' (downloaded)') + ', ' + navigator.userAgent);
 
+    var importer = null;
     function load(b) {
         var links = [];
         (b.css || []).forEach(function (href) {
@@ -49,7 +115,12 @@
             document.head.appendChild(l);
             links.push(l);
         });
-        return Promise.all([import(b.base + b.start), import(b.base + b.app)]).catch(function (e) {
+        step('importing ' + b.base + b.start);
+        return Promise.all([importer(b.base + b.start), importer(b.base + b.app)]).then(function (mods) {
+            step('imported; starting SvelteKit');
+            return mods;
+        }, function (e) {
+            step('import failed: ' + ((e && (e.stack || e.message)) || e));
             links.forEach(function (l) {
                 l.remove();
             });
@@ -57,8 +128,15 @@
         });
     }
 
-    window.__tvBoot = function () {
-        if (chosen === installed) return load(installed);
+    /** `doImport` is import() from the page's inline script. */
+    window.__tvBoot = function (doImport) {
+        importer = doImport;
+        if (chosen === installed) {
+            return load(installed).catch(function (e) {
+                report('The app couldn’t load');
+                throw e;
+            });
+        }
         try {
             localStorage.setItem('tv.bundle.trial', String(chosen.version));
         } catch (e) {

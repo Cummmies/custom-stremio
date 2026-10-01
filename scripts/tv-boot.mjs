@@ -27,7 +27,15 @@ if (!start || !app) throw new Error('index.html: SvelteKit entry imports not fou
 
 const boot = /Promise\.all\(\[\s*import\("[^"]+"\),\s*import\("[^"]+"\)\s*\]\)/;
 if (!boot.test(html)) throw new Error('index.html: SvelteKit start not found');
-html = html.replace(boot, 'window.__tvBoot()');
+// The import()s stay in the page's own inline script, as SvelteKit wrote them
+// (what's known to load on the TV); tv/boot.js only picks the paths.
+html = html.replace(boot, 'window.__tvBoot(function (url) { return import(url); })');
+// Errors from SvelteKit's start show in the start-up report (tv/boot.js).
+if (!html.includes('kit.start(app, element);')) throw new Error('index.html: kit.start not found');
+html = html.replace(
+    'kit.start(app, element);',
+    "window.__tvStep('kit.start'); Promise.resolve(kit.start(app, element)).then(function () { window.__tvStep('kit started'); }, function (e) { window.__tvStep('kit.start failed: ' + (e && (e.stack || e.message) || e)); window.__tvReport('The app couldn’t start'); });"
+);
 html = html.replace(/[ \t]*<link href="[^"]*" rel="modulepreload">\n?/g, '');
 // The first stylesheets come from whichever copy starts (tv/boot.js adds them).
 const css = [...html.matchAll(/<link href="\.\/(_app\/[^"]+\.css)" rel="stylesheet">/g)].map((m) => m[1]);
