@@ -154,11 +154,9 @@ Once logged in, settings sync brings the profile, Home layout and settings over.
 Three ways to sideload:
 
 - **Tizen Studio** (official): described below.
-- **TizenBrew** (recommended for daily use): a homebrew app installed once
-  (with Tizen Studio or its installer); after that it adds and updates
-  "modules" from GitHub or npm, no PC needed. This app can be published as a
-  TizenBrew module, which also solves updates (section 8). Its install guides
-  cover 2023–2025 TVs (Tizen 6–8).
+- **TizenBrew** (the plan; already on the TV): a homebrew app that adds and
+  updates "modules" published on npm, no PC needed: green button → enter the
+  package name. This app becomes one (see "TizenBrew module" below).
 - **From an Android phone** with Termux and `sdb`, no PC (community scripts).
 
 USB-stick installs only work on pre-Tizen (pre-2015) Samsung TVs.
@@ -184,8 +182,8 @@ models; reinstalling fixes it.
 
 Three options:
 
-- **TizenBrew module**: TizenBrew checks for new module versions itself, so
-  publishing a new build is the whole update. Simplest if TizenBrew is used.
+- **TizenBrew module** (the plan): TizenBrew picks up new module versions by
+  itself, so publishing a new build to npm is the whole update.
 - **Packaged app** (the `.wgt` holds the web build): every update means
   reinstalling from a PC. Simple, works offline.
 - **Hosted app** (recommended once it works): the `.wgt` only holds a small
@@ -194,11 +192,42 @@ Three options:
   launch with no reinstall. It needs the same signature check and a fallback
   copy inside the `.wgt` for when the network is down.
 
+## TizenBrew module
+
+An "app" module is an npm package whose `package.json` says where the page is:
+
+```json
+{
+  "name": "@<npm-user>/custom-stremio-tv",
+  "version": "0.1.0",
+  "packageType": "app",
+  "appName": "Custom Stremio",
+  "appPath": "app/index.html",
+  "keys": ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaFastForward", "MediaRewind", "MediaStop"]
+}
+```
+
+`app/` is the TV build of `src/`. A `tv.yml` workflow builds it, bumps the
+version and runs `npm publish` on every push to `main` (needs an npm account
+and an `NPM_TOKEN` repository secret). On the TV: TizenBrew → green button →
+`@<npm-user>/custom-stremio-tv`. Pinning `…@1.2.3` or a `dev` tag also works.
+
+The catch: a page loaded through TizenBrew doesn't get all of Tizen's APIs
+(Jellyfin's module ships an adapter that stubs `tizen.application`,
+`systeminfo` and `tvinputdevice`; TizenBrew registers the `keys` itself).
+Whether **`webapis.avplay`** is reachable from a module is the first thing to
+test. If it isn't:
+
+- play with the HTML5 `<video>` element instead (also hardware decoded on
+  Tizen, but fewer formats and weaker audio/subtitle track switching), or
+- ship a real `.wgt` (full APIs) for the player and keep TizenBrew for
+  installing it.
+
 ## Phases
 
 | Phase | What | Rough size |
 | --- | --- | --- |
-| 0 | Find the TV's Tizen version; package the current build as a `.wgt` (or TizenBrew module); check the core's WebAssembly loads; try the `<video>` + canvas thumbnails | an evening |
+| 0 | A test TizenBrew module that reports the TV's Chromium, whether the core's WebAssembly loads, whether `webapis.avplay` exists, and tries `<video>` + canvas thumbnails | an evening |
 | 1 | Build target and CSS fallbacks for the TV's Chromium; `isTV`; hide unsupported settings | 1–2 days |
 | 2 | AVPlay backend: play, seek, tracks, addon subtitles, errors | 2–4 days |
 | 3 | Remote navigation and the 10-foot layout | 3–5 days |
