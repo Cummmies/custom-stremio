@@ -2,7 +2,7 @@
 
 export type Upscaler = 'off' | 'high-quality' | 'rtx';
 
-type Prefs = {
+export type Prefs = {
     upscaler: Upscaler;
     /** Send HDR to an HDR display instead of tone-mapping it down. */
     hdrPassthrough: boolean;
@@ -136,6 +136,18 @@ class PlayerPrefs {
         this.#save({ discordPresence: v });
     }
 
+    /** The account-level preferences (see SYNCED_PREFS). Reactive. */
+    synced(): SyncedPrefs {
+        return Object.fromEntries(SYNCED_PREFS.map((k) => [k, this.#p[k]])) as SyncedPrefs;
+    }
+
+    /** Takes account-level preferences from another device. */
+    applySynced(p: Partial<SyncedPrefs>) {
+        const patch: Partial<Prefs> = {};
+        for (const k of SYNCED_PREFS) if (k in p) (patch as any)[k] = p[k];
+        this.#save(patch);
+    }
+
     #save(patch: Partial<Prefs>) {
         this.#p = { ...this.#p, ...patch };
         try {
@@ -145,6 +157,13 @@ class PlayerPrefs {
 }
 
 export const playerPrefs = new PlayerPrefs();
+
+/**
+ * Preferences that follow your account between devices (cloudSync.svelte.ts).
+ * The rest depend on the device: its screen, speakers, window and volume.
+ */
+export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence'] as const;
+export type SyncedPrefs = Pick<Prefs, (typeof SYNCED_PREFS)[number]>;
 
 export const upscalerLabels: Record<Upscaler, string> = {
     off: 'Off',

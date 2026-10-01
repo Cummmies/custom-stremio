@@ -768,6 +768,12 @@
         .long {
             display: none;
         }
+        /* iOS sheet: dismiss on the leading edge, the action (Edit) trailing. */
+        .bar-actions {
+            flex: 1;
+            flex-direction: row-reverse;
+            justify-content: space-between;
+        }
         .short {
             display: inline;
         }

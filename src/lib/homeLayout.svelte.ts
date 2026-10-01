@@ -12,7 +12,7 @@ import type { Catalog } from '$lib/core/types';
 export type RowEntry = { key: string; hidden?: boolean; name?: string };
 export type Merge = { name: string; parts: string[] };
 /** `dismissed`: combine suggestions the person said no to. */
-type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[] };
+export type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[] };
 
 export type SpecialKey = 'cw';
 export const SPECIAL_NAMES: Record<SpecialKey, string> = { cw: 'Continue Watching' };
@@ -81,6 +81,14 @@ class HomeLayout {
         fn(next);
         this.layout = next;
         this.undoLabel = label;
+        this.#save();
+    }
+
+    /** The current profile's layout, as it came from another device. */
+    replace(layout: Layout) {
+        this.layout = structuredClone(layout);
+        this.#undo = null;
+        this.undoLabel = null;
         this.#save();
     }
 

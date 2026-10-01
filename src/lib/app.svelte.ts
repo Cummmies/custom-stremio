@@ -4,6 +4,7 @@ import { watchServer } from '$lib/core/server';
 import type { Ctx, Library, MetaItemPreview, ServerStatus } from '$lib/core/types';
 import { profiles } from '$lib/profiles.svelte';
 import { anime } from '$lib/anime.svelte';
+import { cloudSync } from '$lib/cloudSync.svelte';
 
 class AppState {
     ctx = $state<Ctx | null>(null);
@@ -29,6 +30,8 @@ class AppState {
         // "Ask who's watching" on launch, when there's more than one profile.
         if (profiles.askOnLaunch && profiles.list.length > 1) profiles.pickerOpen = true;
         core.watch<Library>('library', (s) => (this.library = s));
+        // Profile picture, Home rows and settings follow your account (via an addon).
+        cloudSync.start();
         watchServer((s) => (this.server = s));
 
         // The whole library stays loaded; screens filter it locally, which is instant.

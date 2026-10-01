@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { SYNC_ADDON_URL } from '$lib/cloudSync.svelte';
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
     import type { Loadable } from '$lib/core/types';
@@ -43,7 +44,8 @@
     });
     $effect(() => () => core.dispatch({ action: 'Unload' }, 'remote_addons'));
 
-    const installedList = $derived(app.ctx?.profile.addons ?? []);
+    // The sync addon carries this app's own data (cloudSync.svelte.ts); nothing to manage here.
+    const installedList = $derived((app.ctx?.profile.addons ?? []).filter((a) => a.transportUrl !== SYNC_ADDON_URL));
     const installedUrls = $derived(new Set(installedList.map((a) => a.transportUrl)));
 
     const remoteContent = $derived(remote?.catalog?.content ?? null);
