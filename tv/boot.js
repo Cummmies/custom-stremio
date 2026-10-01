@@ -104,19 +104,34 @@
 
     window.__tvBundle = { version: chosen.version, downloaded: chosen !== installed };
     step('boot: version ' + chosen.version + (chosen === installed ? ' (installed)' : ' (downloaded)') + ', ' + navigator.userAgent);
+    step('page: ' + location.href + '  base: ' + document.baseURI);
 
     var importer = null;
+    /**
+     * A file of a copy as a full URL. On the TV, import() of a relative path
+     * resolves against the filesystem root (file:///_app/…), not the page, so
+     * everything is resolved against the page here first.
+     */
+    function url(b, path) {
+        return new URL(b.base + path, location.href).href;
+    }
     function load(b) {
         var links = [];
-        (b.css || []).forEach(function (href) {
+        function add(rel, path) {
             var l = document.createElement('link');
-            l.rel = 'stylesheet';
-            l.href = b.base + href;
+            l.rel = rel;
+            l.href = url(b, path);
             document.head.appendChild(l);
             links.push(l);
+        }
+        (b.css || []).forEach(function (href) {
+            add('stylesheet', href);
         });
-        step('importing ' + b.base + b.start);
-        return Promise.all([importer(b.base + b.start), importer(b.base + b.app)]).then(function (mods) {
+        // As SvelteKit's own page has them: the TV fetches these reliably.
+        add('modulepreload', b.start);
+        add('modulepreload', b.app);
+        step('importing ' + url(b, b.start));
+        return Promise.all([importer(url(b, b.start)), importer(url(b, b.app))]).then(function (mods) {
             step('imported; starting SvelteKit');
             return mods;
         }, function (e) {
