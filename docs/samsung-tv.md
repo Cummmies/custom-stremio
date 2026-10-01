@@ -191,6 +191,21 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
   the copy that started (installed or downloaded). Testing this needs the
   app opened from files (`file://`), not from a local web server, which is
   how earlier Chromium 69 tests missed it.
+  SvelteKit's page sets a settings object whose name changes with every
+  build (`__sveltekit_xxxx`); a downloaded copy runs on the installed page,
+  so the script first finds the page's object and gives it its own name
+  (a tiny module bundled first), or a newer copy fails in `kit.start`.
+- **Remote and player (tvOS)**: on the video, OK pauses, Left/Right skip
+  10 s, Up/Down bring up the controls on the timeline; on the timeline
+  Left/Right skip (30 s when held), Down reaches the buttons; the controls
+  fade after a few seconds and focus goes back to the video. The volume
+  slider is hidden (the remote has its own).
+- **Seek-bar thumbnails**: not available on the TV. They need frames of the
+  video, and Samsung's player (AVPlay) draws on a hardware plane the app
+  can't read; a `<video>` drawn to a canvas is black too. Options: the
+  streaming server on a PC making them with ffmpeg, or WebCodecs on the
+  newer engine (only some launches, and only if the TV decodes the codec
+  there): untested.
 - **The remote's OK sends a keydown and no keypress**, and buttons only click
   on keypress, so Play and other buttons did nothing. `$lib/tv/remote.ts`
   clicks the focused control on OK.

@@ -1,6 +1,7 @@
 <script lang="ts">
     // Home, Movies and Series share this layout; `type` narrows it to one kind.
     import { onMount } from 'svelte';
+    import { isTV } from '$lib/platform';
     import { core } from '$lib/core';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { backgroundOf } from '$lib/core/art';
@@ -12,6 +13,10 @@
     import { catalogKey, homeLayout, type BoardCatalog } from '$lib/homeLayout.svelte';
     import Icon from './Icon.svelte';
     import EmptyState from './EmptyState.svelte';
+
+    // TV: fixed (an inline clamp() is lost on the TV's Chromium 69, and vw is
+    // off under the TV's zoom); about as tall as a poster, like tvOS's Up Next.
+    const cwWidth = isTV ? '300px' : 'clamp(240px, 21vw, 320px)';
 
     let { type = null }: { type?: 'movie' | 'series' | null } = $props();
 
@@ -106,7 +111,7 @@
         >
             {#snippet special(key)}
                 {#if key === 'cw' && cwItems.length > 0}
-                    <Shelf title={resolved.find((r) => r.key === 'cw')?.name ?? 'Continue Watching'} href="/library" itemWidth="clamp(240px, 21vw, 320px)">
+                    <Shelf title={resolved.find((r) => r.key === 'cw')?.name ?? 'Continue Watching'} href="/library" itemWidth={cwWidth}>
                         {#each cwItems as item (item._id)}
                             <WideCard {item} />
                         {/each}

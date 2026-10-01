@@ -48,6 +48,11 @@ html = html.replace(/[ \t]*<link href="[^"]*" rel="modulepreload">\n?/g, '');
 // The first stylesheets come from whichever copy starts (tv/boot.js adds them).
 const css = [...html.matchAll(/<link href="\.\/(_app\/[^"]+\.css)" rel="stylesheet">/g)].map((m) => m[1]);
 html = html.replace(/[ \t]*<link href="\.\/_app\/[^"]+\.css" rel="stylesheet">\n?/g, '');
+// SvelteKit's settings object (its base path), set by the page, has a name
+// that changes with every build. A downloaded copy runs on the installed
+// page, so the script first finds the page's object under its own name.
+const kitGlobal = /(__sveltekit_[a-z0-9]+) = \{/.exec(html)?.[1];
+if (!kitGlobal) throw new Error('index.html: SvelteKit settings object not found');
 const script = await bundle();
 html = html.replace(
     /<meta charset="utf-8" \/>/,
@@ -70,9 +75,14 @@ console.log(`TV boot: version ${version}, native ${native}, ${files.length} file
 async function bundle() {
     const root = resolve(dir);
     const entry = join(root, '_app/tv-entry.js');
+    const alias = join(root, '_app/tv-alias.js');
+    writeFileSync(
+        alias,
+        `var own = ${JSON.stringify(kitGlobal)};\nif (!window[own]) for (var k in window) if (/^__sveltekit_/.test(k) && window[k] && 'base' in window[k]) { window[own] = window[k]; break; }\n`
+    );
     writeFileSync(
         entry,
-        `import * as kit from './${start.slice('_app/'.length)}';\nimport * as app from './${app.slice('_app/'.length)}';\nwindow.__tvApp = { kit, app };\n`
+        `import './tv-alias.js';\nimport * as kit from './${start.slice('_app/'.length)}';\nimport * as app from './${app.slice('_app/'.length)}';\nwindow.__tvApp = { kit, app };\n`
     );
     const out = join(root, '_app/immutable/tv/app.js');
     const b = await rolldown({
@@ -102,5 +112,6 @@ async function bundle() {
     renameSync(out, join(root, name));
     // Not part of the app: only the bundle's input.
     rmSync(entry);
+    rmSync(alias);
     return name;
 }

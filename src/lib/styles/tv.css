@@ -40,6 +40,28 @@ html.tv a.card:focus :is(.poster, .art) {
         0 14px 32px rgb(0 0 0 / 0.75);
 }
 
+/* Catalog tiles (artwork behind a label): lift like cards. */
+html.tv .tiles a {
+    transition: transform 0.16s ease-out;
+}
+/* More specific than the white-button rule below, so the artwork shows. */
+html.tv nav.tiles a:focus {
+    background: rgb(255 255 255 / 0.14) !important;
+    color: #fff !important;
+    border-color: #fff !important;
+    transform: scale(1.06);
+    box-shadow:
+        0 0 0 2px #fff,
+        0 14px 32px rgb(0 0 0 / 0.75) !important;
+    z-index: 2;
+}
+html.tv nav.tiles a:focus img {
+    opacity: 0.6;
+}
+html.tv nav.tiles a:focus span {
+    color: #fff !important;
+}
+
 /* Buttons, tabs, chips, links: turn white (the tvOS focused button), with a
    slight lift. Text and icons inside go dark. */
 html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem'], select):focus {
@@ -78,6 +100,14 @@ html.tv header .search:focus-within {
 /* No keyboard shortcuts on a remote. */
 html.tv [data-menu] kbd {
     display: none;
+}
+
+/* The player's timeline, focused: thicker, with its knob (tvOS). */
+html.tv .seek:focus .track {
+    height: 8px;
+}
+html.tv .seek:focus .thumb {
+    transform: scale(1.3);
 }
 
 /* The video surface in the player: never a highlight over the picture. */

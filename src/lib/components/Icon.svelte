@@ -63,9 +63,29 @@
 
 <script lang="ts">
     let { name, size = 18, filled = false }: { name: IconName; size?: number; filled?: boolean } = $props();
+
+    /**
+     * TV on Chromium 69 (html.tv-legacy, tv/boot.js): flex `gap` doesn't exist
+     * there. scripts/tv-legacy-css.mjs adds margins between elements, but a
+     * label right next to an icon ("▶ Play") is text, not an element, so the
+     * icon takes the gap as a margin itself.
+     */
+    function legacyGap(svg: SVGSVGElement) {
+        if (!document.documentElement.classList.contains('tv-legacy')) return;
+        const apply = () => {
+            const gap = svg.parentElement ? getComputedStyle(svg.parentElement).columnGap : '';
+            const space = gap && gap !== 'normal' ? gap : '6px';
+            const text = (n: Node | null) => n?.nodeType === Node.TEXT_NODE && !!n.textContent?.trim();
+            svg.style.marginRight = text(svg.nextSibling) ? space : '';
+            svg.style.marginLeft = text(svg.previousSibling) ? space : '';
+        };
+        // Siblings are in place after this tick.
+        requestAnimationFrame(apply);
+    }
 </script>
 
 <svg
+    {@attach legacyGap}
     width={size}
     height={size}
     viewBox="0 0 24 24"

@@ -299,6 +299,12 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
         const rect = gone.getBoundingClientRect();
         requestAnimationFrame(() => {
             if (gone.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
+            // In the player, the video itself takes focus (OK pauses, arrows seek).
+            const video = document.querySelector<HTMLElement>('.player .surface');
+            if (video) {
+                video.focus({ preventScroll: true });
+                return;
+            }
             const list = candidates();
             if (!list.length) return;
             const cx = rect.left + rect.width / 2;
@@ -367,7 +373,7 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
                 // A field being typed in keeps left/right for the cursor.
                 if ((dir === 'left' || dir === 'right') && isTextField(el) && el.dataset.tvLocked === undefined && !el.readOnly) return;
                 // Sliders keep left/right for their value.
-                if ((dir === 'left' || dir === 'right') && el instanceof HTMLInputElement && el.type === 'range') return;
+                if ((dir === 'left' || dir === 'right') && ((el instanceof HTMLInputElement && el.type === 'range') || el?.getAttribute('role') === 'slider')) return;
                 if (move(dir)) e.preventDefault();
                 return;
             }

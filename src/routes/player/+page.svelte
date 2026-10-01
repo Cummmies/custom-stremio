@@ -777,6 +777,8 @@
             if (player.paused || menu.open) return poke();
             controlsVisible = false;
             document.documentElement.classList.add('player-idle');
+            // TV: with the controls gone, focus goes back to the video.
+            if (isTV && document.activeElement?.closest('.player footer')) surface?.focus();
         }, 2600);
     }
 
@@ -926,6 +928,8 @@
     const onVideo = () => document.activeElement === surface || document.activeElement === document.body;
 
     function onkeydown(e: KeyboardEvent) {
+        // TV: any press keeps the controls up, moving between them included.
+        if (isTV && !onVideo()) poke();
         // Already handled (the TV remote moved focus between controls).
         if (e.defaultPrevented || menu.open || e.target instanceof HTMLInputElement) return;
         const k = e.key.toLowerCase();
@@ -948,11 +952,12 @@
         else if (k === ' ' || k === 'k') player.togglePause();
         else if (k === 'arrowright') player.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
         else if (k === 'arrowleft') player.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
-        // TV: up goes to the controls (the volume is the TV's own).
-        else if (k === 'arrowup' && isTV) {
+        // TV: up or down brings up the controls on the timeline, as on tvOS
+        // (left/right there skip; down again reaches the buttons).
+        else if ((k === 'arrowup' || k === 'arrowdown') && isTV) {
             poke();
-            document.querySelector<HTMLElement>('.player footer button, .player footer [tabindex]')?.focus();
-        } else if (k === 'arrowdown' && isTV) poke();
+            document.querySelector<HTMLElement>('.player footer .seek')?.focus();
+        }
         else if (k === 'enter' && isTV) player.togglePause();
         else if (k === 'arrowup') player.setVolume(player.volume + 5);
         else if (k === 'arrowdown') player.setVolume(player.volume - 5);
@@ -1800,6 +1805,10 @@
     /* The middle has play/pause and ±10s; the phone's buttons do volume. */
     .touch .bar .big,
     .touch .volume {
+        display: none;
+    }
+    /* TV: the remote has its own volume. */
+    :global(html.tv) .volume {
         display: none;
     }
     /* Without the controls, Skip sits near the bottom instead of floating
