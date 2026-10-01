@@ -8,11 +8,19 @@
 //   no modulepreload links, and SvelteKit's start goes through tv/boot.js
 //   (window.__tvBoot), which picks the installed or a downloaded copy.
 // - tv-boot.js: tv/boot.js.
+// - _app/immutable/tv/app.HASH.js: the app as one classic script. The TV's
+//   built-in Chromium 69 won't run JavaScript modules from files (it wants a
+//   JavaScript MIME type, and a file has none), so the TV loads this instead
+//   of SvelteKit's modules. Each module's import.meta.url becomes its own
+//   address (window.__tvUrl, set by tv/boot.js for the copy that starts), so
+//   the core's worker and WebAssembly and each page's CSS are found as before.
 // - tv-web.json: the update manifest: version, native API level, entry files
 //   and every file under _app/ (what an update downloads). tv.yml adds the
 //   commit the files can be fetched from.
-import { readFileSync, writeFileSync, readdirSync, statSync, copyFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync, writeFileSync, readdirSync, statSync, copyFileSync, rmSync, renameSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { rolldown } from 'rolldown';
 
 const [dir = 'build', versionArg] = process.argv.slice(2);
 const version = Number(versionArg ?? Math.floor(Date.now() / 1000));
@@ -40,9 +48,10 @@ html = html.replace(/[ \t]*<link href="[^"]*" rel="modulepreload">\n?/g, '');
 // The first stylesheets come from whichever copy starts (tv/boot.js adds them).
 const css = [...html.matchAll(/<link href="\.\/(_app\/[^"]+\.css)" rel="stylesheet">/g)].map((m) => m[1]);
 html = html.replace(/[ \t]*<link href="\.\/_app\/[^"]+\.css" rel="stylesheet">\n?/g, '');
+const script = await bundle();
 html = html.replace(
     /<meta charset="utf-8" \/>/,
-    `<meta charset="utf-8" />\n    <script>window.__tvEntry = ${JSON.stringify({ version, native, start, app, css })};</script>\n    <script src="./tv-boot.js"></script>`
+    `<meta charset="utf-8" />\n    <script>window.__tvEntry = ${JSON.stringify({ version, native, start, app, css, script })};</script>\n    <script src="./tv-boot.js"></script>`
 );
 writeFileSync(join(dir, 'index.html'), html);
 copyFileSync('tv/boot.js', join(dir, 'tv-boot.js'));
@@ -54,5 +63,44 @@ function walk(d) {
     });
 }
 const files = walk(join(dir, '_app')).map((p) => ({ path: relative(dir, p).split('\\').join('/'), size: statSync(p).size }));
-writeFileSync(join(dir, 'tv-web.json'), JSON.stringify({ version, native, start, app, css, files }, null, 1));
-console.log(`TV boot: version ${version}, native ${native}, ${files.length} files, entry ${start}`);
+writeFileSync(join(dir, 'tv-web.json'), JSON.stringify({ version, native, start, app, css, script, files }, null, 1));
+console.log(`TV boot: version ${version}, native ${native}, ${files.length} files, entry ${start}, script ${script}`);
+
+/** SvelteKit's entry modules and everything they import, as one classic script. */
+async function bundle() {
+    const root = resolve(dir);
+    const entry = join(root, '_app/tv-entry.js');
+    writeFileSync(
+        entry,
+        `import * as kit from './${start.slice('_app/'.length)}';\nimport * as app from './${app.slice('_app/'.length)}';\nwindow.__tvApp = { kit, app };\n`
+    );
+    const out = join(root, '_app/immutable/tv/app.js');
+    const b = await rolldown({
+        input: entry,
+        logLevel: 'warn',
+        // Chromium 69 (the minifier would otherwise write ?. and the like).
+        transform: { target: 'chrome69' },
+        plugins: [
+            {
+                name: 'tv-import-meta',
+                transform(code, id) {
+                    // Vite preloads a page's JavaScript files as modules; here
+                    // they're all in this script already, so only CSS is left.
+                    code = code.replace('=>i.map(i=>d[i])', '=>i.map(i=>d[i]).filter(function(x){return /\\.css$/.test(x)})');
+                    if (!code.includes('import.meta')) return code;
+                    const rel = JSON.stringify(relative(root, id).split('\\').join('/'));
+                    return code.replace(/import\.meta\.url/g, `window.__tvUrl(${rel})`).replace(/import\.meta\.resolve/g, '(void 0)');
+                },
+            },
+        ],
+    });
+    await b.write({ file: out, format: 'iife', codeSplitting: false, minify: true });
+    await b.close();
+    if (readFileSync(out, 'utf8').includes('import.meta')) throw new Error('tv bundle: import.meta left in the classic script');
+    const hash = createHash('sha256').update(readFileSync(out)).digest('hex').slice(0, 10);
+    const name = `_app/immutable/tv/app.${hash}.js`;
+    renameSync(out, join(root, name));
+    // Not part of the app: only the bundle's input.
+    rmSync(entry);
+    return name;
+}

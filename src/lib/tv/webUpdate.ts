@@ -19,10 +19,12 @@ type Manifest = {
     start: string;
     app: string;
     css: string[];
+    /** The app as one classic script (scripts/tv-boot.mjs). */
+    script?: string;
     files: { path: string; size: number }[];
 };
 
-type Entry = { version: number; native: number; start: string; app: string; css: string[] };
+type Entry = { version: number; native: number; start: string; app: string; css: string[]; script?: string };
 
 declare global {
     interface Window {
@@ -73,7 +75,7 @@ export async function checkAndDownload(onProgress?: (fraction: number) => void):
     const root = `wgt-private/web/${m.version}`;
     await download(m, root, onProgress);
     const base = fs().toURI(root).replace(/\/?$/, '/');
-    localStorage.setItem('tv.bundle', JSON.stringify({ version: m.version, native: m.native, start: m.start, app: m.app, css: m.css, base }));
+    localStorage.setItem('tv.bundle', JSON.stringify({ version: m.version, native: m.native, start: m.start, app: m.app, css: m.css, script: m.script, base }));
     void cleanUp(m.version);
     return m.version;
 }

@@ -152,7 +152,7 @@
 
     // --- which copy to start ---------------------------------------------------
     var entry = window.__tvEntry;
-    var installed = { version: entry.version, base: './', start: entry.start, app: entry.app, css: entry.css || [] };
+    var installed = { version: entry.version, base: './', start: entry.start, app: entry.app, css: entry.css || [], script: entry.script };
     var chosen = installed;
 
     function failed(version) {
@@ -190,7 +190,7 @@
     } catch (e) {
         modern = false;
     }
-    step('engine: ' + (modern ? 'newer (reads ?. and class fields)' : 'OLD (no ?. or class fields): the app can’t run on it'));
+    step('engine: ' + (modern ? 'newer (Chromium 94)' : 'built-in (Chromium 69)'));
 
     var importer = null;
     /**
@@ -213,7 +213,9 @@
         (b.css || []).forEach(function (href) {
             add('stylesheet', href);
         });
-        // As SvelteKit's own page has them: the TV fetches these reliably.
+        if (b.script) return loadScript(b, links);
+        // Copies from before the classic script: SvelteKit's modules (the
+        // newer engine only).
         add('modulepreload', b.start);
         add('modulepreload', b.app);
         step('importing ' + url(b, b.start));
@@ -227,6 +229,45 @@
             });
             throw e;
         });
+    }
+
+    /**
+     * The app as one classic script (scripts/tv-boot.mjs): Chromium 69 won't
+     * run modules from files. Its modules' import.meta.url is window.__tvUrl.
+     */
+    function loadScript(b, links) {
+        window.__tvUrl = function (path) {
+            return url(b, path);
+        };
+        window.__tvApp = null;
+        step('loading ' + url(b, b.script));
+        return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = url(b, b.script);
+            s.onload = function () {
+                if (window.__tvApp) resolve([window.__tvApp.kit, window.__tvApp.app]);
+                else reject(new Error('the app script ran but didn’t start (see errors above)'));
+            };
+            s.onerror = function () {
+                reject(new Error('couldn’t load ' + s.src));
+            };
+            document.head.appendChild(s);
+        }).then(
+            function (mods) {
+                step('loaded; starting SvelteKit');
+                return mods;
+            },
+            function (e) {
+                step('load failed: ' + ((e && (e.stack || e.message)) || e));
+                links.forEach(function (l) {
+                    l.remove();
+                });
+                document.querySelectorAll('script[src$="' + b.script.split('/').pop() + '"]').forEach(function (n) {
+                    n.remove();
+                });
+                throw e;
+            }
+        );
     }
 
     /** `doImport` is import() from the page's inline script. */

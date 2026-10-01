@@ -179,6 +179,18 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
     DevTools protocol with the TV's user agent and fake catalogs: Home, a
     title, its sources, the player (up to AVPlay, which only the TV has),
     search and the menus, all by arrow keys and OK.
+- **Chromium 69 won't run JavaScript modules from files**: module scripts
+  need a JavaScript MIME type, and a file has none ("Failed to fetch
+  dynamically imported module" in the start-up report). The newer engine
+  doesn't mind, which is why the app worked only on some launches. The TV
+  build therefore also has the whole app as one classic script
+  (`_app/immutable/tv/app.HASH.js`, made by `scripts/tv-boot.mjs` with
+  rolldown), and `tv/boot.js` loads that with a `<script>` tag on both
+  engines. Each module's `import.meta.url` becomes `window.__tvUrl(path)`,
+  so the core's worker and WebAssembly and each page's CSS resolve against
+  the copy that started (installed or downloaded). Testing this needs the
+  app opened from files (`file://`), not from a local web server, which is
+  how earlier Chromium 69 tests missed it.
 - **The remote's OK sends a keydown and no keypress**, and buttons only click
   on keypress, so Play and other buttons did nothing. `$lib/tv/remote.ts`
   clicks the focused control on OK.
