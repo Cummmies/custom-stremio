@@ -37,7 +37,11 @@ jobs:
       # The Xcode project is generated, not committed, so it always matches the
       # Tauri version in package.json.
       - name: Generate the Xcode project
-        run: npx tauri ios init --ci
+        run: |
+          npx tauri ios init --ci
+          # The app icon (src-tauri/icons/ios, made with `tauri icon`), in case
+          # init kept Tauri's default.
+          cp src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/
 
       # No Apple developer account here: --no-sign builds an unsigned .ipa, and
       # the sideloading app signs it when it installs it on your iPhone.
