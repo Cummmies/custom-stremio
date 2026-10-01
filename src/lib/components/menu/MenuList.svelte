@@ -331,4 +331,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /* Touch: finger-sized rows (44pt, Apple's minimum) and no keyboard shortcuts. */
+    @media (hover: none) and (pointer: coarse) {
+        .item {
+            min-height: 44px;
+            font-size: 16px;
+        }
+        kbd {
+            display: none;
+        }
+    }
 </style>

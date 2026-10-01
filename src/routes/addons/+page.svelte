@@ -262,4 +262,27 @@
             animation: none;
         }
     }
+    /* Phones: title and intro full width, the install button under them. */
+    @media (max-width: 700px) {
+        .top {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 14px;
+        }
+        .install-url {
+            justify-content: center;
+            height: 44px;
+        }
+        .controls {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .right {
+            width: 100%;
+        }
+        .right .filter {
+            flex: 1;
+            min-width: 0;
+        }
+    }
 </style>

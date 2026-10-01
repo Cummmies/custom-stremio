@@ -866,10 +866,9 @@
         .hero {
             padding: calc(var(--nav-h) + 30vh) var(--gutter) 12px;
         }
+        /* The tab bar is the way back on phones. */
         .back {
-            top: calc(var(--nav-h) + 4px);
-            width: 36px;
-            height: 36px;
+            display: none;
         }
         .copy {
             max-width: none;

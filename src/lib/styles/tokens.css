@@ -183,4 +183,9 @@ html {
         -webkit-user-select: text;
         user-select: text;
     }
+    /* No keyboard focus rings on a touch screen: they'd appear on whatever a
+       sheet focuses when it opens (its close button), looking selected. */
+    :focus-visible {
+        outline: none;
+    }
 }

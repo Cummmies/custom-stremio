@@ -204,4 +204,11 @@
         background: var(--fill-hover);
         color: var(--label);
     }
+    /* Phones: the check alone says installed; the words take a third of the row. */
+    @media (max-width: 700px) {
+        .installed {
+            font-size: 0;
+            gap: 0;
+        }
+    }
 </style>

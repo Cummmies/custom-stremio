@@ -618,10 +618,16 @@
         font-size: var(--text-caption);
         color: var(--label-2);
     }
-    @media (max-width: 640px) {
+    /* Phones: like iOS Settings, the control stays on the right of its title
+       and the explanation reads as a footnote under the title. */
+    @media (max-width: 700px) {
         .row {
-            flex-direction: column;
-            align-items: flex-start;
+            gap: 14px;
+            padding: 12px 16px;
+        }
+        .row > div:first-child {
+            flex: 1;
+            min-width: 0;
         }
     }
 </style>

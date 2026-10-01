@@ -11,6 +11,15 @@
 
     let { items }: { items: MetaItemPreview[] } = $props();
 
+    let phone = $state(false);
+    $effect(() => {
+        const mq = matchMedia('(max-width: 700px)');
+        phone = mq.matches;
+        const on = () => (phone = mq.matches);
+        mq.addEventListener('change', on);
+        return () => mq.removeEventListener('change', on);
+    });
+
     const INTERVAL = 9000;
 
     let index = $state(0);
@@ -160,7 +169,8 @@
                 {#if item.description}<p class="description">{item.description}</p>{/if}
 
                 <div class="actions">
-                    <a class="play" href={titleHref(item.type, item.id, { play: '1' })}>
+                    <!-- Phones: the title page (pick an episode or source there); wider: straight to playing. -->
+                    <a class="play" href={titleHref(item.type, item.id, phone ? {} : { play: '1' })}>
                         <Icon name="play" size={16} filled />
                         Play
                     </a>

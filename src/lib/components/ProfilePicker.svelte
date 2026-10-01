@@ -176,7 +176,7 @@
             <span class="brand"><img src={logo} alt="" width="28" height="28" />Stremio</span>
             <div class="bar-actions">
                 <button class="pill" onclick={() => (managing = !managing)} aria-pressed={managing}>
-                    {managing ? 'Done' : 'Manage Profiles'}
+                    {#if managing}Done{:else}<span class="long">Manage Profiles</span><span class="short">Edit</span>{/if}
                 </button>
                 <button class="icon-btn" onclick={close} aria-label="Close"><Icon name="close" size={18} /></button>
             </div>
@@ -750,6 +750,58 @@
         .face :global(.avatar),
         .face.add {
             transition: none;
+        }
+    }
+    .short {
+        display: none;
+    }
+    /* Phones: a compact bar below the status bar (iOS style: Edit, close),
+       smaller faces two or three across, room for the home indicator. */
+    @media (max-width: 700px) {
+        .picker {
+            height: 100dvh;
+        }
+        .bar {
+            padding: calc(var(--safe-top) + 8px) 16px 8px;
+        }
+        .brand,
+        .long {
+            display: none;
+        }
+        .short {
+            display: inline;
+        }
+        .pill {
+            height: 36px;
+            padding: 0 16px;
+        }
+        .content {
+            gap: 28px;
+            padding: 3vh 16px calc(var(--safe-bottom) + 32px);
+        }
+        h1 {
+            font-size: 28px;
+        }
+        .grid {
+            gap: 24px 20px;
+        }
+        .tile {
+            width: 104px;
+        }
+        .face {
+            width: 100px;
+            height: 100px;
+        }
+        .face :global(.avatar) {
+            --size: 92px !important;
+        }
+        .face.add {
+            width: 92px;
+            height: 92px;
+        }
+        .launch {
+            max-width: 340px;
+            font-size: 15px;
         }
     }
 </style>

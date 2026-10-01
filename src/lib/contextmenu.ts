@@ -168,7 +168,9 @@ export function installContextMenu() {
         suppressClick = false;
         if (e.pointerType !== 'touch' || !(e.target instanceof Element)) return;
         const target = e.target;
-        // Text fields keep iOS's own hold menu (select, paste…).
+        // Text fields keep iOS's own hold menu (select, paste…); the player's
+        // controls (holding the seek bar) aren't menus.
+        if (document.documentElement.classList.contains('player-active')) return;
         if (target.closest('input, textarea') || !entriesFor(target)) return;
         hold = {
             x: e.clientX,

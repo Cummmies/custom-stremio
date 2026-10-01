@@ -826,4 +826,21 @@
             animation: none;
         }
     }
+    /* Phones: the suggestion stacks (icon and text, then its buttons); the
+       tab bar replaces the back link. */
+    @media (max-width: 700px) {
+        .suggest {
+            flex-wrap: wrap;
+        }
+        .suggest-text {
+            flex: 1 1 calc(100% - 60px);
+        }
+        .suggest .pill {
+            flex: 1;
+            justify-content: center;
+        }
+        .back {
+            display: none;
+        }
+    }
 </style>

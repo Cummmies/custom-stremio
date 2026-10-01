@@ -938,7 +938,7 @@
         }
     }
 
-    // Touch screens (no hover): tap shows the controls (they fade on their own), double-tap a side
+    // Touch screens (no hover): tap shows or hides the controls, double-tap a side
     // skips 10s (keep tapping to skip more), big buttons sit in the middle.
     let touchUI = $state(false);
     $effect(() => {
@@ -975,8 +975,17 @@
         clearTimeout(tapTimer);
         tapTimer = setTimeout(() => {
             lastTap = null;
-            poke();
+            toggleControls();
         }, TAP_MS);
+    }
+    function toggleControls() {
+        if (controlsVisible) {
+            clearTimeout(idleTimer);
+            controlsVisible = false;
+            document.documentElement.classList.add('player-idle');
+        } else {
+            poke();
+        }
     }
     function tapBy(side: -1 | 1) {
         player.seekBy(side * 10);
@@ -1695,10 +1704,7 @@
         width: 96px;
         height: 96px;
         justify-content: center;
-        border-radius: 50%;
-        background: rgb(255 255 255 / 0.14);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        filter: drop-shadow(0 1px 8px rgb(0 0 0 / 0.6));
         font-size: 13px;
         font-weight: 700;
         pointer-events: none;

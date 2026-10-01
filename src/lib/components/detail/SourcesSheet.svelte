@@ -3,6 +3,7 @@
     // A focused, dismissible task: Esc, the close button or the backdrop all close it.
     import type { MetaDetails, Stream } from '$lib/core/types';
     import { goto } from '$app/navigation';
+    import { page } from '$app/state';
     import { openExternal } from '$lib/links';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
@@ -85,7 +86,12 @@
         // A hand-picked source: don't auto-switch away from it.
         easyQueue.clear();
         easyQueue.handPicked = link?.videoId ?? null;
-        if (link && url) goto(playerHref(link, url));
+        if (!link || !url) return;
+        // Coming back from the player should land on the title, not reopen this
+        // sheet: take the picked video out of this page's address first.
+        const here = new URL(page.url);
+        ['video', 'play', 'auto', 'failed', 'nomatch'].forEach((k) => here.searchParams.delete(k));
+        goto(here.pathname + here.search, { replaceState: true, noScroll: true, keepFocus: true }).then(() => goto(playerHref(link, url)));
     }
 
     async function copy(s: Stream, key: string) {
