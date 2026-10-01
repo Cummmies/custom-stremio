@@ -58,14 +58,21 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
   `-C target-feature=-reference-types`, strip `target_features` so
   wasm-bindgen doesn't use `externref`, then `wasm-opt` without
   reference types to re-encode). Can be a CI job.
-- **AVPlay isn't exposed** to a TizenBrew module: `webapis.js` loads
-  (`productinfo`, `avinfo` work, HDR TV: yes) but `webapis.avplay` is
-  missing. Being checked: whether it appears with a player element.
-  Otherwise HTML5 video, which reports H.264, HEVC, AV1, VP9, AAC, AC-3,
-  E-AC-3 and Opus (MSE too); not DTS, and MKV by type check.
+- **No AVPlay in a TizenBrew module**: `webapis.js` loads (`productinfo`,
+  `avinfo`, `tvinfo`, `network`…, HDR TV: yes) but has no `avplay`, even
+  with a player element on the page.
+- **HTML5 `<video>` is the player, and it's good**: an HEVC 10-bit HDR10
+  MKV with E-AC-3 + AC-3 audio played at 1080p (despite `canPlayType`
+  saying no to MKV), `audioTracks` listed both, and a WebVTT `<track>`
+  showed. H.264 MP4 started in under 2 s. Embedded subtitle tracks don't
+  show up in `textTracks`, so subtitles come from addons (or are extracted
+  by the service). DTS isn't supported.
+- **No seek-bar thumbnails**: drawing the video to a canvas gives a black
+  frame (the video is on a hardware plane).
 - **Node.js service**: Node 16.5 (V8 9.4), WebAssembly yes, its proxy
-  works (IntroDB needs it, CORS). Being checked: the core compiled in Node
-  with `--experimental-wasm-reftypes`.
+  works (IntroDB needs it, CORS). With
+  `v8.setFlagsFromString('--experimental-wasm-reftypes')` the published
+  core compiles there in 1.3 s, a fallback if the rebuilt core has trouble.
 - **Memory**: 1 GB, little free. Keep the TV build lean.
 - Network from the page: Cinemeta, the Stremio API and TheIntroDB work
   directly; IntroDB needs the service proxy.
