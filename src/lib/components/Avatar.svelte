@@ -42,6 +42,8 @@
         height: var(--size);
         border-radius: 50%;
         overflow: hidden;
+        /* Older engines (the TV's) have no color-mix: plain color. */
+        background: var(--c);
         background: linear-gradient(145deg, color-mix(in srgb, var(--c) 100%, white 18%), color-mix(in srgb, var(--c) 100%, black 32%));
     }
     .rounded {

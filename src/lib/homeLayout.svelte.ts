@@ -6,6 +6,7 @@
 //   "cat:<addon>/<type>/<id>" one addon catalog (e.g. cat:com.linvo.cinemeta/movie/top)
 //   "merge:<id>"              a merged row; its catalogs are in `merges`
 // Rows the layout doesn't know yet (a new addon) are added at the end, shown.
+import '$lib/polyfills';
 import { app } from '$lib/app.svelte';
 import type { Catalog } from '$lib/core/types';
 

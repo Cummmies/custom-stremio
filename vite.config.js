@@ -28,6 +28,9 @@ export default defineConfig(() => ({
   },
   worker: { format: /** @type {const} */ ("es") },
 
+  // The Samsung TV's engine is about Chromium 94 (missing APIs: src/lib/polyfills.ts).
+  build: process.env.TV_BUILD ? { target: "chrome94" } : undefined,
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
