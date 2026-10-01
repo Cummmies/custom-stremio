@@ -924,6 +924,37 @@
         menu.toggleFor(el, entries, 'end');
     }
 
+    // --- TV skipping ------------------------------------------------------
+    // Each press moves a target, which the seek bar and the time show at once;
+    // the player seeks once, when the presses stop (each seek on a TV restarts
+    // buffering). Held, it speeds up: 10 s steps, then 30 s, then 60 s.
+    let scrubTo = $state<number | null>(null);
+    let scrubTimer: ReturnType<typeof setTimeout> | undefined;
+    let scrubHeldSince = 0;
+    const shownTime = $derived(scrubTo ?? player.time);
+
+    function scrub(direction: 1 | -1, held: boolean) {
+        const now = performance.now();
+        if (!held || !scrubHeldSince) scrubHeldSince = now;
+        const heldFor = held ? now - scrubHeldSince : 0;
+        const step = heldFor > 4000 ? 60 : heldFor > 1500 ? 30 : 10;
+        const end = player.duration ? player.duration - 1 : Infinity;
+        scrubTo = Math.max(0, Math.min(end, (scrubTo ?? player.time) + direction * step));
+        poke();
+        clearTimeout(scrubTimer);
+        scrubTimer = setTimeout(commitScrub, 700);
+    }
+
+    function commitScrub() {
+        clearTimeout(scrubTimer);
+        scrubHeldSince = 0;
+        if (scrubTo == null) return;
+        const t = scrubTo;
+        player.seek(t).finally(() => {
+            if (scrubTo === t) scrubTo = null;
+        });
+    }
+
     /** TV: focus is on the video itself, not on one of the controls. */
     const onVideo = () => document.activeElement === surface || document.activeElement === document.body;
 
@@ -934,6 +965,12 @@
         if (e.defaultPrevented || menu.open || e.target instanceof HTMLInputElement) return;
         const k = e.key.toLowerCase();
         let handled = true;
+        // TV: Left/Right on the video or the timeline skip.
+        if (isTV && (k === 'arrowleft' || k === 'arrowright') && (onVideo() || (e.target as Element)?.closest?.('.seek'))) {
+            e.preventDefault();
+            scrub(k === 'arrowright' ? 1 : -1, e.repeat);
+            return;
+        }
         if (isTV && !onVideo()) {
             // On a control: Back returns to the video, arrows and OK are the
             // control's. Media keys (sent by the remote code, so not trusted)
@@ -1053,7 +1090,10 @@
 </script>
 
 <svelte:head><title>{heading} · Stremio</title></svelte:head>
-<svelte:window {onkeydown} onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
+<svelte:window
+    {onkeydown}
+    onkeyup={(e) => isTV && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && scrubTo != null && commitScrub()}
+    onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
 
 <div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI}>
     <!-- Transparent surface over the video that takes clicks. -->
@@ -1189,7 +1229,7 @@
 
     <!-- Touch: keep the controls up while dragging the seek bar. -->
     <footer class="bottom" onpointerdown={poke} onpointermove={poke}>
-        <SeekBar time={player.time} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
+        <SeekBar time={shownTime} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
             {#snippet preview(t: number)}
                 {#if thumbs && !pip}<SeekPreview {thumbs} time={t} />{/if}
             {/snippet}
@@ -1230,7 +1270,7 @@
                             style:--fill="{((player.muted ? 0 : player.volume) / 130) * 100}%"
                         />
                     </div>
-                    <span class="time">{[fmtTime(player.time), player.duration ? fmtTime(player.duration) : null].filter(Boolean).join(' / ')}</span>
+                    <span class="time">{[fmtTime(shownTime), player.duration ? fmtTime(player.duration) : null].filter(Boolean).join(' / ')}</span>
                 {/if}
             </div>
 

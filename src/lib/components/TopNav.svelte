@@ -28,9 +28,7 @@
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const onSearchPage = $derived(appUrl(page.url).pathname === '/search');
-    // TV: Search is its own screen with its field (tvOS); the bar's field
-    // never expands (animating its width stutters on a TV).
-    const expanded = $derived(!isTV && (searchOpen || onSearchPage));
+    const expanded = $derived(searchOpen || onSearchPage);
     // TVs never have a server; nothing to warn about.
     const serverTrouble = $derived(!isTV && (app.server.state === 'missing' || app.server.state === 'failed'));
 
@@ -87,7 +85,6 @@
     }
 
     export async function focusSearch() {
-        if (isTV) return goto('/search');
         searchOpen = true;
         await Promise.resolve();
         input?.focus();
@@ -299,6 +296,44 @@
     }
     .search:focus-within {
         border-color: var(--accent-hover);
+    }
+    /* TV: animating the width re-lays out the whole bar every frame, which
+       stutters on a TV. There the button keeps its place and the field is a
+       fixed-width pill on top of the bar, uncovered from the button leftwards
+       (clip-path: repaints that area only). */
+    :global(html.tv) .search,
+    :global(html.tv) .search.expanded {
+        position: relative;
+        width: 36px;
+        overflow: visible;
+        background: none;
+        border: 0;
+        transition: none;
+    }
+    :global(html.tv) .search .circle {
+        position: relative;
+        z-index: 1;
+    }
+    :global(html.tv) .search input {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 300px;
+        height: 36px;
+        box-sizing: border-box;
+        padding: 0 44px 0 16px;
+        border-radius: 999px;
+        background: rgb(30 30 38 / 0.96);
+        border: 1px solid rgb(255 255 255 / 0.14);
+        clip-path: inset(0 0 0 264px round 18px);
+        opacity: 0;
+        transition:
+            clip-path var(--slow) var(--ease),
+            opacity var(--fast);
+    }
+    :global(html.tv) .search.expanded input {
+        clip-path: inset(0 0 0 0 round 18px);
+        opacity: 1;
     }
     .server-note :global(.status) {
         background: rgb(30 30 38 / 0.8);

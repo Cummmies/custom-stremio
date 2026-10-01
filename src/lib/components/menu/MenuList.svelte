@@ -45,8 +45,11 @@
         // Layout size, unaffected by the opening scale animation.
         const width = el.offsetWidth;
         const height = el.offsetHeight;
-        const vw = innerWidth;
-        const vh = innerHeight;
+        // The window in the page's own units: the TV app zooms the whole page
+        // (src/lib/styles/tv.css), and innerWidth/innerHeight don't.
+        const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+        const vw = innerWidth / zoom;
+        const vh = innerHeight / zoom;
         const pad = 8;
 
         let l = align === 'end' ? x - width : x;

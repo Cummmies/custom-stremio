@@ -168,8 +168,12 @@ function recalled(target: HTMLElement, current: Element | null): HTMLElement {
 
 /** The item to start from when nothing (or the page itself) has focus: top left. */
 function first(list: { el: HTMLElement; r: DOMRect }[]) {
-    const onScreen = list.filter(({ r }) => r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth);
-    onScreen.sort((a, b) => a.r.top - b.r.top || a.r.left - b.r.left);
+    // The window in the page's units (the TV app is zoomed).
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const onScreen = list.filter(({ r }) => r.bottom > 0 && r.top < innerHeight / zoom && r.right > 0 && r.left < innerWidth / zoom);
+    // The page before the top bar (focus starts in the content, as on tvOS).
+    const inBar = (el: HTMLElement) => (el.closest('header') ? 1 : 0);
+    onScreen.sort((a, b) => inBar(a.el) - inBar(b.el) || a.r.top - b.r.top || a.r.left - b.r.left);
     return onScreen[0]?.el ?? null;
 }
 
@@ -300,6 +304,7 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
     document.addEventListener('focusout', (e) => {
         const gone = e.target as HTMLElement;
         const rect = gone.getBoundingClientRect();
+        const wasInBar = !!gone.closest('header');
         requestAnimationFrame(() => {
             if (gone.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
             // In the player, the video itself takes focus (OK pauses, arrows seek).
@@ -308,7 +313,10 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
                 video.focus({ preventScroll: true });
                 return;
             }
-            const list = candidates();
+            // From the page, stay in the page: while a new page is still
+            // loading the top bar would be all that's left (the logo lit up);
+            // its main action takes focus when it appears (focusPrimary).
+            const list = candidates().filter(({ el }) => wasInBar || !el.closest('header'));
             if (!list.length) return;
             const cx = rect.left + rect.width / 2;
             const cy = rect.top + rect.height / 2;

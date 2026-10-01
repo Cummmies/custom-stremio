@@ -76,9 +76,9 @@
     }
 
     function onkeydown(e: KeyboardEvent) {
-        if (!d) return;
-        // A remote skips 10 s a press, as on tvOS, and 30 s while held.
-        const step = isTV ? (e.repeat ? 30 : 10) : e.shiftKey ? 30 : 5;
+        // TV: the player skips (it holds a target while the button is held).
+        if (!d || isTV) return;
+        const step = e.shiftKey ? 30 : 5;
         if (e.key === 'ArrowRight') onseek(Math.min(d, time + step));
         else if (e.key === 'ArrowLeft') onseek(Math.max(0, time - step));
         else if (e.key === 'Home') onseek(0);

@@ -62,6 +62,27 @@ html.tv nav.tiles a:focus span {
     color: #fff !important;
 }
 
+/* Rows in a scrolling list (episodes): lit with a frame drawn inside, not
+   white and enlarged, which the list would clip and which hides the text.
+   More specific than the white-button rule below. */
+html.tv ol.episodes button.main:focus {
+    background: rgb(255 255 255 / 0.14) !important;
+    color: var(--label) !important;
+    border-color: transparent !important;
+    box-shadow: inset 0 0 0 3px #fff !important;
+    transform: none;
+}
+html.tv ol.episodes button.main:focus span {
+    color: var(--label) !important;
+}
+html.tv ol.episodes button.main:focus span.overview,
+html.tv ol.episodes button.main:focus span.meta {
+    color: var(--label-2) !important;
+}
+html.tv ol.episodes button.main:focus svg {
+    color: #fff !important;
+}
+
 /* Buttons, tabs, chips, links: turn white (the tvOS focused button), with a
    slight lift. Text and icons inside go dark. */
 html.tv :is(button, a:not(.card), [role='button'], [role='tab'], [role^='menuitem'], select):focus {
@@ -88,17 +109,10 @@ html.tv :is(input, textarea):focus {
     border-color: #fff !important;
 }
 
-/* Search fields (the Search screen's, the top bar's): the pill is the frame. */
-html.tv header .search input:focus,
-html.tv form.field input:focus {
-    box-shadow: none !important;
-}
-html.tv form.field:focus-within {
-    box-shadow: 0 0 0 3px #fff;
-}
-html.tv header .search:focus-within {
+/* The top bar's search field: its own pill is the frame (TopNav.svelte). */
+html.tv header .search input:focus {
     border-color: #fff !important;
-    box-shadow: 0 0 0 2px #fff !important;
+    box-shadow: none !important;
 }
 
 /* No keyboard shortcuts on a remote. */
