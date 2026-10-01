@@ -269,7 +269,10 @@ filters to them when no server is reachable.
   `<access origin="*" subdomains="true"/>`. `src/lib/player/skips.ts` gets a
   `fetch` branch.
 - `config.xml` also needs the privileges: `internet`, `tv.inputdevice`,
-  `application.launch`.
+  `application.launch`, and `filesystem.read`/`filesystem.write` for
+  over-the-air updates. (They were dropped for a while on the suspicion that
+  they made the TV pick its old engine; the engine turned out to vary between
+  launches anyway, and the app now runs on both.)
 
 ## 4. Remote control
 

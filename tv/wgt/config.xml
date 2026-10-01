@@ -12,13 +12,15 @@
     <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
     <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
     <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
-    <!-- No filesystem privileges: with them the app got the old engine and
-         couldn't load (on a UN55TU8200). Updates use the app's own storage
-         (wgt-private), see src/lib/tv/webUpdate.ts. -->
+    <!-- Updates without reinstalling: newer builds are downloaded into the
+         app's own storage (wgt-private) and run from there
+         (src/lib/tv/webUpdate.ts, tv/boot.js). -->
+    <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+    <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
     <tizen:profile name="tv-samsung"/>
-    <!-- The newer browser engine (on a 2020 TV about Chromium 94 instead of 69,
-         which lacks ?., flex gap and the WebAssembly the core needs). Not
-         documented by Samsung; TizenBrew sets it too. AVPlay still works. -->
+    <!-- Asks for the newer browser engine (on a 2020 TV about Chromium 94
+         instead of 69). Not documented by Samsung; TizenBrew sets it too.
+         The TV doesn't always honor it, so the app runs on 69 as well. -->
     <tizen:metadata key="http://samsung.com/tv/metadata/use.uwe" value="true"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="false"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/use.preview" value="false"/>
