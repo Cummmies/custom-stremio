@@ -1,8 +1,6 @@
 // Desktop: embedded libmpv, Stremio's streaming server, Discord, the Windows
 // media overlay and window modes. iOS plays with MPVKit (plugins/mpv) and has
 // no streaming server, so torrents aren't playable there; debrid links are.
-#[cfg_attr(desktop, allow(dead_code))]
-mod art;
 #[cfg(desktop)]
 mod discord;
 #[cfg(desktop)]
@@ -67,7 +65,6 @@ fn run_mobile() {
             web_update::web_update_check,
             web_update::web_update_apply,
             web_update::web_update_confirm,
-            art::art_focus,
         ])
         .build(context)
         .expect("error while building tauri application")

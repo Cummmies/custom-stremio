@@ -374,7 +374,9 @@ function iosOptions(settings: StartSettings): Record<string, string> {
         'gpu-api': 'vulkan',
         'gpu-context': 'moltenvk',
         hwdec: settings.hardwareDecoding === false ? 'no' : 'videotoolbox',
-        'target-colorspace-hint': 'no',
+        // HDR video in HDR: the iPhone screen's extended range (EDR), switched
+        // on by mpv for HDR files only; SDR video is unaffected.
+        'target-colorspace-hint': 'yes',
         'demuxer-max-bytes': '150MiB',
         'demuxer-max-back-bytes': '50MiB',
         // Phone screens are small and close: a slightly smaller subtitle size reads better.

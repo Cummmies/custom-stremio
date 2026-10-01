@@ -28,8 +28,6 @@ ureq = { version = "2", default-features = false, features = ["tls", "json"] }
 minisign-verify = "0.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 base64 = "0.22"
-# Finding where a backdrop's subject is, to aim the phone banner's crop (src/art.rs).
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

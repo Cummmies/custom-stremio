@@ -95,6 +95,7 @@
         copied = key;
         setTimeout(() => copied === key && (copied = null), 2000);
     }
+    const phone = typeof matchMedia === 'function' ? matchMedia('(max-width: 700px)') : ({ matches: false } as MediaQueryList);
 </script>
 
 <dialog bind:this={dialog} class="sheet" aria-labelledby="sources-title" {onclose} onclick={(e) => e.target === dialog && dialog?.close()}>
@@ -123,7 +124,15 @@
                                     {@const key = `${group.addon}-${i}`}
                                     {@const [quality, ...rest] = label(stream)}
                                     {@const badge = audioBadge(stream)}
-                                    <li>
+                                    <!-- Phones: the whole row plays, a touch shortcut for its Play button (which keyboards use). -->
+                                    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+                                    <li
+                                        class:tappable={playable(stream) && !stream.externalUrl && !!linkOf(stream)}
+                                        onclick={(e) => {
+                                            if (!phone.matches || (e.target as Element).closest('button')) return;
+                                            if (playable(stream) && !stream.externalUrl && linkOf(stream)) play(stream);
+                                        }}
+                                    >
                                         <div class="quality">
                                             <span>{quality ?? group.addon}</span>
                                             {#if rest.length}<span class="sub">{rest.join(' ')}</span>{/if}
@@ -397,5 +406,89 @@
         border-top: 1px solid var(--separator);
         font-size: var(--text-caption);
         color: var(--label-2);
+    }
+
+    /* Phones: a full-screen sheet from the bottom; each source is one tappable
+       row with its name on top and the description across the full width. */
+    @media (max-width: 700px) {
+        .sheet {
+            margin: 0;
+            width: 100vw;
+            max-width: 100vw;
+            height: 100dvh;
+            max-height: 100dvh;
+            border-left: 0;
+            box-shadow: none;
+        }
+        .sheet[open] {
+            animation: rise var(--slow) var(--ease);
+        }
+        @keyframes rise {
+            from {
+                transform: translateY(40px);
+                opacity: 0;
+            }
+        }
+        header {
+            padding: calc(var(--safe-top) + 14px) 16px 12px;
+        }
+        h2 {
+            font-size: 20px;
+        }
+        .close {
+            width: 34px;
+            height: 34px;
+        }
+        .body {
+            padding: 4px 12px calc(var(--safe-bottom) + 24px);
+        }
+        li {
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-areas:
+                'quality buttons'
+                'details details';
+            gap: 6px 12px;
+            padding: 12px 12px 12px 14px;
+        }
+        li.tappable:active {
+            background: var(--fill-hover);
+        }
+        .quality {
+            grid-area: quality;
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            font-size: 15px;
+        }
+        .quality .sub {
+            font-size: 13px;
+        }
+        .quality .badge {
+            margin-top: 0;
+            align-self: center;
+        }
+        .details {
+            grid-area: details;
+            font-size: 13px;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+        }
+        .buttons,
+        li > .action {
+            grid-area: buttons;
+        }
+        .action.play {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            justify-content: center;
+            font-size: 0;
+            gap: 0;
+        }
+        .icon-action {
+            width: 36px;
+            height: 36px;
+        }
     }
 </style>

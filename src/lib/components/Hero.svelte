@@ -8,8 +8,6 @@
     import { titleContext } from '$lib/contextmenu';
     import { fetchDetails, heroPreview, merge, needsDetails } from '$lib/heroPreview.svelte';
     import { onDestroy } from 'svelte';
-    import { invoke } from '@tauri-apps/api/core';
-    import { isIOS } from '$lib/platform';
 
     let { items }: { items: MetaItemPreview[] } = $props();
 
@@ -37,23 +35,13 @@
     onDestroy(() => heroPreview.clear());
 
     // Crossfade layers: the previous artwork stays until the next has loaded.
-    // `focus` (iPhone): where the backdrop's subject is, so the narrow phone
-    // crop centers on it instead of on the middle (src-tauri/src/art.rs).
-    let layers = $state<{ key: string; src: string; ready: boolean; focus?: number }[]>([]);
-    function findFocus(key: string, src: string) {
-        if (!isIOS) return;
-        invoke<number>('art_focus', { url: src })
-            .then((focus) => (layers = layers.map((l) => (l.key === key ? { ...l, focus } : l))))
-            .catch(() => {});
-    }
+    let layers = $state<{ key: string; src: string; ready: boolean }[]>([]);
     const shown = $derived(layers.findLastIndex((l) => l.ready));
 
     $effect(() => {
         const src = item ? backgroundOf(item) : null;
         if (!src || layers.at(-1)?.src === src) return;
-        const key = `${item!.id}-${Date.now()}`;
-        layers = [...layers.slice(-1), { key, src, ready: false }];
-        findFocus(key, src);
+        layers = [...layers.slice(-1), { key: `${item!.id}-${Date.now()}`, src, ready: false }];
     });
 
     $effect(() => {
@@ -123,7 +111,6 @@
             alt=""
             decoding="async"
             class:show={i === shown}
-            style:--focus={layer.focus != null ? `${Math.round(layer.focus * 100)}%` : null}
             onload={() => (layers = layers.map((l) => (l.key === layer.key ? { ...l, ready: true } : l)))}
         />
     {/each}
@@ -406,10 +393,7 @@
             height: 72vh;
         }
         .art img {
-            object-position: var(--focus, 50%) 30%;
-            transition:
-                opacity 700ms var(--ease),
-                object-position 500ms var(--ease);
+            object-position: center 30%;
         }
         .art img.show {
             opacity: 0.85;

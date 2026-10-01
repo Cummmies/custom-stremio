@@ -938,7 +938,7 @@
         }
     }
 
-    // Touch screens (no hover): tap shows/hides the controls, double-tap a side
+    // Touch screens (no hover): tap shows the controls (they fade on their own), double-tap a side
     // skips 10s (keep tapping to skip more), big buttons sit in the middle.
     let touchUI = $state(false);
     $effect(() => {
@@ -975,7 +975,7 @@
         clearTimeout(tapTimer);
         tapTimer = setTimeout(() => {
             lastTap = null;
-            toggleControls();
+            poke();
         }, TAP_MS);
     }
     function tapBy(side: -1 | 1) {
@@ -984,15 +984,6 @@
         tapSkip = { side, total, key: Date.now() };
         clearTimeout(tapSkipTimer);
         tapSkipTimer = setTimeout(() => (tapSkip = null), 700);
-    }
-    function toggleControls() {
-        if (controlsVisible && !player.paused) {
-            clearTimeout(idleTimer);
-            controlsVisible = false;
-            document.documentElement.classList.add('player-idle');
-        } else {
-            poke();
-        }
     }
 
     // Clicking empty video area toggles play; double-click toggles fullscreen.
@@ -1669,9 +1660,12 @@
     .center-controls .huge {
         width: 76px;
         height: 76px;
-        background: rgb(0 0 0 / 0.35);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+    }
+    /* Plain glyphs over the video (no discs behind them), shadowed to read on
+       bright frames. */
+    .center-controls .icon {
+        background: none;
+        filter: drop-shadow(0 1px 8px rgb(0 0 0 / 0.55));
     }
     .center-controls .ten {
         position: relative;
@@ -1748,6 +1742,10 @@
     }
     .touch.hidden .skip {
         bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px));
+    }
+    /* iOS keeps :hover on a tapped button, which would leave a grey disc. */
+    .touch .icon:hover:not(:disabled) {
+        background: transparent;
     }
     .touch .time {
         margin-left: 4px;

@@ -91,6 +91,19 @@ final class MpvMetalLayer: CAMetalLayer {
         }
     }
 
+    // HDR: mpv turns on the screen's extended range (EDR) for HDR video
+    // (target-colorspace-hint), which iOS only honours on the main thread.
+    override var wantsExtendedDynamicRangeContent: Bool {
+        get { super.wantsExtendedDynamicRangeContent }
+        set {
+            if Thread.isMainThread {
+                super.wantsExtendedDynamicRangeContent = newValue
+            } else {
+                DispatchQueue.main.sync { super.wantsExtendedDynamicRangeContent = newValue }
+            }
+        }
+    }
+
 }
 
 final class VideoView: UIView {

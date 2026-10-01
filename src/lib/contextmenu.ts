@@ -152,6 +152,59 @@ export function installContextMenu() {
         }
     };
 
+    // Touch screens: press and hold (iOS doesn't send contextmenu) opens the same
+    // menu at the finger. Moving cancels it (that's a scroll); the tap that would
+    // follow the hold is swallowed so it doesn't also open the title.
+    const HOLD_MS = 480;
+    let hold: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | null = null;
+    let suppressClick = false;
+    const cancelHold = () => {
+        if (hold) clearTimeout(hold.timer);
+        hold = null;
+    };
+    const onPointerDown = (e: PointerEvent) => {
+        cancelHold();
+        // A new touch: whatever the last hold swallowed is over.
+        suppressClick = false;
+        if (e.pointerType !== 'touch' || !(e.target instanceof Element)) return;
+        const target = e.target;
+        // Text fields keep iOS's own hold menu (select, paste…).
+        if (target.closest('input, textarea') || !entriesFor(target)) return;
+        hold = {
+            x: e.clientX,
+            y: e.clientY,
+            timer: setTimeout(() => {
+                hold = null;
+                suppressClick = true;
+                navigator.vibrate?.(10);
+                open(target, e.clientX, e.clientY);
+            }, HOLD_MS),
+        };
+    };
+    const onPointerMove = (e: PointerEvent) => {
+        if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) cancelHold();
+    };
+    const onClick = (e: MouseEvent) => {
+        if (!suppressClick) return;
+        suppressClick = false;
+        e.preventDefault();
+        e.stopPropagation();
+    };
     window.addEventListener('contextmenu', onContextMenu);
-    return () => window.removeEventListener('contextmenu', onContextMenu);
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', cancelHold);
+    window.addEventListener('pointercancel', cancelHold);
+    window.addEventListener('scroll', cancelHold, { passive: true, capture: true });
+    window.addEventListener('click', onClick, true);
+    return () => {
+        cancelHold();
+        window.removeEventListener('contextmenu', onContextMenu);
+        window.removeEventListener('pointerdown', onPointerDown);
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', cancelHold);
+        window.removeEventListener('pointercancel', cancelHold);
+        window.removeEventListener('scroll', cancelHold, { capture: true });
+        window.removeEventListener('click', onClick, true);
+    };
 }
