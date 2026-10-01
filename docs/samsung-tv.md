@@ -99,8 +99,11 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
   `setExternalSubtitlePath` with a URL is accepted. The app's own Node 16.5
   service starts (launched with `launchAppControl`) and listens.
 - **Loading updates**: navigating the installed app to a page served by its
-  service (`http://127.0.0.1:8090/…`) gave a black screen (testing
-  `tizen:allow-navigation`). Also testing the iPhone-like way: download the
+  service (`http://127.0.0.1:8090/…`) gives a black screen, even with
+  `tizen:allow-navigation`; dropped. A copy written to `wgt-private` and
+  opened from there loads and its scripts run, but its inline `<style>` was
+  ignored (unstyled page). Being checked: which inline styles/scripts a
+  page from storage may use (Svelte sets `style=""` attributes). Also testing the iPhone-like way: download the
   new files into the app's own storage (`wgt-private`) and open them from
   there, which keeps the page local (AVPlay, same-origin workers).
 - **Memory**: 1 GB, little free. Keep the TV build lean.

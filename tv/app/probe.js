@@ -76,6 +76,10 @@
         logEl.textContent = (line + '\n' + logEl.textContent).slice(0, 3000);
     }
     window.addEventListener('error', function (e) { log('JS error: ' + e.message); });
+    // Anything the page's content security policy blocks.
+    document.addEventListener('securitypolicyviolation', function (e) {
+        log('Blocked by CSP: ' + e.violatedDirective + ' ' + (e.blockedURI || '') + ' ' + (e.originalPolicy || '').slice(0, 120));
+    });
 
     function syntax(src) {
         try { new Function(src); return true; } catch (e) { return false; }
@@ -101,6 +105,43 @@
     row('Device', 'Running as', moduleMatch ? 'TizenBrew module' : fromStorage ? 'App, page from storage' : packaged ? 'Installed app' : servedByUs ? 'App, page from service' : 'Browser', 'ok');
     row('Device', 'Memory (deviceMemory)', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'n/a', 'dim');
     row('Device', 'CPU threads', navigator.hardwareConcurrency || 'n/a', 'dim');
+
+    // --- what this page may do (pages from app storage may get a stricter policy)
+    var PG = 'Page';
+    row(PG, 'style.css loaded', run(function () {
+        return getComputedStyle(document.getElementById('side')).position === 'absolute';
+    }));
+    row(PG, 'Inline <style>', run(function () {
+        var st = document.createElement('style');
+        st.textContent = '.csp-probe-a{width:7px;display:block}';
+        document.head.appendChild(st);
+        var d = document.createElement('div');
+        d.className = 'csp-probe-a';
+        document.body.appendChild(d);
+        var ok = d.offsetWidth === 7;
+        document.body.removeChild(d);
+        return ok;
+    }));
+    row(PG, 'style="" attribute', run(function () {
+        var d = document.createElement('div');
+        d.setAttribute('style', 'width:9px;display:block');
+        document.body.appendChild(d);
+        var ok = d.offsetWidth === 9;
+        document.body.removeChild(d);
+        return ok;
+    }));
+    row(PG, 'Inline <script>', run(function () {
+        var sc = document.createElement('script');
+        sc.textContent = 'window.__inlineRan = true;';
+        document.head.appendChild(sc);
+        return window.__inlineRan === true;
+    }));
+    row(PG, 'eval / new Function', run(function () { return new Function('return 1')() === 1; }));
+    var wasmCspRow = row(PG, 'WebAssembly.compile', '…');
+    try {
+        WebAssembly.compile(Uint8Array.from(atob('AGFzbQEAAAABBQFgAAF/AwIBAAoGAQQAQQEL'), function (c) { return c.charCodeAt(0); }))
+            .then(function () { setRow(wasmCspRow, true); }, function (e) { setRow(wasmCspRow, '✗ ' + short(e), 'no'); });
+    } catch (e) { setRow(wasmCspRow, '✗ ' + short(e), 'no'); }
 
     // --- Samsung APIs ------------------------------------------------------------
     var hasTizen = typeof window.tizen !== 'undefined';
@@ -501,7 +542,7 @@
 
     // Button 8: what an update would do. Download the page's files into the
     // app's private storage, then open that copy.
-    var PAGE_FILES = ['index.html', 'probe.js', 'module-test.js', 'worker-test.js', 'module-worker-test.js'];
+    var PAGE_FILES = ['index.html', 'style.css', 'probe.js', 'module-test.js', 'worker-test.js', 'module-worker-test.js'];
     function copyToStorage() {
         if (fromStorage) return log('Already the copy in storage');
         if (!run(function () { return tizen.filesystem; })) return log('No tizen.filesystem here');
