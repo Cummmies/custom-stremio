@@ -44,17 +44,15 @@ jobs:
           PW: ${{ secrets.TIZEN_AUTHOR_KEY_PW }}
         run: |
           if [ -z "$KEY" ] || [ -z "$PW" ]; then
-            echo "::warning::No TV app built: run the TV certificate workflow first (see tv-cert.yml)."
+            echo "::warning::No certificate yet (see tv-cert.yml): signing with a throwaway one to test the build; not publishing."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v4
-        if: steps.secrets.outputs.ok == 'true'
 
       - name: Install Tizen Studio (command line)
-        if: steps.secrets.outputs.ok == 'true'
         run: |
           sudo apt-get install -y expect
           curl -fsSLo tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
@@ -66,14 +64,19 @@ jobs:
       # Our author certificate, and the SDK's public distributor certificate
       # (the one Tizen 6.5 and older TVs accept in developer mode).
       - name: Set up signing
-        if: steps.secrets.outputs.ok == 'true'
         env:
           KEY: ${{ secrets.TIZEN_AUTHOR_KEY }}
           PW: ${{ secrets.TIZEN_AUTHOR_KEY_PW }}
         run: |
           DATA="$HOME/tizen-signing"
           mkdir -p "$DATA"
-          echo "$KEY" | base64 -d > "$DATA/author.p12"
+          if [ -n "$KEY" ] && [ -n "$PW" ]; then
+            echo "$KEY" | base64 -d > "$DATA/author.p12"
+          else
+            PW=throwaway
+            "$TIZEN" certificate -a Throwaway -p "$PW" -c US -n "Throwaway" -f throwaway-author
+            cp "$(find "$HOME" -name 'throwaway-author.p12' | head -1)" "$DATA/author.p12"
+          fi
           SDK="$HOME/tizen-studio/tools/certificate-generator/certificates"
           cat > "$DATA/profiles.xml" <<XML
           <?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -89,7 +92,6 @@ jobs:
           "$TIZEN" cli-config "profiles.path=$DATA/profiles.xml"
 
       - name: Assemble
-        if: steps.secrets.outputs.ok == 'true'
         run: |
           rm -rf wgt && mkdir wgt
           cp -r tv/app/. wgt/
@@ -101,7 +103,6 @@ jobs:
           grep -o 'version="[0-9.]*"' wgt/config.xml | head -1
 
       - name: Build and sign
-        if: steps.secrets.outputs.ok == 'true'
         run: |
           cd wgt
           "$TIZEN" build-web -e ".*"
@@ -117,7 +118,6 @@ jobs:
           unzip -l CustomStremio.wgt | grep -E "signature|config.xml|service.js|index.html"
 
       - uses: actions/upload-artifact@v4
-        if: steps.secrets.outputs.ok == 'true'
         with:
           name: CustomStremio-tv
           path: CustomStremio.wgt
