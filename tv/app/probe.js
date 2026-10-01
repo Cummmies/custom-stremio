@@ -12,12 +12,13 @@
     var JSD_APP = 'https://cdn.jsdelivr.net/gh/Cummmies/custom-stremio/tv/app/';
     var moduleMatch = location.pathname.match(/\/module\/([^/]+)\/(.*\/)?[^/]*$/);
     var packaged = location.protocol === 'file:';
-    var servedByUs = location.host === '127.0.0.1:8090';
+    var servedByUs = location.host === '127.0.0.1:8090' || location.host === '127.0.0.1:8091';
     var CDN_BASE = moduleMatch
         ? 'https://cdn.jsdelivr.net/' + decodeURIComponent(moduleMatch[1]) + '/' + (moduleMatch[2] || '')
         : packaged || servedByUs ? JSD_APP : new URL('./', location.href).href;
     var CORE_WASM = 'https://cdn.jsdelivr.net/npm/@stremio/stremio-core-web@0.63.2/stremio_core_web_bg.wasm';
     var SERVICE = 'http://127.0.0.1:8090';
+    var SERVICE_ALT = 'http://127.0.0.1:8091';
 
     // --- results -----------------------------------------------------------------
     var cols = document.getElementById('cols');
@@ -274,6 +275,13 @@
             });
         } catch (e) { log('registerKey: ' + e.message); }
     }
+    if (packaged || servedByUs) {
+        try {
+            tizen.messageport.requestLocalMessagePort('cs-log').addMessagePortListener(function (data) {
+                for (var i = 0; i < data.length; i++) log('service: ' + data[i].value);
+            });
+        } catch (e) { log('message port: ' + e.message); }
+    }
     if (packaged) {
         try {
             var pkgId = tizen.application.getCurrentApplication().appInfo.packageId;
@@ -290,9 +298,16 @@
     var svcRow = row(SV, 'Running', '…');
     (function poll(tries) {
         Promise.race([fetch(SERVICE + '/info'), timeout(3000)])
+            .catch(function () {
+                return Promise.race([fetch(SERVICE_ALT + '/info'), timeout(3000)]).then(function (r) {
+                    SERVICE = SERVICE_ALT;
+                    return r;
+                });
+            })
             .then(function (r) { return r.json(); })
             .then(function (info) {
                 setRow(svcRow, true);
+                row(SV, 'Answered by', (info.owner || '?') + ' on ' + SERVICE.slice(-4));
                 row(SV, 'Node', info.node);
                 row(SV, 'V8', (info.versions && info.versions.v8) || '?', 'dim');
                 row(SV, 'Free memory', info.freeMemMB + '/' + info.totalMemMB + ' MB');
@@ -307,7 +322,7 @@
                 if (tries > 0) return setTimeout(function () { poll(tries - 1); }, 2000);
                 setRow(svcRow, false);
             });
-    })(10);
+    })(20);
 
     // --- keys ----------------------------------------------------------------------
     var KEY_NAMES = {

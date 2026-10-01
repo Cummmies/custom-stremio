@@ -89,6 +89,16 @@ First run of the test module (`tv/`, see `tv/README.md`) through TizenBrew:
   works (IntroDB needs it, CORS). With
   `v8.setFlagsFromString('--experimental-wasm-reftypes')` the published
   core compiles there in 1.3 s, a fallback if the rebuilt core has trouble.
+- **As an installed app (.wgt, TizenBrew Installer)**: `webapis.avplay` is
+  there and works: H.264 MP4 and the HEVC HDR10 MKV both play, and
+  `getTotalTrackInfo` lists every track (HEVC video, E-AC-3 English, AC-3
+  Japanese, the embedded English subtitle); `setExternalSubtitlePath` with
+  a URL is accepted. **But** the page got the old engine (Chromium 69:
+  no `?.`, no class fields, no flex gap, no bulk memory / non-trapping
+  WebAssembly), unlike under TizenBrew. TizenBrew's `config.xml` sets the
+  undocumented `http://samsung.com/tv/metadata/use.uwe` metadata; being
+  tested in ours. The app's own Node service didn't come up yet (being
+  diagnosed through a message port).
 - **Memory**: 1 GB, little free. Keep the TV build lean.
 - Network from the page: Cinemeta, the Stremio API and TheIntroDB work
   directly; IntroDB needs the service proxy.
