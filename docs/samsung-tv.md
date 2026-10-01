@@ -68,8 +68,7 @@ A new `src/lib/player/avplay.svelte.ts` implementing `PlayerBackend`
 | subtitle delay | `setSubtitlePosition(ms)` |
 | volume | the TV's own (remote volume keys), not in-app |
 
-Features flag: no seek-bar thumbnails (AVPlay can't decode frames on the side),
-no upscaling, no passthrough settings (the TV handles audio output). HDR10, HLG
+Features flag: no seek-bar thumbnails at first (see below), no upscaling, no passthrough settings (the TV handles audio output). HDR10, HLG
 and Dolby Vision play natively; the TV switches mode by itself.
 
 Chapters: AVPlay doesn't expose them, so skips come from TheIntroDB / IntroDB
@@ -80,11 +79,35 @@ AC3, EAC3; DTS dropped on 2018+ models). MKV is supported. Files the TV can't
 play fail, and Easy Mode moves on to the next source; it should prefer formats
 the TV handles (add a TV rule to the ranking: avoid DTS-only audio).
 
+**Seek-bar thumbnails.** On the PC and iPhone, a second hidden mpv decodes
+frames for them. On the TV, AVPlay draws the video on a hardware layer *behind*
+the web page, so the page can never read its pixels, and TVs have few hardware
+decoders, so a second hidden player usually isn't allowed (Plex's Tizen app
+has the same gap). Things to try in phase 0: a hidden `<video>` element drawn
+to a `<canvas>` (may work for H.264 MP4, rarely for MKV/HEVC), or having the
+PC make them when the TV uses its streaming server (option A below).
+
 ## 3. Streams and network
 
-- **No torrents**: there's no streaming server on the TV, same as iOS. Debrid
-  links only, and Easy Mode already filters to those when the server is
-  missing.
+Torrents need Stremio's streaming server, a Node.js program that downloads the
+torrent and serves it as a video. Three ways to get it on the TV:
+
+- **A. Use the PC's server (recommended first).** The desktop app already runs
+  it. The TV (and iPhone) gets a "Streaming server" setting with the PC's
+  address, e.g. `http://192.168.1.20:11470`, and plays torrents through it.
+  Works while the PC is on; nothing new runs on the TV.
+- **B. Run a torrent engine on the TV.** Tizen apps can include a background
+  "web service" that runs on the TV's own Node.js (TizenBrew's modules use
+  this on sideloaded TVs). But that Node is very old (4.4.3 on Tizen 3/4),
+  Stremio's `server.js` won't run on it and may not be redistributed anyway,
+  and TVs have little memory and storage for a torrent cache. It would mean
+  writing our own small engine in old JavaScript. Possible, slow going;
+  only worth it if A isn't enough.
+- **C. A hosted torrent-to-stream addon** (Webtor-style). Someone else's
+  servers see what you watch; not planned.
+
+Without any of these, debrid links play as on iOS, and Easy Mode already
+filters to them when no server is reachable.
 - **Skip lookups**: on desktop/iOS they go through the native `skip_lookup`
   command. On the TV, plain `fetch` works because packaged Tizen apps aren't
   bound by CORS when `config.xml` allows the origin:
@@ -128,6 +151,20 @@ Once logged in, settings sync brings the profile, Home layout and settings over.
 
 ## 7. Building, signing, installing
 
+Three ways to sideload:
+
+- **Tizen Studio** (official): described below.
+- **TizenBrew** (recommended for daily use): a homebrew app installed once
+  (with Tizen Studio or its installer); after that it adds and updates
+  "modules" from GitHub or npm, no PC needed. This app can be published as a
+  TizenBrew module, which also solves updates (section 8). Its install guides
+  cover 2023–2025 TVs (Tizen 6–8).
+- **From an Android phone** with Termux and `sdb`, no PC (community scripts).
+
+USB-stick installs only work on pre-Tizen (pre-2015) Samsung TVs.
+
+Tizen Studio details:
+
 - **Tools**: Tizen Studio's command-line tools (`tizen`, `sdb`), on Windows.
 - **Certificate**: a Samsung certificate (free, made in Tizen Studio's
   Certificate Manager with a Samsung account). It's tied to the TV's DUID, so
@@ -145,8 +182,10 @@ models; reinstalling fixes it.
 
 ## 8. Updates
 
-Two options:
+Three options:
 
+- **TizenBrew module**: TizenBrew checks for new module versions itself, so
+  publishing a new build is the whole update. Simplest if TizenBrew is used.
 - **Packaged app** (the `.wgt` holds the web build): every update means
   reinstalling from a PC. Simple, works offline.
 - **Hosted app** (recommended once it works): the `.wgt` only holds a small
@@ -159,11 +198,11 @@ Two options:
 
 | Phase | What | Rough size |
 | --- | --- | --- |
-| 0 | Find the TV's Tizen version; package the current build as a `.wgt`; check the core's WebAssembly loads | an evening |
+| 0 | Find the TV's Tizen version; package the current build as a `.wgt` (or TizenBrew module); check the core's WebAssembly loads; try the `<video>` + canvas thumbnails | an evening |
 | 1 | Build target and CSS fallbacks for the TV's Chromium; `isTV`; hide unsupported settings | 1–2 days |
 | 2 | AVPlay backend: play, seek, tracks, addon subtitles, errors | 2–4 days |
 | 3 | Remote navigation and the 10-foot layout | 3–5 days |
-| 4 | Code/QR login, if the link API is usable | 1 day |
+| 4 | Code/QR login, if the link API is usable; "Streaming server" address setting for torrents through the PC (also on iPhone) | 1–2 days |
 | 5 | Hosted updates and a CI workflow | 1–2 days |
 
 Phase 0 decides the rest: a 2022+ TV makes phase 1 small, and a WebAssembly
