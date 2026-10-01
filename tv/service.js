@@ -34,6 +34,36 @@ function get(url, res, redirects) {
     });
 }
 
+// Can Node's V8 run Stremio's core with the reference-types flag on?
+var REFTYPES = Buffer.from('AGFzbQEAAAABBgFgAW8BbwMCAQAKBgEEACAACw==', 'base64');
+var CORE_URL = 'https://cdn.jsdelivr.net/npm/@stremio/stremio-core-web@0.63.2/stremio_core_web_bg.wasm';
+function coreTest(res) {
+    var out = {};
+    try { out.reftypesBefore = WebAssembly.validate(REFTYPES); } catch (e) { out.reftypesBefore = String(e); }
+    try { require('v8').setFlagsFromString('--experimental-wasm-reftypes'); } catch (e) { out.flagError = String(e); }
+    try { out.reftypesAfter = WebAssembly.validate(REFTYPES); } catch (e) { out.reftypesAfter = String(e); }
+    https.get(CORE_URL, function (up) {
+        var chunks = [];
+        up.on('data', function (c) { chunks.push(c); });
+        up.on('end', function () {
+            var t0 = Date.now();
+            WebAssembly.compile(Buffer.concat(chunks)).then(function () {
+                out.ok = true;
+                out.ms = Date.now() - t0;
+                send(res, 200, 'application/json', JSON.stringify(out));
+            }, function (e) {
+                out.ok = false;
+                out.error = String(e && e.message || e);
+                send(res, 200, 'application/json', JSON.stringify(out));
+            });
+        });
+    }).on('error', function (e) {
+        out.ok = false;
+        out.error = 'download: ' + e.message;
+        send(res, 200, 'application/json', JSON.stringify(out));
+    });
+}
+
 var server = http.createServer(function (req, res) {
     var u = urlLib.parse(req.url, true);
     if (u.pathname === '/info') {
@@ -50,6 +80,7 @@ var server = http.createServer(function (req, res) {
         return send(res, 200, 'application/json', JSON.stringify(info));
     }
     if (u.pathname === '/proxy' && u.query.url) return get(u.query.url, res, 0);
+    if (u.pathname === '/core') return coreTest(res);
     send(res, 404, 'text/plain', 'not found');
 });
 server.on('error', function () {});

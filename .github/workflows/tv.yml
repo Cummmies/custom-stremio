@@ -1,0 +1,25 @@
+# The TV test module (tv/) is loaded by TizenBrew through jsDelivr, which
+# caches a branch's files for up to 12 hours. This clears that cache on each
+# push so the TV gets the new files on its next launch.
+name: TV
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tv/**'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Purge jsDelivr
+        run: |
+          for f in package.json $(git ls-files tv); do
+            for name in gh/${{ github.repository }} gh/${{ github.repository }}@main; do
+              curl -sS "https://purge.jsdelivr.net/$name/$f" -o /dev/null -w "%{http_code} $name/$f\n" || true
+            done
+          done

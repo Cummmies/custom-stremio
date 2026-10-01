@@ -380,7 +380,21 @@
 
     function avplay(file) {
         stopAll();
-        if (!run(function () { return webapis.avplay; })) { log('AVPlay: not available here'); return; }
+        if (!run(function () { return webapis.avplay; })) {
+            // Maybe it only appears once a player element exists.
+            var o = document.createElement('object');
+            o.type = 'application/avplayer';
+            stage.appendChild(o);
+            var hasNow = run(function () { return webapis.avplay; });
+            stage.removeChild(o);
+            if (!hasNow) {
+                var keys = [];
+                try { for (var k in webapis) keys.push(k); } catch (e) { /* none */ }
+                log('AVPlay: not available here. webapis: ' + keys.join(', '));
+                return;
+            }
+            log('AVPlay: appeared after adding the player element');
+        }
         avObject = document.createElement('object');
         avObject.type = 'application/avplayer';
         stage.appendChild(avObject);
@@ -441,4 +455,23 @@
     }
 
     log('Files from ' + CDN_BASE);
+    log('UA: ' + navigator.userAgent);
+    try { log('webapis has: ' + Object.keys(webapis).join(', ')); } catch (e) { log('webapis: none'); }
+    try { log('tizen has: ' + Object.keys(tizen).join(', ')); } catch (e) { /* none */ }
+
+    // The core in the Node service, with V8's reference-types flag.
+    var nodeCoreRow = row(SV, 'Core in Node (flag)', '…');
+    (function pollCore(tries) {
+        Promise.race([fetch(SERVICE + '/core'), timeout(90000)])
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                log('Node reftypes before flag: ' + j.reftypesBefore + ', after: ' + j.reftypesAfter);
+                log('Node core: ' + (j.ok ? 'compiled in ' + j.ms + ' ms' : j.error));
+                setRow(nodeCoreRow, j.ok ? '✓ ' + (j.ms / 1000).toFixed(1) + ' s' : '✗ ' + String(j.error).slice(0, 40), j.ok ? 'ok' : 'no');
+            })
+            .catch(function (e) {
+                if (tries > 0) return setTimeout(function () { pollCore(tries - 1); }, 3000);
+                setRow(nodeCoreRow, '✗ ' + short(e), 'no');
+            });
+    })(5);
 })();
