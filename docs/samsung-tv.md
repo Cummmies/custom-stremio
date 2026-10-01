@@ -154,9 +154,9 @@ Once logged in, settings sync brings the profile, Home layout and settings over.
 Three ways to sideload:
 
 - **Tizen Studio** (official): described below.
-- **TizenBrew** (the plan; already on the TV): a homebrew app that adds and
-  updates "modules" published on npm, no PC needed: green button → enter the
-  package name. This app becomes one (see "TizenBrew module" below).
+- **TizenBrew** (the plan; already on the TV): adds and updates "modules"
+  from GitHub or npm, no PC needed. This app becomes one (see "TizenBrew
+  module" below).
 - **From an Android phone** with Termux and `sdb`, no PC (community scripts).
 
 USB-stick installs only work on pre-Tizen (pre-2015) Samsung TVs.
@@ -182,8 +182,8 @@ models; reinstalling fixes it.
 
 Three options:
 
-- **TizenBrew module** (the plan): TizenBrew picks up new module versions by
-  itself, so publishing a new build to npm is the whole update.
+- **TizenBrew module** (the plan): TizenBrew loads the module's files from
+  GitHub on each launch, so pushing a new build is the whole update.
 - **Packaged app** (the `.wgt` holds the web build): every update means
   reinstalling from a PC. Simple, works offline.
 - **Hosted app** (recommended once it works): the `.wgt` only holds a small
@@ -194,23 +194,36 @@ Three options:
 
 ## TizenBrew module
 
-An "app" module is an npm package whose `package.json` says where the page is:
+TizenBrew (already on the TV) runs "app" modules: plain web pages it
+downloads through jsDelivr and serves from its own little server on the TV
+(`http://127.0.0.1:8081/module/...`). A module can come from npm or straight
+from **GitHub** (Module Manager → **Add GitHub Module**), which is the plan:
+no npm account, no Tizen Studio, no Samsung certificate.
 
-```json
-{
-  "name": "@<npm-user>/custom-stremio-tv",
-  "version": "0.1.0",
-  "packageType": "app",
-  "appName": "Custom Stremio",
-  "appPath": "app/index.html",
-  "keys": ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaFastForward", "MediaRewind", "MediaStop"]
-}
-```
+- A `tv.yml` workflow builds the TV version of `src/` and pushes it to a
+  `tv` branch holding only the built files plus this `package.json`:
 
-`app/` is the TV build of `src/`. A `tv.yml` workflow builds it, bumps the
-version and runs `npm publish` on every push to `main` (needs an npm account
-and an `NPM_TOKEN` repository secret). On the TV: TizenBrew → green button →
-`@<npm-user>/custom-stremio-tv`. Pinning `…@1.2.3` or a `dev` tag also works.
+  ```json
+  {
+    "name": "custom-stremio-tv",
+    "version": "0.1.0",
+    "packageType": "app",
+    "appName": "Custom Stremio",
+    "appPath": "app/index.html",
+    "keys": ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaFastForward", "MediaRewind", "MediaStop"]
+  }
+  ```
+
+- On the TV: TizenBrew → Module Manager → Add GitHub Module →
+  `Cummmies/custom-stremio@tv`.
+- Updates: TizenBrew fetches the files from jsDelivr every launch, so a push
+  to `tv` is the update. jsDelivr caches a branch for up to 12 hours; the
+  workflow asks it to purge (`purge.jsdelivr.net`) so it's minutes instead.
+- jsDelivr only serves **public** repos, and files up to 20 MB (the core's
+  WebAssembly is well under).
+- `serviceFile` can add a Node.js script that TizenBrew runs in the
+  background, useful for requests the page can't make itself (CORS), like
+  `skip_lookup` on desktop.
 
 The catch: a page loaded through TizenBrew doesn't get all of Tizen's APIs
 (Jellyfin's module ships an adapter that stubs `tizen.application`,
@@ -220,8 +233,9 @@ test. If it isn't:
 
 - play with the HTML5 `<video>` element instead (also hardware decoded on
   Tizen, but fewer formats and weaker audio/subtitle track switching), or
-- ship a real `.wgt` (full APIs) for the player and keep TizenBrew for
-  installing it.
+- ship a real `.wgt` (full APIs) as a GitHub release; the TizenBrew Installer
+  installs apps straight from a GitHub `user/repo`. Updates then mean
+  reinstalling, unless the `.wgt` loads its pages from the `tv` branch.
 
 ## Phases
 
