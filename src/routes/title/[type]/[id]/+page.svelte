@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import { page } from '$app/state';
     import { core } from '$lib/core';
     import type { ContinueWatchingPreview, MetaDetails, MetaItem, Video } from '$lib/core/types';
@@ -11,7 +11,7 @@
     import { looksLikeAnime } from '$lib/player/ranking';
     import { anime } from '$lib/anime.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
-    import { inTauri } from '$lib/player/mpv.svelte';
+    import { canPlay } from '$lib/platform';
     import Icon from '$lib/components/Icon.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import EpisodeList from '$lib/components/detail/EpisodeList.svelte';
@@ -129,7 +129,7 @@
 
     /** Play a movie/episode: Easy Mode picks the source, otherwise you do. */
     function playVideo(target: string, replace = false) {
-        if (playerPrefs.easyMode && inTauri) {
+        if (playerPrefs.easyMode && canPlay) {
             goto(titleHref(type, id, { video: target, auto: '1' }), { noScroll: true, keepFocus: true, replaceState: replace });
         } else {
             openSources(target, replace);
@@ -201,7 +201,7 @@
         const target = resumeVideo?.id ?? meta.id;
 
         // Resuming: reuse the stream you picked last time, if core remembers one.
-        if (resuming && inTauri) {
+        if (resuming && canPlay) {
             const cw = await core.getState<ContinueWatchingPreview>('continue_watching_preview').catch(() => null);
             const item = cw?.items.find((i) => i._id === meta!.id);
             const sameVideo = !isSeries || cleanVideoId(item?.state?.videoId) === target;

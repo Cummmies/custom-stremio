@@ -19,10 +19,10 @@ import { app } from '$lib/app.svelte';
 import { profiles } from '$lib/profiles.svelte';
 import { homeLayout, type Layout } from '$lib/homeLayout.svelte';
 import { playerPrefs, type DevicePrefs, type SyncedPrefs } from '$lib/player/prefs.svelte';
-import { isDesktop, isIOS } from '$lib/platform';
+import { isDesktop, isIOS, isTV } from '$lib/platform';
 
 /** Which kind of device this is, for device settings. */
-const DEVICE_KIND = isDesktop ? 'desktop' : isIOS ? 'ios' : 'web';
+const DEVICE_KIND = isDesktop ? 'desktop' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
 
 export const SYNC_ADDON_URL = 'https://sync.custom-stremio.invalid/manifest.json';
 const SYNC_ADDON_ID = 'community.customstremio.sync';

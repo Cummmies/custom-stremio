@@ -5,8 +5,13 @@ import { core } from '.';
 import type { ServerStatus } from './types';
 
 const inTauri = '__TAURI_INTERNALS__' in window;
+const onTV = !inTauri && /Tizen/i.test(navigator.userAgent);
 
 export function watchServer(onChange: (status: ServerStatus) => void): () => void {
+    if (onTV) {
+        onChange({ state: 'missing', message: 'TVs have no streaming server: debrid links play, torrents don’t.' });
+        return () => {};
+    }
     if (!inTauri) {
         onChange({ state: 'missing', message: 'Running in a plain browser: start Stremio Service manually.' });
         return () => {};

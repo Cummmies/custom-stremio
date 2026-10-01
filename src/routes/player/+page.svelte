@@ -9,7 +9,7 @@
     // Full-window player. mpv draws the video underneath this transparent page;
     // everything you see here is the control layer on top of it.
     import { onMount, untrack } from 'svelte';
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import { page } from '$app/state';
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
@@ -17,8 +17,7 @@
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
     import { player, type Track } from '$lib/player/player';
-    import { inTauri } from '$lib/player/mpv.svelte';
-    import { isDesktop, isIOS } from '$lib/platform';
+    import { canPlay, isDesktop, isIOS, isTV } from '$lib/platform';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -74,6 +73,7 @@
     let model = $state<PlayerModel | null>(null);
     let thumbs = $state<Thumbnails | null>(null);
     let controlsVisible = $state(true);
+    let surface = $state<HTMLButtonElement>();
     let fullscreen = $state(false);
     let pip = $state(false);
     let showNext = $state(false);
@@ -108,6 +108,8 @@
 
     onMount(() => {
         document.documentElement.classList.add('player-active');
+        // TV: the remote's OK toggles play on the video surface.
+        if (isTV) surface?.focus();
         // iPhone: landscape while watching, back to portrait after.
         const landscape = () => isIOS && invoke('plugin:mpv|orientation', { landscape: true }).catch(() => {});
         landscape();
@@ -211,7 +213,7 @@
 
         const url = params.get('url') ?? streamUrl(stream, settings?.streamingServerUrl ?? 'http://127.0.0.1:11470/');
         if (!url) return (startError = 'This stream has no playable address.');
-        if (!inTauri) return (startError = 'Playback runs in the desktop app.');
+        if (!canPlay) return (startError = 'Playback runs in the desktop app.');
 
         thumbs?.close();
         // Background thumbnail work steps aside whenever the main video is buffering.
@@ -269,7 +271,7 @@
             switching = null;
             return false;
         }
-        easyQueue.adopt(forVideo, picks, location.pathname + location.search, isAnime);
+        easyQueue.adopt(forVideo, picks, page.url.pathname + page.url.search, isAnime);
         return true;
     }
 
@@ -920,16 +922,38 @@
         menu.toggleFor(el, entries, 'end');
     }
 
+    /** TV: focus is on the video itself, not on one of the controls. */
+    const onVideo = () => document.activeElement === surface || document.activeElement === document.body;
+
     function onkeydown(e: KeyboardEvent) {
-        if (menu.open || e.target instanceof HTMLInputElement) return;
+        // Already handled (the TV remote moved focus between controls).
+        if (e.defaultPrevented || menu.open || e.target instanceof HTMLInputElement) return;
         const k = e.key.toLowerCase();
         let handled = true;
+        if (isTV && !onVideo()) {
+            // On a control: Back returns to the video, arrows and OK are the
+            // control's. Media keys (sent by the remote code, so not trusted)
+            // still play, pause and seek.
+            if (k === 'escape') {
+                e.preventDefault();
+                surface?.focus();
+                toggleControls();
+                return;
+            }
+            if (e.isTrusted) return;
+        }
         // Tab skips while the Skip button is up; otherwise it moves between controls as usual.
         if (k === 'tab' && !e.shiftKey && skipVisible) tabSkip();
         else if (k === 's') tabSkip();
         else if (k === ' ' || k === 'k') player.togglePause();
         else if (k === 'arrowright') player.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
         else if (k === 'arrowleft') player.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
+        // TV: up goes to the controls (the volume is the TV's own).
+        else if (k === 'arrowup' && isTV) {
+            poke();
+            document.querySelector<HTMLElement>('.player footer button, .player footer [tabindex]')?.focus();
+        } else if (k === 'arrowdown' && isTV) poke();
+        else if (k === 'enter' && isTV) player.togglePause();
         else if (k === 'arrowup') player.setVolume(player.volume + 5);
         else if (k === 'arrowdown') player.setVolume(player.volume - 5);
         else if (k === 'm') player.setMuted(!player.muted);
@@ -1030,12 +1054,18 @@
     <!-- Transparent surface over the video that takes clicks. -->
     <button
         class="surface"
+        bind:this={surface}
         aria-label={player.paused ? 'Play' : 'Pause'}
         onclick={onsurfaceclick}
         ondblclick={onsurfacedblclick}
         onpointerdown={onsurfacedown}
         onpointerup={onsurfaceup}
     ></button>
+
+    {#if player.subtitleText}
+        <!-- Players that leave subtitles to the app (AVPlay on TVs). -->
+        <div class="app-subs" class:raised={controlsVisible} aria-live="off">{player.subtitleText}</div>
+    {/if}
 
     {#if tapSkip}
         {#key tapSkip.key}
@@ -1229,6 +1259,25 @@
     :global(html.player-active body) {
         background: transparent !important;
     }
+    .app-subs {
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        bottom: 7%;
+        text-align: center;
+        white-space: pre-line;
+        font-size: 34px;
+        line-height: 1.25;
+        font-weight: 600;
+        color: white;
+        text-shadow: 0 0 3px black, 0 0 3px black, 0 2px 6px rgb(0 0 0 / 0.8);
+        pointer-events: none;
+        transition: bottom 0.2s;
+    }
+    .app-subs.raised {
+        bottom: 22%;
+    }
+
     :global(html.player-idle),
     :global(html.player-idle *) {
         cursor: none !important;

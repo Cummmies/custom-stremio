@@ -1,6 +1,37 @@
 # Samsung TV (Tizen) plan
 
-Status: plan only, nothing built yet. Written so it can be picked up later.
+Status: **first version built** (`.github/workflows/tv.yml`): the app as an
+installed TV app (`.wgt`) with AVPlay and remote navigation, installed with
+TizenBrew Installer (`Cummmies/custom-stremio`). The sections below are the
+original plan and what testing on a UN55TU8200 found; "How the TV app works"
+describes what was built.
+
+## How the TV app works
+
+- **Same app, TV build.** `npm run build` with `TV_BUILD=1` (hash routing,
+  `svelte.config.js`) and `CORE_DIR` (Stremio's core rebuilt without
+  WebAssembly reference types, `scripts/build-core-tv.sh`). `tv.yml` packages
+  `build/` with `tv/wgt/config.xml` into `CustomStremio.wgt`, signs it with the
+  certificate from `tv-cert.yml`, and attaches it to the **tv** release, which
+  it marks as the latest (TizenBrew Installer takes the latest release's
+  `.wgt`). Every push that touches the app rebuilds it; updating the TV means
+  installing again.
+- **Platform**: `isTV` (`src/lib/platform.ts`): no streaming server (debrid
+  links only), its own synced device settings (`tv`), skip lookups fetched
+  directly (the installed app isn't bound by CORS).
+- **Routing**: the app opens from a local file, so it routes by hash.
+  `src/lib/nav.ts` turns app paths (`/title/…`) into `#/title/…` for `goto`
+  and for links.
+- **Player**: `src/lib/player/avplay.svelte.ts` implements `PlayerBackend` on
+  AVPlay; subtitles are drawn by the player page (`subtitleText`): the file's
+  own tracks come from AVPlay as text, addon subtitles are fetched and timed
+  in `src/lib/player/subtitles.ts`.
+- **Remote**: `src/lib/tv/remote.ts`: arrows move focus to the nearest
+  button/link/field in that direction, Back sends Escape (closes menus, leaves
+  the player) and otherwise goes back or exits at Home, the media keys reach
+  the player. Focus outline in `src/lib/styles/tv.css`.
+- **Not yet**: TV-sized layout (it uses the desktop layout at 1920×1080),
+  over-the-air updates, link-code login.
 
 ## The short version
 

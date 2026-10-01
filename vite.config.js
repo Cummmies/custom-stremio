@@ -7,6 +7,18 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [sveltekit()],
 
+  // CORE_DIR: a stremio-core-web build to use instead of the npm package's.
+  // The TV build uses one compiled without WebAssembly reference types, which
+  // Samsung's 2020-22 TVs lack (docs/samsung-tv.md, scripts/build-core-tv.sh).
+  resolve: process.env.CORE_DIR
+    ? {
+        alias: [
+          { find: /^@stremio\/stremio-core-web\/stremio_core_web\.js$/, replacement: process.env.CORE_DIR + "/stremio_core_web.js" },
+          { find: /^@stremio\/stremio-core-web\/stremio_core_web_bg\.wasm/, replacement: process.env.CORE_DIR + "/stremio_core_web_bg.wasm" },
+        ],
+      }
+    : undefined,
+
   // stremio-core-web ships CommonJS; pre-bundle it so the module worker can import it.
   optimizeDeps: {
     include: [
@@ -38,3 +50,4 @@ export default defineConfig(() => ({
     },
   },
 }));
+

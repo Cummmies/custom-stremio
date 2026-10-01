@@ -1,8 +1,8 @@
 <script lang="ts">
     import { page } from '$app/state';
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import Icon from '$lib/components/Icon.svelte';
-    import { isIOS } from '$lib/platform';
+    import { isIOS, isTV } from '$lib/platform';
     import { core } from '$lib/core';
     import type { Board } from '$lib/core/types';
     import CatalogList from '$lib/components/CatalogList.svelte';
@@ -58,7 +58,7 @@
     </form>
     {#if !query}
         <EmptyState icon="search" title="Find something to watch">
-            <p>Search movies and series across all your addons.{#if !isIOS}{' '}Press Ctrl K from anywhere to start typing.{/if}</p>
+            <p>Search movies and series across all your addons.{#if !isIOS && !isTV}{' '}Press Ctrl K from anywhere to start typing.{/if}</p>
         </EmptyState>
     {:else}
         <h1>Results for “{query}”</h1>

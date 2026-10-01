@@ -1,6 +1,6 @@
 // Replaces the browser's right-click menu with app menus that fit what was clicked:
 // a title, a text field, selected text, a link, or empty space.
-import { goto } from '$app/navigation';
+import { goto } from '$lib/nav';
 import { app } from '$lib/app.svelte';
 import { titleHref } from '$lib/links';
 import { menu, type MenuEntry } from '$lib/menu.svelte';

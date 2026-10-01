@@ -1,7 +1,7 @@
 <script lang="ts">
     import '$lib/styles/tokens.css';
     import { onMount } from 'svelte';
-    import { goto } from '$app/navigation';
+    import { goto, installHashLinks } from '$lib/nav';
     import { page } from '$app/state';
     import { canPlay, player } from '$lib/player/player';
     import { app } from '$lib/app.svelte';
@@ -15,7 +15,9 @@
     import ProfilePicker from '$lib/components/ProfilePicker.svelte';
     import { profiles } from '$lib/profiles.svelte';
     import { confirmWebBundle, updates } from '$lib/updates.svelte';
-    import { isIOS } from '$lib/platform';
+    import { isIOS, isTV } from '$lib/platform';
+    import { startRemote } from '$lib/tv/remote';
+    import '$lib/styles/tv.css';
 
     let { children } = $props();
 
@@ -24,6 +26,10 @@
     const inPlayer = $derived(page.url.pathname === '/player');
 
     onMount(() => {
+        if (isTV) {
+            installHashLinks();
+            startRemote({ atHome: () => page.url.pathname === '/', back: () => history.back() });
+        }
         app.start();
         // A reload skips the player's cleanup; make sure no video keeps playing unseen.
         if (!inPlayer && canPlay) player.stop();

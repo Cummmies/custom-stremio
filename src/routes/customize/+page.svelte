@@ -6,7 +6,7 @@
     // (drop a row onto another), and is in every row's menu for keyboard users.
     // Changes apply as you make them; Undo covers every one of them.
     import { onMount, tick } from 'svelte';
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import { core } from '$lib/core';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { menu, type MenuEntry } from '$lib/menu.svelte';

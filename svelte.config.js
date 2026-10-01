@@ -12,6 +12,9 @@ const config = {
     adapter: adapter({
       fallback: "index.html",
     }),
+    // The Samsung TV app opens from a local file, so it routes by hash
+    // (#/title/…). Built with TV_BUILD=1 (.github/workflows/tv.yml).
+    router: process.env.TV_BUILD ? { type: "hash" } : undefined,
   },
 };
 

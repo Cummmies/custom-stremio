@@ -1,9 +1,8 @@
 // What the player screen needs from a video player, whatever plays the video.
 //
-// Today there is one backend, embedded mpv on the desktop (mpv.svelte.ts).
-// Other platforms get their own implementation of this same interface, e.g.
-// MPVKit on iOS or Samsung's AVPlay on Tizen TVs, and the player screen, Easy
-// Mode, skips and Up Next work unchanged on top of it.
+// Backends: embedded mpv on the desktop and MPVKit on iOS (mpv.svelte.ts), and
+// Samsung's AVPlay on TVs (avplay.svelte.ts). The player screen, Easy Mode,
+// skips and Up Next work unchanged on top of any of them.
 //
 // State fields are reactive ($state) in implementations, so screens can read
 // them directly (`player.time`, `player.paused`…).
@@ -91,6 +90,11 @@ export interface PlayerBackend {
     readonly hwdec: string | null;
     readonly ended: boolean;
     readonly error: string | null;
+    /**
+     * The subtitle line to show now, for players that hand subtitles to the app
+     * instead of drawing them (AVPlay). Undefined when the player draws its own.
+     */
+    readonly subtitleText?: string;
 
     onEvent(fn: (e: PlayerEvent) => void): () => void;
 

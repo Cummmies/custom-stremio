@@ -1,38 +1,38 @@
-# The Samsung TV test (see docs/samsung-tv.md and tv/README.md).
+# The Samsung TV app (docs/samsung-tv.md).
 #
-# purge: TizenBrew loads the tv/ module through jsDelivr, which caches a
-#   branch's files for up to 12 hours; this clears that cache on each push.
-# wgt: builds the test as an installable TV app (.wgt), signed with the
-#   certificate from tv-cert.yml, and publishes it as the repository's latest
-#   release, where TizenBrew Installer finds it (Cummmies/custom-stremio).
+# app: builds the app's TV version (hash routing, Stremio's core compiled for
+#   the TV's WebAssembly), packages it as an installable TV app (.wgt) signed
+#   with the certificate from tv-cert.yml, and publishes it as the repository's
+#   latest release, where TizenBrew Installer finds it: Cummmies/custom-stremio.
+# purge: the tv/ test module is loaded by TizenBrew through jsDelivr, which
+#   caches a branch's files for up to 12 hours; this clears that cache.
 name: TV
 
 on:
   push:
     branches: [main]
     paths:
-      - 'tv/**'
+      - 'src/**'
+      - 'static/**'
       - 'package.json'
+      - 'package-lock.json'
+      - 'svelte.config.js'
+      - 'vite.config.js'
+      - 'scripts/build-core-tv.sh'
+      - 'scripts/strip-wasm-section.py'
+      - 'tv/**'
       - '.github/workflows/tv.yml'
   workflow_dispatch:
+
+concurrency:
+  group: tv
+  cancel-in-progress: true
 
 env:
   TIZEN_STUDIO_VER: '5.6'
 
 jobs:
-  purge:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Purge jsDelivr
-        run: |
-          for f in package.json $(git ls-files tv); do
-            for name in gh/${{ github.repository }} gh/${{ github.repository }}@main; do
-              curl -sS "https://purge.jsdelivr.net/$name/$f" -o /dev/null -w "%{http_code} $name/$f\n" || true
-            done
-          done
-
-  wgt:
+  app:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,6 +51,68 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Stremio's core without WebAssembly reference types (scripts/build-core-tv.sh),
+      # cached per core version.
+      - name: Core version
+        id: core
+        run: |
+          echo "version=$(node -p "require('./node_modules/@stremio/stremio-core-web/package.json').version")" >> "$GITHUB_OUTPUT"
+          echo "dir=$RUNNER_TEMP/core-tv" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: core-cache
+        with:
+          path: ${{ steps.core.outputs.dir }}
+          key: core-tv-${{ steps.core.outputs.version }}-${{ hashFiles('scripts/build-core-tv.sh', 'scripts/strip-wasm-section.py') }}
+
+      - name: Get the core's source
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        id: src
+        run: |
+          git clone --quiet --filter=blob:none https://github.com/Stremio/stremio-core "$RUNNER_TEMP/stremio-core"
+          git -C "$RUNNER_TEMP/stremio-core" checkout --quiet "stremio-core-web-v${{ steps.core.outputs.version }}"
+          WB=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' "$RUNNER_TEMP/stremio-core/Cargo.lock")
+          echo "wasm-bindgen $WB"
+          echo "wasm_bindgen=$WB" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        with:
+          tool: wasm-bindgen-cli@${{ steps.src.outputs.wasm_bindgen }}
+
+      - name: Build the core
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        env:
+          CORE_SRC: ${{ runner.temp }}/stremio-core
+        run: |
+          # The core pins its Rust version (rust-toolchain.toml); add the target to it.
+          (cd "$CORE_SRC/stremio-core-web" && rustup target add wasm32-unknown-unknown)
+          scripts/build-core-tv.sh "${{ steps.core.outputs.dir }}"
+
+      - name: Build the app (TV)
+        env:
+          TV_BUILD: '1'
+          CORE_DIR: ${{ steps.core.outputs.dir }}
+        run: |
+          # Hash routing allows no page options; ssr = false is implied there.
+          sed -i '/export const ssr/d' src/routes/+layout.ts
+          npm run build
+          # The app opens from a local file: start from paths relative to it.
+          sed -i 's#"/_app/#"./_app/#g; s#href="/favicon#href="./favicon#' build/index.html
+          grep -c '"./_app/' build/index.html
 
       - name: Install Tizen Studio (command line)
         run: |
@@ -94,13 +156,12 @@ jobs:
       - name: Assemble
         run: |
           rm -rf wgt && mkdir wgt
-          cp -r tv/app/. wgt/
-          cp tv/service.js wgt/
+          cp -r build/. wgt/
           cp tv/wgt/config.xml wgt/
           cp src-tauri/icons/128x128.png wgt/icon.png
           # A new version each build, so the TV takes it as an update.
           sed -i "s/version=\"0.1.0\"/version=\"0.1.${{ github.run_number }}\"/" wgt/config.xml
-          grep -o 'version="[0-9.]*"' wgt/config.xml | head -1
+          du -sh wgt
 
       - name: Build and sign
         run: |
@@ -115,7 +176,8 @@ jobs:
             exit 1
           fi
           mv "$WGT" CustomStremio.wgt
-          unzip -l CustomStremio.wgt | grep -E "signature|config.xml|service.js|index.html"
+          ls -lh CustomStremio.wgt
+          unzip -l CustomStremio.wgt | grep -E "signature|config.xml|index.html|\.wasm"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -129,8 +191,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view tv >/dev/null 2>&1; then
-            gh release create tv --target "$GITHUB_SHA" --latest --title "Samsung TV (test)" \
-              --notes "Test build of the Samsung TV app. Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
+            gh release create tv --target "$GITHUB_SHA" --latest --title "Samsung TV" \
+              --notes "The Samsung TV app. Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
           fi
+          gh release edit tv --title "Samsung TV" --latest \
+            --notes "The Samsung TV app ($(git log -1 --format=%h)). Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
           gh release upload tv CustomStremio.wgt --clobber
-          gh release edit tv --latest
+
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Purge jsDelivr
+        run: |
+          for f in package.json $(git ls-files tv); do
+            for name in gh/${{ github.repository }} gh/${{ github.repository }}@main; do
+              curl -sS "https://purge.jsdelivr.net/$name/$f" -o /dev/null -w "%{http_code} $name/$f\n" || true
+            done
+          done

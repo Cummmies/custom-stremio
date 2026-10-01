@@ -6,7 +6,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
-    import { isDesktop, isIOS } from '$lib/platform';
+    import { isDesktop, isIOS, isTV } from '$lib/platform';
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { profiles } from '$lib/profiles.svelte';
@@ -356,7 +356,7 @@
             </section>
         {/if}
 
-        {#if !isIOS}<!-- iOS has no streaming server -->
+        {#if !isIOS && !isTV}<!-- iOS and TVs have no streaming server -->
         <section>
             <h2>Streaming Server</h2>
             <div class="group">
@@ -395,7 +395,7 @@
         </div>
     </section>
 
-        {#if !isIOS}<!-- no keyboard on a phone -->
+        {#if !isIOS && !isTV}<!-- no keyboard on a phone or TV -->
     <section>
         <h2>Keyboard Shortcuts</h2>
         {#each shortcutGroups as g (g.title)}

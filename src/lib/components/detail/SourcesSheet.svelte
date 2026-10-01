@@ -2,10 +2,10 @@
     // Side sheet listing every addon's streams for one movie or episode.
     // A focused, dismissible task: Esc, the close button or the backdrop all close it.
     import type { MetaDetails, Stream } from '$lib/core/types';
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import { page } from '$app/state';
     import { openExternal } from '$lib/links';
-    import { inTauri } from '$lib/player/mpv.svelte';
+    import { canPlay } from '$lib/platform';
     import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
     import { easyQueue } from '$lib/player/easy';
     import { parseStream } from '$lib/player/ranking';
@@ -78,7 +78,7 @@
         return p.multiAudio ? 'Multi audio' : null;
     }
 
-    const playable = (s: Stream) => inTauri && !!s.deepLinks?.player && !s.ytId && !!linkOf(s);
+    const playable = (s: Stream) => canPlay && !!s.deepLinks?.player && !s.ytId && !!linkOf(s);
 
     function play(s: Stream) {
         const link = parsePlayerDeepLink(s.deepLinks!.player!);
@@ -184,7 +184,7 @@
             {/if}
         </div>
 
-        {#if !inTauri}
+        {#if !canPlay}
             <footer>Playback runs in the desktop app. Here you can copy a link into VLC or mpv.</footer>
         {/if}
     </div>

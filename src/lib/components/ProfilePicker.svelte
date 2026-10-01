@@ -2,7 +2,7 @@
     // Full-screen profiles: "Who's watching?", Add Profile and Edit Profile.
     // A profile is a Stremio account saved on this PC, so adding one is a log-in.
     // A modal task with an obvious way out: Esc, the close button, Back or Cancel.
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import { app } from '$lib/app.svelte';
     import { core } from '$lib/core';
     import { imageToAvatar, profiles, PROFILE_COLORS, type SavedProfile } from '$lib/profiles.svelte';

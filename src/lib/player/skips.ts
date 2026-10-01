@@ -4,6 +4,7 @@
 //   1. The file's own chapter markers ("Intro", "Opening", "Credits"…): exact for this file.
 //   2. TheIntroDB and IntroDB: crowdsourced timings looked up by IMDb id + season/episode.
 import { invoke } from '@tauri-apps/api/core';
+import { inTauri } from '$lib/platform';
 import type { RawChapter } from './backend';
 
 export type SkipKind = 'intro' | 'recap' | 'credits' | 'preview';
@@ -15,7 +16,10 @@ const MIN_LENGTH = 5; // seconds; shorter "segments" aren't worth a button
 
 async function getJson(url: string): Promise<any | null> {
     try {
-        const text = await invoke<string | null>('skip_lookup', { url });
+        // The apps fetch natively (no CORS); the TV app isn't bound by CORS either.
+        const text = inTauri
+            ? await invoke<string | null>('skip_lookup', { url })
+            : await fetch(url).then((r) => (r.ok ? r.text() : null));
         return text ? JSON.parse(text) : null;
     } catch {
         return null;

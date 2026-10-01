@@ -2,9 +2,10 @@
     import logo from '$lib/assets/logo.png';
     // Floating navigation over the hero: brand, a pill of sections, search and account.
     // Transparent at rest; picks up a glass backing once content scrolls under it.
-    import { goto } from '$app/navigation';
+    import { goto } from '$lib/nav';
     import { page } from '$app/state';
     import { app } from '$lib/app.svelte';
+    import { isTV } from '$lib/platform';
     import Icon from './Icon.svelte';
     import ServerStatus from './ServerStatus.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -28,7 +29,8 @@
 
     const onSearchPage = $derived(page.url.pathname === '/search');
     const expanded = $derived(searchOpen || onSearchPage);
-    const serverTrouble = $derived(app.server.state === 'missing' || app.server.state === 'failed');
+    // TVs never have a server; nothing to warn about.
+    const serverTrouble = $derived(!isTV && (app.server.state === 'missing' || app.server.state === 'failed'));
 
     $effect(() => {
         if (onSearchPage) query = page.url.searchParams.get('q') ?? '';

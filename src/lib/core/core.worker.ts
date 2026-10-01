@@ -30,6 +30,22 @@ scope.init = async ({ appVersion, shellVersion }: { appVersion: string; shellVer
     scope.decodeStream = decode_stream;
     scope.encodeStream = encode_stream;
     scope.analytics = analytics;
-    await initWasm({ module_or_path: wasmUrl });
+    await initWasm({ module_or_path: await wasmSource() });
     await initialize_runtime((event: unknown) => bridge.call(['onCoreEvent'], [event]));
 };
+
+/**
+ * The core's WebAssembly. The TV app runs from local files, where fetch() may
+ * not be allowed; read it with XHR there.
+ */
+async function wasmSource(): Promise<string | ArrayBuffer> {
+    if (new URL(wasmUrl, self.location.href).protocol !== 'file:') return wasmUrl;
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', wasmUrl);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = () => (xhr.response ? resolve(xhr.response) : reject(new Error('Core not found')));
+        xhr.onerror = () => reject(new Error('Core not loaded'));
+        xhr.send();
+    });
+}

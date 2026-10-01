@@ -7,7 +7,7 @@
     import { titleContext } from '$lib/contextmenu';
     import { previewInHero } from '$lib/heroPreview.svelte';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
-    import { inTauri } from '$lib/player/mpv.svelte';
+    import { canPlay } from '$lib/platform';
     import { playerPrefs } from '$lib/player/prefs.svelte';
 
     let { item }: { item: LibraryItem } = $props();
@@ -22,9 +22,9 @@
     // without it you choose. Not knowing the episode, open the title's episode list.
     const target = $derived(item.type === 'series' ? resumeVideo : item._id);
     const href = $derived(
-        (inTauri && resumeHref(item.deepLinks?.player)) ||
+        (canPlay && resumeHref(item.deepLinks?.player)) ||
             (target
-                ? titleHref(item.type, item._id, playerPrefs.easyMode && inTauri ? { video: target, auto: '1' } : { video: target })
+                ? titleHref(item.type, item._id, playerPrefs.easyMode && canPlay ? { video: target, auto: '1' } : { video: target })
                 : titleHref(item.type, item._id))
     );
 

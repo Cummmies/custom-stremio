@@ -1,0 +1,27 @@
+/* The TV app (html.tv, set by $lib/tv/remote.ts). Everything is reached with
+   the remote's arrows, so focus has to be obvious from the sofa. The outline
+   sits inside the item: scrolling rows would clip one drawn outside. */
+html.tv :focus,
+html.tv :focus-visible {
+    outline: 4px solid #fff;
+    outline-offset: -4px;
+    box-shadow: 0 0 0 2px rgb(0 0 0 / 0.6), 0 0 24px rgb(255 255 255 / 0.35);
+}
+
+/* Fields show their own focus (the caret and the TV keyboard). */
+html.tv input:focus,
+html.tv textarea:focus {
+    outline-offset: 0;
+}
+
+/* The video surface in the player: no ring over the picture. */
+html.tv .player .surface:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* No mouse on a TV. */
+html.tv,
+html.tv * {
+    cursor: none !important;
+}
