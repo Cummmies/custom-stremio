@@ -28,7 +28,9 @@
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const onSearchPage = $derived(appUrl(page.url).pathname === '/search');
-    const expanded = $derived(searchOpen || onSearchPage);
+    // TV: Search is its own screen with its field (tvOS); the bar's field
+    // never expands (animating its width stutters on a TV).
+    const expanded = $derived(!isTV && (searchOpen || onSearchPage));
     // TVs never have a server; nothing to warn about.
     const serverTrouble = $derived(!isTV && (app.server.state === 'missing' || app.server.state === 'failed'));
 
@@ -85,6 +87,7 @@
     }
 
     export async function focusSearch() {
+        if (isTV) return goto('/search');
         searchOpen = true;
         await Promise.resolve();
         input?.focus();

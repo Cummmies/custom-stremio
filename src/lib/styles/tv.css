@@ -88,9 +88,13 @@ html.tv :is(input, textarea):focus {
     border-color: #fff !important;
 }
 
-/* The top bar's search field: its pill is the frame. */
-html.tv header .search input:focus {
+/* Search fields (the Search screen's, the top bar's): the pill is the frame. */
+html.tv header .search input:focus,
+html.tv form.field input:focus {
     box-shadow: none !important;
+}
+html.tv form.field:focus-within {
+    box-shadow: 0 0 0 3px #fff;
 }
 html.tv header .search:focus-within {
     border-color: #fff !important;

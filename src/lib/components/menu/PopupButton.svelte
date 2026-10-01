@@ -3,6 +3,7 @@
     // Replaces native <select>, whose dropdown can't be styled to match the app.
     import { menu } from '$lib/menu.svelte';
     import Icon from '../Icon.svelte';
+    import { isTV } from '$lib/platform';
 
     let {
         value = $bindable(),
@@ -34,6 +35,9 @@
     }
 
     function onkeydown(e: KeyboardEvent) {
+        // TV: the arrows move between items (OK opens the menu); opening it
+        // here too left you stuck reopening it.
+        if (isTV || e.defaultPrevented) return;
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
             open(e.currentTarget as HTMLElement);

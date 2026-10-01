@@ -40,7 +40,7 @@
 <svelte:head><title>{query ? `${query} · Search` : 'Search'} · Stremio</title></svelte:head>
 
 <div class="page">
-    <form class="field" role="search" onsubmit={(e) => (e.preventDefault(), clearTimeout(typing), search(field))}>
+    <form class="field" class:tv={isTV} role="search" onsubmit={(e) => (e.preventDefault(), clearTimeout(typing), search(field))}>
         <Icon name="search" size={17} />
         <input
             type="search"
@@ -51,6 +51,7 @@
             }}
             placeholder="Movies, series…"
             aria-label="Search movies and series"
+            data-tv-focus={isTV && !query ? '' : undefined}
             enterkeyhint="search"
             autocomplete="off"
             spellcheck="false"
@@ -113,6 +114,28 @@
             font-size: 17px;
             outline: none;
         }
+    }
+    /* TV: the field heads the Search screen (tvOS); OK on it opens the keyboard. */
+    .field.tv {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 56px;
+        max-width: 720px;
+        margin: 0 var(--gutter) 28px;
+        padding: 0 20px;
+        border-radius: 999px;
+        background: var(--fill-hover);
+        color: var(--label-2);
+    }
+    .field.tv input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        background: none;
+        color: var(--label);
+        font-size: 20px;
+        outline: none;
     }
     .rows {
         display: flex;

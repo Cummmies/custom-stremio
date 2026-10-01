@@ -222,6 +222,7 @@
                     </div>
                     <Toggle label="Ask if you’re still watching" checked={playerPrefs.askStillWatching} onchange={(v) => (playerPrefs.askStillWatching = v)} />
                 </div>
+                {#if !isTV}<!-- the TV's own player always decodes in hardware -->
                 <div class="row">
                     <div>
                         <div class="title">Hardware-accelerated decoding</div>
@@ -229,6 +230,7 @@
                     </div>
                     <Toggle label="Hardware-accelerated decoding" checked={settings.hardwareDecoding} onchange={(v) => update({ hardwareDecoding: v })} />
                 </div>
+                {/if}
             </div>
         </section>
 

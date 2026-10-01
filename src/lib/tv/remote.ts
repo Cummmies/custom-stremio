@@ -144,8 +144,11 @@ const cameFromBelow = new WeakMap<Element, HTMLElement>();
 /** The sideways-scrolling container an item sits in, if any. */
 function rowOf(el: Element): Element | null {
     for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-        const o = getComputedStyle(p).overflowX;
-        if ((o === 'auto' || o === 'scroll') && p.scrollWidth > p.clientWidth + 1) return p;
+        // A sideways scroller only: a vertical list (overflow-y auto, which
+        // makes overflow-x auto too) can be a little wider than itself while
+        // its focused item is enlarged.
+        const { overflowX: x, overflowY: y } = getComputedStyle(p);
+        if ((x === 'auto' || x === 'scroll') && y !== 'auto' && y !== 'scroll' && p.scrollWidth > p.clientWidth + 1) return p;
     }
     return null;
 }
@@ -182,7 +185,7 @@ function move(dir: Dir): boolean {
     // Reversing a vertical move goes back where you came from (as on tvOS).
     const key = rowOf(active!) ?? active!;
     const back = dir === 'up' ? cameFromAbove.get(key) : dir === 'down' ? cameFromBelow.get(key) : undefined;
-    let next = back && back.isConnected && visible(back) ? back : nearest(active!.getBoundingClientRect(), dir, list, active);
+    let next = back && back !== active && back.isConnected && visible(back) ? back : nearest(active!.getBoundingClientRect(), dir, list, active);
     if (next && next !== back && (dir === 'up' || dir === 'down')) next = recalled(next, active);
     if (next && (dir === 'up' || dir === 'down')) {
         const nextKey = rowOf(next) ?? next;
