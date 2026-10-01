@@ -1,0 +1,56 @@
+# Run once: creates the Tizen author certificate that signs the TV app.
+#
+# 1. Add a repository secret TIZEN_AUTHOR_KEY_PW with a password you make up.
+# 2. Run this workflow (Actions → TV certificate → Run workflow).
+# 3. Download the run's TIZEN_AUTHOR_KEY artifact, unzip it, and add the text
+#    inside as the repository secret TIZEN_AUTHOR_KEY. Then delete the run.
+#
+# The certificate is protected by that password, so the artifact is useless
+# without it. Keep both: every version of the TV app has to be signed with the
+# same certificate, or the TV won't update it in place.
+name: TV certificate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TIZEN_STUDIO_VER: '5.6'
+
+jobs:
+  cert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the password secret
+        env:
+          PW: ${{ secrets.TIZEN_AUTHOR_KEY_PW }}
+        run: |
+          if [ -z "$PW" ]; then
+            echo "::error::Add the repository secret TIZEN_AUTHOR_KEY_PW (any password) first."
+            exit 1
+          fi
+
+      - name: Install Tizen Studio (command line)
+        run: |
+          curl -fsSLo tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x tizen-installer
+          ./tizen-installer --accept-license "$HOME/tizen-studio"
+          rm tizen-installer
+
+      - name: Create the certificate
+        env:
+          PW: ${{ secrets.TIZEN_AUTHOR_KEY_PW }}
+        run: |
+          "$HOME/tizen-studio/tools/ide/bin/tizen" certificate -a CustomStremio -p "$PW" -c US -n "Custom Stremio" -f custom-stremio-author
+          P12=$(find "$HOME" -name 'custom-stremio-author.p12' | head -1)
+          test -n "$P12"
+          base64 -w0 "$P12" > TIZEN_AUTHOR_KEY.txt
+          echo "Created $(wc -c < TIZEN_AUTHOR_KEY.txt) characters of certificate."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TIZEN_AUTHOR_KEY
+          path: TIZEN_AUTHOR_KEY.txt
+          retention-days: 1

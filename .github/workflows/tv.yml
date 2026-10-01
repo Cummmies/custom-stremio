@@ -1,6 +1,10 @@
-# The TV test module (tv/) is loaded by TizenBrew through jsDelivr, which
-# caches a branch's files for up to 12 hours. This clears that cache on each
-# push so the TV gets the new files on its next launch.
+# The Samsung TV test (see docs/samsung-tv.md and tv/README.md).
+#
+# purge: TizenBrew loads the tv/ module through jsDelivr, which caches a
+#   branch's files for up to 12 hours; this clears that cache on each push.
+# wgt: builds the test as an installable TV app (.wgt), signed with the
+#   certificate from tv-cert.yml, and publishes it as the repository's latest
+#   release, where TizenBrew Installer finds it (Cummmies/custom-stremio).
 name: TV
 
 on:
@@ -9,7 +13,11 @@ on:
     paths:
       - 'tv/**'
       - 'package.json'
+      - '.github/workflows/tv.yml'
   workflow_dispatch:
+
+env:
+  TIZEN_STUDIO_VER: '5.6'
 
 jobs:
   purge:
@@ -23,3 +31,106 @@ jobs:
               curl -sS "https://purge.jsdelivr.net/$name/$f" -o /dev/null -w "%{http_code} $name/$f\n" || true
             done
           done
+
+  wgt:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check the certificate secrets
+        id: secrets
+        env:
+          KEY: ${{ secrets.TIZEN_AUTHOR_KEY }}
+          PW: ${{ secrets.TIZEN_AUTHOR_KEY_PW }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$PW" ]; then
+            echo "::warning::No TV app built: run the TV certificate workflow first (see tv-cert.yml)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ok == 'true'
+
+      - name: Install Tizen Studio (command line)
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          sudo apt-get install -y expect
+          curl -fsSLo tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x tizen-installer
+          ./tizen-installer --accept-license "$HOME/tizen-studio"
+          rm tizen-installer
+          echo "TIZEN=$HOME/tizen-studio/tools/ide/bin/tizen" >> "$GITHUB_ENV"
+
+      # Our author certificate, and the SDK's public distributor certificate
+      # (the one Tizen 6.5 and older TVs accept in developer mode).
+      - name: Set up signing
+        if: steps.secrets.outputs.ok == 'true'
+        env:
+          KEY: ${{ secrets.TIZEN_AUTHOR_KEY }}
+          PW: ${{ secrets.TIZEN_AUTHOR_KEY_PW }}
+        run: |
+          DATA="$HOME/tizen-signing"
+          mkdir -p "$DATA"
+          echo "$KEY" | base64 -d > "$DATA/author.p12"
+          SDK="$HOME/tizen-studio/tools/certificate-generator/certificates"
+          cat > "$DATA/profiles.xml" <<XML
+          <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+          <profiles active="CustomStremio" version="3.1">
+          <profile name="CustomStremio">
+          <profileitem ca="$SDK/developer/tizen-developer-ca.cer" distributor="0" key="$DATA/author.p12" password="$PW" rootca=""/>
+          <profileitem ca="$SDK/distributor/sdk-public/tizen-distributor-ca.cer" distributor="1" key="$SDK/distributor/sdk-public/tizen-distributor-signer.p12" password="tizenpkcs12passfordsigner" rootca=""/>
+          <profileitem ca="" distributor="2" key="" password="" rootca=""/>
+          </profile>
+          </profiles>
+          XML
+          sed -i 's/^ *//' "$DATA/profiles.xml"
+          "$TIZEN" cli-config "profiles.path=$DATA/profiles.xml"
+
+      - name: Assemble
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          rm -rf wgt && mkdir wgt
+          cp -r tv/app/. wgt/
+          cp tv/service.js wgt/
+          cp tv/wgt/config.xml wgt/
+          cp src-tauri/icons/128x128.png wgt/icon.png
+          # A new version each build, so the TV takes it as an update.
+          sed -i "s/version=\"0.1.0\"/version=\"0.1.${{ github.run_number }}\"/" wgt/config.xml
+          grep -o 'version="[0-9.]*"' wgt/config.xml | head -1
+
+      - name: Build and sign
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          cd wgt
+          "$TIZEN" build-web -e ".*"
+          expect -c "set timeout 300; spawn $TIZEN package -t wgt -s CustomStremio -o $GITHUB_WORKSPACE/out -- .buildResult; expect eof"
+          cd ..
+          WGT=$(ls out/*.wgt | head -1)
+          if [ -z "$WGT" ]; then
+            cat "$HOME"/tizen-studio-data/cli/logs/cli.log 2>/dev/null | tail -50 || true
+            echo "::error::No .wgt was made."
+            exit 1
+          fi
+          mv "$WGT" CustomStremio.wgt
+          unzip -l CustomStremio.wgt | grep -E "signature|config.xml|service.js|index.html"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.secrets.outputs.ok == 'true'
+        with:
+          name: CustomStremio-tv
+          path: CustomStremio.wgt
+
+      # TizenBrew Installer installs the first .wgt of the latest release.
+      - name: Publish
+        if: steps.secrets.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view tv >/dev/null 2>&1; then
+            gh release create tv --target "$GITHUB_SHA" --latest --title "Samsung TV (test)" \
+              --notes "Test build of the Samsung TV app. Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
+          fi
+          gh release upload tv CustomStremio.wgt --clobber
+          gh release edit tv --latest

@@ -7,10 +7,15 @@
     // --- where files are ---------------------------------------------------------
     // Under TizenBrew the page is http://127.0.0.1:8081/module/<gh%2F...>/app/index.html;
     // jsDelivr serves the same files directly (with Range requests and CORS).
+    // In the test app (.wgt) the page is a local file, or served by our own
+    // service on 127.0.0.1:8090; the media then comes from jsDelivr too.
+    var JSD_APP = 'https://cdn.jsdelivr.net/gh/Cummmies/custom-stremio/tv/app/';
     var moduleMatch = location.pathname.match(/\/module\/([^/]+)\/(.*\/)?[^/]*$/);
+    var packaged = location.protocol === 'file:';
+    var servedByUs = location.host === '127.0.0.1:8090';
     var CDN_BASE = moduleMatch
         ? 'https://cdn.jsdelivr.net/' + decodeURIComponent(moduleMatch[1]) + '/' + (moduleMatch[2] || '')
-        : new URL('./', location.href).href;
+        : packaged || servedByUs ? JSD_APP : new URL('./', location.href).href;
     var CORE_WASM = 'https://cdn.jsdelivr.net/npm/@stremio/stremio-core-web@0.63.2/stremio_core_web_bg.wasm';
     var SERVICE = 'http://127.0.0.1:8090';
 
@@ -90,7 +95,7 @@
     row('Device', 'Tizen (from UA)', tizenVer || '?');
     row('Device', 'Screen', screen.width + '×' + screen.height + ' @' + window.devicePixelRatio);
     row('Device', 'Window', window.innerWidth + '×' + window.innerHeight);
-    row('Device', 'Page origin', location.origin, 'dim');
+    row('Device', 'Running as', moduleMatch ? 'TizenBrew module' : packaged ? 'Installed app' : servedByUs ? 'App, page from service' : 'Browser', 'ok');
     row('Device', 'Memory (deviceMemory)', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'n/a', 'dim');
     row('Device', 'CPU threads', navigator.hardwareConcurrency || 'n/a', 'dim');
 
@@ -261,6 +266,26 @@
     netTest('IntroDB (CORS?)', 'https://api.introdb.app/segments?imdb_id=tt0903747&season=1&episode=1');
 
     // --- TizenBrew service ---------------------------------------------------------
+    if (packaged || servedByUs) {
+        try {
+            ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind',
+                'ColorF0Red', 'ColorF1Green', 'ColorF2Yellow', 'ColorF3Blue'].forEach(function (k) {
+                tizen.tvinputdevice.registerKey(k);
+            });
+        } catch (e) { log('registerKey: ' + e.message); }
+    }
+    if (packaged) {
+        try {
+            var pkgId = tizen.application.getCurrentApplication().appInfo.packageId;
+            tizen.application.launchAppControl(
+                new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/service'),
+                pkgId + '.Service',
+                function () { log('Service launched'); },
+                function (e) { log('Service launch failed: ' + e.message); }
+            );
+        } catch (e) { log('Service launch: ' + e.message); }
+    }
+
     var SV = 'Node.js service';
     var svcRow = row(SV, 'Running', '…');
     (function poll(tries) {
@@ -297,7 +322,12 @@
         var i = buttons.indexOf(document.activeElement);
         if (e.keyCode === 40) { buttons[Math.min(buttons.length - 1, i + 1)].focus(); e.preventDefault(); }
         else if (e.keyCode === 38) { buttons[Math.max(0, i - 1)].focus(); e.preventDefault(); }
-        else if (e.keyCode === 10009) { stopAll(); e.preventDefault(); }
+        else if (e.keyCode === 10009) {
+            e.preventDefault();
+            if (video || avplayOpen) return stopAll();
+            if (servedByUs) return history.back();
+            if (packaged) { try { tizen.application.getCurrentApplication().exit(); } catch (err) { /* stay */ } }
+        }
         else if (e.keyCode === 10252 || e.keyCode === 415 || e.keyCode === 19) { togglePause(); }
         else if (e.keyCode === 417) { seekBy(10); }
         else if (e.keyCode === 412) { seekBy(-10); }
@@ -452,6 +482,10 @@
         else if (name === 'avplay-hevc') avplay('hevc-hdr10.mkv');
         else if (name === 'avplay-audio') avplayAudio2();
         else if (name === 'stop') stopAll();
+        else if (name === 'served') {
+            if (servedByUs) return log('Already the served page');
+            location.href = SERVICE + '/app/index.html';
+        }
     }
 
     log('Files from ' + CDN_BASE);

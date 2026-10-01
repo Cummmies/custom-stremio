@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The TV test app. tv.yml packages tv/app + tv/service.js with this file. -->
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="https://github.com/Cummmies/custom-stremio" version="0.1.0" viewmodes="maximized">
+    <tizen:application id="CStremioTV.CustomStremio" package="CStremioTV" required_version="3.0"/>
+    <tizen:service id="CStremioTV.Service">
+        <tizen:content src="service.js"/>
+        <tizen:name>CustomStremioService</tizen:name>
+    </tizen:service>
+    <name>Custom Stremio</name>
+    <content src="index.html"/>
+    <icon src="icon.png"/>
+    <access origin="*" subdomains="true"/>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <feature name="http://tizen.org/feature/web.service"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="false"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/use.preview" value="false"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

@@ -1,7 +1,11 @@
-// Runs in TizenBrew's Node.js service on the TV (old Node: plain ES5 only).
-// Answers the test page on http://127.0.0.1:8090:
-//   /info         Node version, memory, disk
+// The test's Node.js service on the TV (plain ES5: older TVs have Node 4).
+// Runs either inside TizenBrew (as the module's serviceFile) or as the test
+// app's own Tizen service. Answers on http://127.0.0.1:8090:
+//   /info         Node version, memory
 //   /proxy?url=   fetches a URL for the page (no CORS limits here)
+//   /core         compiles Stremio's core here with reference types on
+//   /app/...      the test page itself, from jsDelivr (to compare a page
+//                 served by us with the packaged one)
 var http = require('http');
 var https = require('https');
 var os = require('os');
@@ -36,6 +40,7 @@ function get(url, res, redirects) {
 
 // Can Node's V8 run Stremio's core with the reference-types flag on?
 var REFTYPES = Buffer.from('AGFzbQEAAAABBgFgAW8BbwMCAQAKBgEEACAACw==', 'base64');
+var APP_FILES = 'https://cdn.jsdelivr.net/gh/Cummmies/custom-stremio/tv/app/';
 var CORE_URL = 'https://cdn.jsdelivr.net/npm/@stremio/stremio-core-web@0.63.2/stremio_core_web_bg.wasm';
 function coreTest(res) {
     var out = {};
@@ -81,7 +86,15 @@ var server = http.createServer(function (req, res) {
     }
     if (u.pathname === '/proxy' && u.query.url) return get(u.query.url, res, 0);
     if (u.pathname === '/core') return coreTest(res);
+    if (u.pathname.indexOf('/app/') === 0) return get(APP_FILES + u.pathname.slice(5), res, 0);
     send(res, 404, 'text/plain', 'not found');
 });
 server.on('error', function () {});
 server.listen(8090, '127.0.0.1');
+
+// As a Tizen service the runtime calls these; the server above is already up.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports.onStart = function () {};
+    module.exports.onRequest = function () {};
+    module.exports.onExit = function () { try { server.close(); } catch (e) { /* closed */ } };
+}
