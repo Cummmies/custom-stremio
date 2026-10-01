@@ -272,7 +272,8 @@
     if (packaged || servedByUs) {
         try {
             ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind',
-                'ColorF0Red', 'ColorF1Green', 'ColorF2Yellow', 'ColorF3Blue'].forEach(function (k) {
+                'ColorF0Red', 'ColorF1Green', 'ColorF2Yellow', 'ColorF3Blue',
+                '1', '2', '3', '4', '5', '6', '7', '8'].forEach(function (k) {
                 tizen.tvinputdevice.registerKey(k);
             });
         } catch (e) { log('registerKey: ' + e.message); }
@@ -348,6 +349,12 @@
         else if (e.keyCode === 10252 || e.keyCode === 415 || e.keyCode === 19) { togglePause(); }
         else if (e.keyCode === 417) { seekBy(10); }
         else if (e.keyCode === 412) { seekBy(-10); }
+        // Number keys 1-8 run that test.
+        else if (e.keyCode >= 49 && e.keyCode <= 48 + buttons.length) {
+            var b = buttons[e.keyCode - 49];
+            b.focus();
+            runTest(b.getAttribute('data-test'));
+        }
     });
     buttons.forEach(function (b) {
         b.addEventListener('click', function () { runTest(b.getAttribute('data-test')); });
