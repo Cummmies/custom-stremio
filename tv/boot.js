@@ -13,6 +13,13 @@
     'use strict';
     // The TV look and scale (src/lib/styles/tv.css) from the first frame.
     document.documentElement.classList.add('tv');
+    // The screen size picked in Settings (src/lib/tv/size.ts).
+    try {
+        var zoom = { small: 1, medium: 1.35, large: 1.75 }[localStorage.getItem('tv.size')];
+        if (zoom) document.documentElement.style.setProperty('--tv-zoom', String(zoom));
+    } catch (e) {
+        /* storage blocked: the default size */
+    }
     // Engines without flex gap and aspect-ratio (Chromium 69) get stand-ins
     // for them (scripts/tv-legacy-css.mjs).
     if (!(window.CSS && CSS.supports && CSS.supports('aspect-ratio', '1 / 1'))) {

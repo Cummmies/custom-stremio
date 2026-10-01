@@ -120,6 +120,13 @@
         margin-top: -8px;
         scrollbar-width: none;
     }
+    /* TV: room above and below for the focus lift and its shadow. */
+    :global(html.tv) .track {
+        padding-top: 18px;
+        padding-bottom: 30px;
+        margin-top: -18px;
+        margin-bottom: -22px;
+    }
     .track::-webkit-scrollbar {
         display: none;
     }

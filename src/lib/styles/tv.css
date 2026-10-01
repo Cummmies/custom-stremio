@@ -3,8 +3,8 @@
    the room, driven by focus.
 
    Scale. A TV is 1920 points wide and tvOS sets body text at 29 pt; the app's
-   desktop body text is 14 px. The whole app is zoomed so it lays out as a
-   ~1100 px wide window (its desktop layout) at about 1.75× the size. Under
+   desktop body text is 14 px. The whole app is zoomed: 1.35× by default
+   (a ~1420 px wide desktop layout), 1× or 1.75× from Settings. Under
    zoom, vh/vw come out zoom times too big, so the TV build turns them into
    --tv-vh / --tv-vw (vite.config.js, tvViewportUnits).
 
@@ -12,10 +12,11 @@
    and casts a shadow) and focused buttons turn white. Every element is
    reachable with the arrows ($lib/tv/remote.ts). */
 html.tv {
-    --tv-zoom: 1.75;
-    zoom: 1.75;
-    --tv-vh: calc(1vh / 1.75);
-    --tv-vw: calc(1vw / 1.75);
+    /* Settings → Display → Screen Size sets it on <html> ($lib/tv/size.ts). */
+    --tv-zoom: 1.35;
+    zoom: var(--tv-zoom);
+    --tv-vh: calc(1vh / var(--tv-zoom));
+    --tv-vw: calc(1vw / var(--tv-zoom));
 }
 
 /* --- focus --------------------------------------------------------------- */
@@ -37,14 +38,6 @@ html.tv a.card:focus :is(.poster, .art) {
     box-shadow:
         0 0 0 3px #fff,
         0 14px 32px rgb(0 0 0 / 0.75);
-}
-
-/* Rows: room above and below for the lift and its shadow. */
-html.tv .track {
-    padding-top: 18px;
-    padding-bottom: 30px;
-    margin-top: -18px;
-    margin-bottom: -22px;
 }
 
 /* Buttons, tabs, chips, links: turn white (the tvOS focused button), with a

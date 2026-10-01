@@ -3,6 +3,7 @@
     import { app } from '$lib/app.svelte';
     import type { Settings } from '$lib/core/types';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
+    import { getTvSize, setTvSize, tvSizes, type TvSize } from '$lib/tv/size';
     import Toggle from '$lib/components/Toggle.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
@@ -19,6 +20,7 @@
 
     // stremio:// link handling (registered per user in Windows, not synced).
     let handlesLinks = $state(false);
+    let tvSize = $state<TvSize>(isTV ? getTvSize() : 'medium');
     $effect(() => {
         if (!inTauri) return;
         import('@tauri-apps/plugin-deep-link').then(async ({ isRegistered }) => {
@@ -380,6 +382,29 @@
             </div>
         </section>
         {/if}
+    {/if}
+
+    {#if isTV}
+        <section>
+            <h2>Display</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">Screen Size</div>
+                        <div class="sub">How big text, posters and controls are. Small is the desktop app’s size.</div>
+                    </div>
+                    <PopupButton
+                        label="Screen Size"
+                        value={tvSize}
+                        options={(Object.keys(tvSizes) as TvSize[]).map((s) => ({ value: s, label: tvSizes[s].label }))}
+                        onchange={(v) => {
+                            tvSize = v;
+                            setTvSize(v);
+                        }}
+                    />
+                </div>
+            </div>
+        </section>
     {/if}
 
     <section>

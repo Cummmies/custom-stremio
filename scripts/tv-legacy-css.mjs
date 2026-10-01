@@ -13,9 +13,10 @@
 // - flex gap (Chromium 84) and aspect-ratio (Chromium 88): extra rules under
 //   html.tv-legacy, which tv/boot.js sets on engines without aspect-ratio.
 
-// The TV lays out a 1920 × 1080 screen zoomed 1.75× (src/lib/styles/tv.css).
-const VW = 1920 / 1.75 / 100;
-const VH = 1080 / 1.75 / 100;
+// The TV lays out a 1920 × 1080 screen zoomed 1.35× by default
+// (src/lib/styles/tv.css); fixed values are worked out for that.
+const VW = 1920 / 1.35 / 100;
+const VH = 1080 / 1.35 / 100;
 
 /** Splits on top-level commas. */
 function splitTop(s) {
