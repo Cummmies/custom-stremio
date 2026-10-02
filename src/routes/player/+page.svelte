@@ -797,6 +797,16 @@
         await invoke('set_pip', { enabled: pip });
     }
 
+    /**
+     * The on-screen back button: the title's (or episode's show's) page, in
+     * the player's place, so Back from there returns to where you started.
+     * Esc and the remote's Back still go straight back (exit).
+     */
+    function toDetails() {
+        if (type && id) goto(titleHref(type, id), { replaceState: true });
+        else exit();
+    }
+
     function exit() {
         if (history.length > 1) history.back();
         else goto(type && id ? titleHref(type, id) : '/');
@@ -1172,7 +1182,7 @@
 
     <header class="top">
         {#if !pip}
-            <button class="icon" onclick={exit} aria-label="Back" title="Back (Esc)"><Icon name="back" size={22} /></button>
+            <button class="icon" onclick={toDetails} aria-label={type && id ? 'Details' : 'Back'} title={type && id ? 'Details' : 'Back (Esc)'}><Icon name="back" size={22} /></button>
         {/if}
         <div class="titles">
             <h1>{heading}</h1>

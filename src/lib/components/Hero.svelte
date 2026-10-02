@@ -255,6 +255,13 @@
     .placeholder {
         pointer-events: none;
     }
+    /* TV: the artwork itself fades out at the bottom (a mask, not just the dark
+       scrim over it), over a longer stretch, so it never ends in a visible edge
+       behind the first rows on a bright TV. */
+    :global(html.tv) .art {
+        -webkit-mask-image: linear-gradient(to bottom, #000 30%, rgb(0 0 0 / 0.6) 60%, transparent 100%);
+        mask-image: linear-gradient(to bottom, #000 30%, rgb(0 0 0 / 0.6) 60%, transparent 100%);
+    }
     /* TV (zoomed, see tv.css): a shorter banner, so its buttons and the first
        row share the opening screen, like tvOS's top shelf. */
     :global(html.tv) .hero {
