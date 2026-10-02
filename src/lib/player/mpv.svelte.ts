@@ -385,6 +385,11 @@ function iosOptions(settings: StartSettings): Record<string, string> {
         'demuxer-max-back-bytes': '50MiB',
         // Phone screens are small and close: a slightly smaller subtitle size reads better.
         'sub-font-size': '40',
+        // mpv's iOS audio otherwise mixes with other apps' (AVAudioSession's
+        // mixWithOthers), and iOS leaves a mixing app out of Now Playing
+        // (Control Center, the Lock Screen; MpvPlugin.swift). Like any video
+        // app, it takes the audio: music playing elsewhere stops.
+        'audio-exclusive': 'yes',
     };
     return o;
 }
