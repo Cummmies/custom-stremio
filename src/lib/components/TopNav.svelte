@@ -68,7 +68,12 @@
         const name = user ? profiles.list.find((p) => p.uid === user._id)?.name || user.email : null;
         const account: MenuEntry[] = name
             ? [{ header: name }]
-            : [{ header: 'Not logged in' }, { label: 'Log In…', icon: 'user', onselect: () => app.openLogin() }];
+            : [
+                  { header: 'Not logged in' },
+                  { label: 'Log In…', icon: 'user', onselect: () => app.openLogin() },
+                  // Profiles saved on this device: pick one instead of logging in.
+                  ...(profiles.list.length ? [{ label: 'Switch Profile…', icon: 'users', onselect: () => app.openProfiles() } as MenuEntry] : []),
+              ];
         return [
             ...account,
             { separator: true },

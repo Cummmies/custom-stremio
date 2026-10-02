@@ -117,6 +117,11 @@ class CloudSync {
                 if (uid !== this.#uid) {
                     this.#uid = uid;
                     clearTimeout(this.#timer);
+                    // This profile's own settings, before comparing or sending anything.
+                    untrack(() => {
+                        playerPrefs.sync(uid);
+                        homeLayout.sync();
+                    });
                     // Already in step with the account: nothing to send until something changes.
                     this.#last = uid && this.#stamp(uid) ? untrack(() => this.#snapshot(uid)) : '';
                 }

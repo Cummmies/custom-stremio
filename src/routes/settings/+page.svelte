@@ -131,7 +131,12 @@
                 {#if app.user}
                     <button class="btn" onclick={() => app.openProfiles()}>Switch Profile…</button>
                 {:else}
-                    <button class="btn primary" onclick={() => app.openLogin()}>Log In…</button>
+                    <div class="account-actions">
+                        {#if profiles.list.length}
+                            <button class="btn" onclick={() => app.openProfiles()}>Switch Profile…</button>
+                        {/if}
+                        <button class="btn primary" onclick={() => app.openLogin()}>Log In…</button>
+                    </div>
                 {/if}
             </div>
             {#if myProfile}
@@ -153,6 +158,7 @@
                         onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                     />
                 </div>
+                {#if !isTV}<!-- a TV has no files to choose a picture from -->
                 <div class="row">
                     <div>
                         <div class="title">Profile picture</div>
@@ -160,6 +166,7 @@
                     </div>
                     <PhotoControls uid={myProfile.uid} />
                 </div>
+                {/if}
             {/if}
             {#if app.user}
                 <button class="row action destructive" onclick={() => app.logout()}>Log Out</button>
@@ -568,6 +575,11 @@
     .name-input:focus {
         outline: none;
         border-color: var(--accent-hover);
+    }
+    .account-actions {
+        display: flex;
+        gap: 8px;
+        flex: none;
     }
     .btn {
         height: 32px;

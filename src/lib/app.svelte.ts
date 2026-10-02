@@ -108,6 +108,8 @@ class AppState {
         const uid = this.user?._id;
         if (uid) profiles.forget(uid);
         core.dispatch({ action: 'Ctx', args: { action: 'Logout' } });
+        // Other profiles are still saved here: ask who's watching next.
+        if (profiles.list.length) this.openProfiles();
     }
 }
 

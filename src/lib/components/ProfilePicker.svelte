@@ -290,6 +290,7 @@
                 {:else}
                     <Avatar profile={draft} size={168} />
                 {/if}
+                {#if !isTV}<!-- a TV has no files to choose a picture from -->
                 <button
                     type="button"
                     class="pencil"
@@ -300,6 +301,7 @@
                 >
                     <Icon name="pencil" size={17} />
                 </button>
+                {/if}
                 <input bind:this={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange={onfile} hidden />
             </div>
 

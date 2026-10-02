@@ -369,6 +369,9 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             // OK on a text field that isn't typing yet: start typing.
             if (e.key === 'Enter' && isTextField(active) && active.dataset.tvLocked !== undefined) {
                 e.preventDefault();
+                // This OK only starts typing: the field's own Enter (often
+                // "done, blur") mustn't see it, or the keyboard closes at once.
+                e.stopPropagation();
                 unlock(active);
                 active.blur();
                 active.focus();
@@ -377,6 +380,9 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             // The TV's keyboard closed: arrows move focus again.
             if ((e.keyCode === KEYBOARD_DONE || e.keyCode === KEYBOARD_CANCEL) && isTextField(active) && !active.readOnly) {
                 lock(active);
+                // Focus stays in the field, so it hasn't committed: what was
+                // typed counts now (a profile name, say), as if you'd left it.
+                if (e.keyCode === KEYBOARD_DONE) active.dispatchEvent(new Event('change', { bubbles: true }));
                 return;
             }
 

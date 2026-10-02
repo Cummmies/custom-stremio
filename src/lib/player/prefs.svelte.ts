@@ -46,16 +46,47 @@ const defaults: Prefs = {
     discordPresence: false,
 };
 
-function load(): Prefs {
+function read(key: string): Partial<Prefs> | null {
     try {
-        return { ...defaults, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+        return JSON.parse(localStorage.getItem(key) ?? 'null');
     } catch {
-        return { ...defaults };
+        return null;
     }
 }
 
+/** This device's preferences; before profiles had their own, everything was here. */
+function load(): Prefs {
+    return { ...defaults, ...read(KEY) };
+}
+
+/**
+ * The account-level preferences (SYNCED_PREFS) are kept per profile: switching
+ * profile mustn't carry one account's choices over to another.
+ */
+function accountKey(uid: string | null) {
+    return `${KEY}:${uid ?? 'guest'}`;
+}
+const MIGRATED = `${KEY}:perProfile`;
+
 class PlayerPrefs {
     #p = $state<Prefs>(load());
+    #uid: string | null | undefined = undefined;
+
+    /** Follow the signed-in profile (called by cloudSync when it changes). */
+    sync(uid: string | null) {
+        if (uid === this.#uid) return;
+        this.#uid = uid;
+        let mine = read(accountKey(uid));
+        if (!mine) {
+            // The first profile after this change keeps what was set before it.
+            const first = !localStorage.getItem(MIGRATED);
+            mine = first ? pick(this.#p, SYNCED_PREFS) : pick(defaults, SYNCED_PREFS);
+            try {
+                localStorage.setItem(MIGRATED, '1');
+            } catch {}
+        }
+        this.#save({ ...pick(defaults, SYNCED_PREFS), ...pick(mine, SYNCED_PREFS) });
+    }
 
     get upscaler() {
         return this.#p.upscaler;
@@ -164,6 +195,7 @@ class PlayerPrefs {
         this.#p = { ...this.#p, ...patch };
         try {
             localStorage.setItem(KEY, JSON.stringify(this.#p));
+            if (this.#uid !== undefined) localStorage.setItem(accountKey(this.#uid), JSON.stringify(pick(this.#p, SYNCED_PREFS)));
         } catch {}
     }
 }
@@ -186,3 +218,9 @@ export const upscalerLabels: Record<Upscaler, string> = {
     'high-quality': 'High-Quality Scaling',
     rtx: 'NVIDIA RTX Video Super Resolution',
 };
+
+function pick<K extends keyof Prefs>(p: Partial<Prefs>, keys: readonly K[]): Partial<Pick<Prefs, K>> {
+    const out: Partial<Pick<Prefs, K>> = {};
+    for (const k of keys) if (k in p) out[k] = p[k] as Prefs[K];
+    return out;
+}
