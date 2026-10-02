@@ -53,6 +53,7 @@ tauri-plugin-process = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
 
-# iOS: mpv comes from MPVKit, driven by a small Swift plugin (plugins/mpv).
+# iOS: mpv comes from MPVKit (Streamyfin's fork, with Picture in Picture), driven
+# by a small Swift plugin (plugins/mpv).
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-mpv = { path = "plugins/mpv" }

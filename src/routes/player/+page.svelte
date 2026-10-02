@@ -11,7 +11,7 @@
     import { onMount, untrack } from 'svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
-    import { invoke } from '@tauri-apps/api/core';
+    import { addPluginListener, invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { core } from '$lib/core';
@@ -116,11 +116,16 @@
         // Back from the app switcher: iOS may have reset the orientation and
         // sizes, so ask for landscape again and bring the controls back up.
         const onVisible = () => {
-            if (document.visibilityState !== 'visible') return;
+            if (document.visibilityState !== 'visible') {
+                pipWanted = isIOS && player.loaded && !player.paused;
+                return;
+            }
             landscape();
             poke();
+            explainNoPip();
         };
         document.addEventListener('visibilitychange', onVisible);
+        const offIosPip = isIOS ? addPluginListener<IosPip>('mpv', 'pip', onIosPip).catch(() => null) : Promise.resolve(null);
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
         const offEvents = player.onEvent(onPlayerEvent);
         // Play/pause from the Windows media overlay or the keyboard's media keys.
@@ -152,6 +157,7 @@
             offEvents();
             offMedia.then((off) => off());
             offWindow.then((offs) => offs.forEach((off) => off()));
+            offIosPip.then((l) => l?.unregister());
             document.removeEventListener('visibilitychange', onVisible);
             if (isIOS) invoke('plugin:mpv|orientation', { landscape: false }).catch(() => {});
             if (isDesktop) invoke('media_clear').catch(() => {});
@@ -831,6 +837,52 @@
         await invoke('set_fullscreen', { fullscreen });
     }
 
+    // --- iOS Picture in Picture (MpvPlugin.swift): swiping home starts it once
+    // the video is ready; the PiP button starts it now. Its state comes from the
+    // app, which also says why when it can't (an app installed before this
+    // existed sends nothing, and says so when the button's pressed).
+    type IosPip = { state: string; detail?: string | null };
+    let iosPip = $state<IosPip | null>(null);
+    /** iOS's own "PiP could start now". */
+    let iosPipPossible = $state(false);
+    /** Playing when the app went to the background (so PiP was expected). */
+    let pipWanted = false;
+
+    function onIosPip(e: IosPip) {
+        if (e.state === 'possible' || e.state === 'impossible') iosPipPossible = e.state === 'possible';
+        else iosPip = e;
+    }
+
+    async function toggleIosPip() {
+        poke();
+        try {
+            await invoke('plugin:mpv|pip_toggle');
+        } catch (e) {
+            // The app rejects with a string or an { message } object.
+            const text = typeof e === 'string' ? e : ((e as { message?: string })?.message ?? JSON.stringify(e));
+            // An app installed before PiP existed doesn't have the command.
+            const old = !iosPip && /not allowed|not found|unknown|no such/i.test(text);
+            note(old ? 'Picture in Picture needs the newest version of the app.' : `Picture in Picture didn't start: ${text}`, 8000);
+        }
+    }
+
+    /** Back from the home screen without PiP: say why. */
+    function explainNoPip() {
+        if (!pipWanted || !iosPip) return;
+        pipWanted = false;
+        const s = iosPip.state;
+        if (s === 'active' || s === 'restoring' || s === 'unsupported') return;
+        const why =
+            s === 'failed'
+                ? `the video couldn't be prepared for it (${iosPip.detail ?? 'unknown reason'})`
+                : s !== 'ready'
+                  ? 'the video wasn\u2019t ready for it yet'
+                  : !iosPipPossible
+                    ? 'iOS didn\u2019t allow it (Settings \u2192 General \u2192 Picture in Picture \u2192 Start PiP Automatically)'
+                    : 'iOS didn\u2019t start it';
+        note(`No Picture in Picture: ${why}. Try the PiP button.`, 8000);
+    }
+
     async function togglePip() {
         if (!isDesktop) return;
         pip = !pip;
@@ -1353,6 +1405,11 @@
                     </button>
                     <button class="icon" aria-haspopup="menu" aria-expanded="false" aria-label="Playback settings" title="Settings" onclick={(e) => settingsMenu(e.currentTarget)}>
                         <Icon name="gear" size={20} />
+                    </button>
+                {/if}
+                {#if isIOS && iosPip?.state !== 'unsupported'}
+                    <button class="icon" onclick={toggleIosPip} aria-label={iosPip?.state === 'active' ? 'Exit picture in picture' : 'Picture in picture'}>
+                        <Icon name="pip" size={20} />
                     </button>
                 {/if}
                 {#if isDesktop}

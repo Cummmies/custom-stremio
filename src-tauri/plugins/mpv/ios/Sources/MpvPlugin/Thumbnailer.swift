@@ -4,7 +4,7 @@
 // Frames go back to the page as JPEGs.
 
 import Foundation
-import Libmpv
+import Mpv
 import UIKit
 
 struct ThumbnailError: LocalizedError {

@@ -102,6 +102,12 @@ The first time, turn on Developer Mode (Settings → Privacy & Security).
   overlay are desktop-only and hidden.
 - HDR plays in HDR on the iPhone screen (EDR), switched on for HDR video only.
 - The player locks to landscape; browsing is portrait.
+- Picture in Picture: swiping home while a video plays moves it into a PiP
+  window. mpv comes from [Streamyfin's MPVKit fork](https://github.com/streamyfin/MPVKit)
+  (`src-tauri/plugins/mpv/ios/Package.swift`; a GPL build), whose
+  vo_avfoundation draws into the layer PiP shows: one picture, one stream.
+- Control Center and the Lock Screen show what's playing, with play/pause,
+  ±10 s and seeking.
 
 ## Over-the-air updates (iOS)
 

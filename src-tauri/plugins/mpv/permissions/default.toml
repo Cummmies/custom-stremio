@@ -11,6 +11,7 @@ permissions = [
     "allow-thumb-close",
     "allow-now-playing",
     "allow-now-playing-clear",
+    "allow-pip-toggle",
     "allow-register-listener",
     "allow-remove-listener",
 ]

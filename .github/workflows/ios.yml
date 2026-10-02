@@ -32,6 +32,9 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # A new key when MPVKit changes (plugins/mpv/ios/Package.swift), so a
+          # cached build can't link the old one's libraries next to the new.
+          key: mpvkit-streamyfin-av5
 
       - run: npm ci
 

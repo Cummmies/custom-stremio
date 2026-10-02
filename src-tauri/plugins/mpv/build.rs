@@ -2,7 +2,7 @@ use std::{env, fs, path::Path, path::PathBuf};
 
 // register_listener/remove_listener: how the page subscribes to `prop` and
 // `event` (addPluginListener); they need permissions like any command.
-const COMMANDS: &[&str] = &["start", "command", "set", "get", "stop", "orientation", "thumb_frame", "thumb_close", "now_playing", "now_playing_clear", "register_listener", "remove_listener"];
+const COMMANDS: &[&str] = &["start", "command", "set", "get", "stop", "orientation", "thumb_frame", "thumb_close", "now_playing", "now_playing_clear", "pip_toggle", "register_listener", "remove_listener"];
 
 fn main() {
     tauri_plugin::Builder::new(COMMANDS).ios_path("ios").build();

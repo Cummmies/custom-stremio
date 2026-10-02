@@ -1,0 +1,11 @@
+// mpv's client API, as `import Mpv`. The headers are mpv's own (ISC licence,
+// see client.h), copied from the MPVKit release Package.swift downloads: that
+// framework has no macOS slice, and `swift build` (how Tauri compiles this
+// plugin) looks for a binary target's module there, not in the iOS slice.
+module Mpv {
+    header "mpv/client.h"
+    header "mpv/render.h"
+    header "mpv/render_gl.h"
+    header "mpv/stream_cb.h"
+    export *
+}

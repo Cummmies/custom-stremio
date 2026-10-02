@@ -10,19 +10,30 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "Tauri", path: "../.tauri/tauri-api"),
-        // libmpv + FFmpeg + libplacebo + MoltenVK, prebuilt for iOS.
-        .package(url: "https://github.com/mpvkit/MPVKit.git", from: "1.0.0"),
     ],
     targets: [
         .target(
             name: "MpvPlugin",
             dependencies: [
                 .byName(name: "Tauri"),
-                .product(name: "MPVKit", package: "MPVKit"),
+                "Mpv",
+                "MPVKit",
                 "MpvSystemLinks",
             ],
             path: "Sources/MpvPlugin"
         ),
         .target(name: "MpvSystemLinks", path: "Sources/MpvSystemLinks"),
+        // mpv's headers (import Mpv); see its module.modulemap.
+        .target(name: "Mpv", path: "Sources/Mpv"),
+        // mpv with FFmpeg and everything else in one static framework, from
+        // Streamyfin's MPVKit fork: its vo_avfoundation draws into an
+        // AVSampleBufferDisplayLayer, which Picture in Picture shows too (one
+        // stream). GPL build. Only its iOS slice is used, by build.rs, which
+        // links it into the app; Swift sees mpv through the Mpv target.
+        .binaryTarget(
+            name: "MPVKit",
+            url: "https://github.com/streamyfin/MPVKit/releases/download/0.41.0-av5/MPVKit.xcframework.zip",
+            checksum: "80a79fbb34b1a3ae84744fe7bb9d365d2a006a5f617460933b7ce777251d3618"
+        ),
     ]
 )
