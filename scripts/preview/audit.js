@@ -94,6 +94,11 @@
             var el = find(id);
             if (!el) return false;
             el.focus({ preventScroll: true });
+            // Arriving by the arrows, a text field isn't typing yet (remote.ts locks it).
+            if ((el.tagName === 'INPUT' && !/^(button|checkbox|radio|range|submit|reset|file|color)$/.test(el.type)) || el.tagName === 'TEXTAREA') {
+                el.readOnly = true;
+                el.dataset.tvLocked = '';
+            }
             el.scrollIntoView({ block: 'center', inline: 'nearest' });
             var r = el.getBoundingClientRect();
             var top = r.top - document.body.getBoundingClientRect().top;

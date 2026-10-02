@@ -35,7 +35,7 @@ concurrency:
 env:
   # Chromium builds matching the TV's two engines (chromium-browser-snapshots).
   CHROMIUM_69: '576713'
-  CHROMIUM_94: '911515'
+  CHROMIUM_94: '911577'
 
 jobs:
   check:

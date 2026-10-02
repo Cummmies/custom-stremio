@@ -215,6 +215,9 @@ async function walk(browser, name) {
 
 /** Did a move from `a` to `b` skip something, or jump too far? */
 function check(a, b, dir, all, vp) {
+    // Down from the top bar goes back where you were in the page (as on
+    // tvOS), past what's in between by design.
+    if (a.header && !b.header) return null;
     const between = all.filter((c) => {
         if (c.id === a.id || c.id === b.id) return false;
         if (c.header && !a.header && !b.header) return false;

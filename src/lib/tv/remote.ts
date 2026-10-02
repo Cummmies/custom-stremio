@@ -220,6 +220,23 @@ function belowBar(list: { el: HTMLElement; r: DOMRect }[]): HTMLElement | null {
     return first(list.filter(({ el }) => !inBar(el)));
 }
 
+/** The nearest row still loading between `from` and `to` (or beyond `from`, with no `to`). */
+function loadingBetween(from: DOMRect, to: DOMRect | null, dir: 'up' | 'down'): HTMLElement | null {
+    let best: HTMLElement | null = null;
+    let bestD = Infinity;
+    for (const el of document.querySelectorAll<HTMLElement>('[aria-busy="true"]')) {
+        const r = el.getBoundingClientRect();
+        if (r.height < MIN_TARGET || el.closest('[inert], [aria-hidden="true"]')) continue;
+        const d = dir === 'down' ? r.top - from.bottom : from.top - r.bottom;
+        const before = !to || (dir === 'down' ? r.bottom <= to.top + 1 : r.top >= to.bottom - 1);
+        if (d >= -1 && before && d < bestD) {
+            best = el;
+            bestD = d;
+        }
+    }
+    return best;
+}
+
 function move(dir: Dir): boolean {
     const list = candidates();
     const active = document.activeElement as HTMLElement | null;
@@ -247,6 +264,16 @@ function move(dir: Dir): boolean {
     if (next && (dir === 'up' || dir === 'down')) {
         const nextKey = rowOf(next) ?? next;
         (dir === 'down' ? cameFromAbove : cameFromBelow).set(nextKey, active!);
+    }
+    // A row still loading in the way (a slow network): show it and wait,
+    // rather than skip past it to whatever has loaded beyond (Customize Home
+    // at the bottom of the page). The next press goes into it.
+    if (dir === 'up' || dir === 'down') {
+        const loading = loadingBetween(active!.getBoundingClientRect(), next?.getBoundingClientRect() ?? null, dir);
+        if (loading) {
+            loading.scrollIntoView({ block: 'center', inline: 'nearest' });
+            return true;
+        }
     }
     if (next && dir === 'up' && inBar(next) && !inBar(active!)) beforeBar = active;
     if (next) focusEl(next);
