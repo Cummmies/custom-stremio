@@ -7,7 +7,8 @@
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
     import { fetchDetails, heroPreview, merge, needsDetails } from '$lib/heroPreview.svelte';
-    import { onDestroy } from 'svelte';
+    import { onDestroy, tick } from 'svelte';
+    import { isTV } from '$lib/platform';
 
     let { items }: { items: MetaItemPreview[] } = $props();
 
@@ -110,6 +111,36 @@
             : []
     );
     const logo = $derived(item && !logoFailed[item.id] ? logoOf(item) : null);
+
+    // The banner's height comes from the opening-screen rules (HomeView.svelte).
+    // When its contents don't fit under the top bar, they tighten a step at a
+    // time (data-fit, styles below): a smaller logo, a one-line description,
+    // no description, no tags. The buttons always stay.
+    const FIT_STEPS = 4;
+    let hero = $state<HTMLElement>();
+    function fitContents() {
+        const el = hero;
+        const copy = el?.querySelector<HTMLElement>('.copy');
+        if (!el || !copy || isTV) return;
+        const room = parseFloat(getComputedStyle(el).paddingTop);
+        for (let step = 0; step <= FIT_STEPS; step++) {
+            el.dataset.fit = String(step);
+            if (copy.getBoundingClientRect().top - el.getBoundingClientRect().top >= room - 1) break;
+        }
+    }
+    $effect(() => {
+        const el = hero;
+        if (!el || isTV) return;
+        const ro = new ResizeObserver(() => fitContents());
+        ro.observe(el);
+        return () => ro.disconnect();
+    });
+    // A different title (its logo, its description) fits differently.
+    $effect(() => {
+        item;
+        logo;
+        tick().then(fitContents);
+    });
     const saved = $derived(item ? app.inLibrary(item.id) : false);
 </script>
 
@@ -129,6 +160,7 @@
 {#if item}
     <section
         class="hero"
+        bind:this={hero}
         aria-roledescription="carousel"
         aria-label="Featured"
         onmouseenter={() => {
@@ -156,6 +188,7 @@
                         class="logo"
                         src={logo}
                         alt={item.name}
+                        onload={fitContents}
                         onerror={() => (logoFailed = { ...logoFailed, [item.id]: true })}
                     />
                 {:else}
@@ -212,10 +245,12 @@
 {/if}
 
 <style>
+    /* Sized by the opening-screen rules in HomeView.svelte (--hero-h); the art
+       runs on behind the first rows. */
     .art {
         position: absolute;
         inset: 0 0 auto 0;
-        height: min(96vh, 900px);
+        height: calc(var(--hero-h, min(78vh, 700px)) + 18vh);
         overflow: hidden;
         pointer-events: none;
         z-index: 0;
@@ -245,12 +280,13 @@
     .hero {
         position: relative;
         z-index: 1;
-        min-height: min(78vh, 700px);
+        box-sizing: border-box;
+        height: var(--hero-h, min(78vh, 700px));
         display: flex;
         align-items: flex-end;
         justify-content: space-between;
         gap: 24px;
-        padding: calc(var(--nav-h) + 24px) var(--gutter) 40px;
+        padding: calc(var(--nav-h) + 16px) var(--gutter) 32px;
     }
     .placeholder {
         pointer-events: none;
@@ -265,8 +301,12 @@
     /* TV (zoomed, see tv.css): a shorter banner, so its buttons and the first
        row share the opening screen, like tvOS's top shelf. */
     :global(html.tv) .hero {
+        height: auto;
         min-height: calc(56 * var(--tv-vh, 1vh));
         padding-bottom: 20px;
+    }
+    :global(html.tv) .art {
+        height: min(96vh, 900px);
     }
     .copy {
         max-width: 560px;
@@ -413,7 +453,7 @@
        everything centered, a wide Play button, swipe between titles. */
     @media (max-width: 700px) {
         .art {
-            height: 72vh;
+            height: calc(var(--hero-h, 66vh) + 6vh);
         }
         .art img {
             object-position: center 30%;
@@ -427,7 +467,6 @@
                 linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 22%);
         }
         .hero {
-            min-height: 66vh;
             flex-direction: column;
             align-items: stretch;
             justify-content: flex-end;
@@ -475,5 +514,43 @@
             justify-content: center;
             padding-bottom: 0;
         }
+    }
+
+    /* Tightening steps for a short banner (fitContents), after the phone
+       layout so they apply there too. */
+    .hero:global([data-fit='1']) .logo,
+    .hero:global([data-fit='2']) .logo {
+        max-height: 96px;
+        margin-bottom: 14px;
+    }
+    .hero:global([data-fit='1']) h1,
+    .hero:global([data-fit='2']) h1 {
+        margin-bottom: 12px;
+        font-size: clamp(28px, 3.4vw, 44px);
+    }
+    .hero:global([data-fit='2']) .description {
+        -webkit-line-clamp: 1;
+        line-clamp: 1;
+        margin-bottom: 16px;
+    }
+    .hero:global([data-fit='3']) .logo,
+    .hero:global([data-fit='4']) .logo {
+        max-height: 72px;
+        margin-bottom: 12px;
+    }
+    .hero:global([data-fit='3']) h1,
+    .hero:global([data-fit='4']) h1 {
+        margin-bottom: 12px;
+        font-size: 28px;
+    }
+    .hero:global([data-fit='3']) .description,
+    .hero:global([data-fit='4']) .description {
+        display: none;
+    }
+    .hero:global([data-fit='3']) .meta {
+        margin-bottom: 16px;
+    }
+    .hero:global([data-fit='4']) .meta {
+        display: none;
     }
 </style>

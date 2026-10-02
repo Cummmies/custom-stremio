@@ -87,13 +87,49 @@
     );
 
     const pageTitle = $derived(type === 'movie' ? 'Movies' : type === 'series' ? 'Series' : 'Home');
+
+    // The opening screen (the banner's height is what's left of the window,
+    // see .home below): how much room the feed tiles, the first row and a
+    // glimpse of the next one take, measured as they are. TV: its own layout.
+    const PEEK = 56; // the next row's title and the top of its cards
+    let content = $state<HTMLElement>();
+    let below = $state<number | null>(null);
+    $effect(() => {
+        const el = content;
+        if (!el || isTV) return;
+        let frame = 0;
+        const measure = () => {
+            frame = 0;
+            const [first, second] = el.querySelectorAll<HTMLElement>('.shelf');
+            if (!first) return;
+            ro.observe(first);
+            const top = el.getBoundingClientRect().top;
+            const end = first.getBoundingClientRect().bottom;
+            const next = second ? second.getBoundingClientRect().top - end + PEEK : 0;
+            below = Math.round(end - top + next);
+        };
+        const schedule = () => (frame ||= window.setTimeout(measure, 30));
+        // Sizes change with the window and as the first row fills in; rows
+        // replace their placeholders (the same height) when they load.
+        const ro = new ResizeObserver(schedule);
+        ro.observe(el);
+        const mo = new MutationObserver(schedule);
+        mo.observe(el, { childList: true, subtree: true });
+        schedule();
+        return () => {
+            clearTimeout(frame);
+            ro.disconnect();
+            mo.disconnect();
+        };
+    });
 </script>
 
 <svelte:head><title>{pageTitle} · Stremio</title></svelte:head>
 
+<div class="home" style:--below={below != null ? `${below}px` : null}>
 <Hero items={featured} />
 
-<div class="content">
+<div class="content" bind:this={content}>
     {#if tiles.length > 1}
         <CategoryTiles {tiles} />
     {/if}
@@ -127,8 +163,39 @@
         </div>
     {/if}
 </div>
+</div>
 
 <style>
+    /*
+     * The opening screen, on every phone, tablet and window size. In order:
+     *   1. the banner, its buttons always whole;
+     *   2. the feed tiles;
+     *   3. the first row (Continue Watching, or whichever is first), whole;
+     *   4. the title and top of the next row, so it's clear the page goes on.
+     * The banner gets the height 2–4 leave (`--below`, measured above), between
+     * a minimum (room for its logo and buttons) and a maximum (a tall window
+     * shows more rows, not a bigger banner). When it's short, its contents
+     * tighten (Hero.svelte: smaller logo, then no description, then no tags).
+     * On a short window (a phone on its side) 1 and 2 come first and the row
+     * starts on screen. TV: its own, fixed layout (Hero.svelte).
+     */
+    .home {
+        --screen-h: 100vh;
+        --hero-min: 300px;
+        --hero-max: min(720px, 72vh);
+        --hero-h: clamp(var(--hero-min), calc(var(--screen-h) - var(--tabbar-h) - var(--below, 480px)), var(--hero-max));
+    }
+    @supports (height: 100svh) {
+        .home {
+            --screen-h: 100svh;
+            --hero-max: min(720px, 72svh);
+        }
+    }
+    @media (max-width: 700px) {
+        .home {
+            --hero-max: 62svh;
+        }
+    }
     .customize {
         display: flex;
         justify-content: center;
