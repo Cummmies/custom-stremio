@@ -315,4 +315,28 @@
             -webkit-mask-image: none;
         }
     }
+
+    /* TV: the page scrolls, not the list (the remote moves through the
+       episodes and the page follows), and rows are compact so more of them
+       show at once. */
+    :global(html.tv) .episodes {
+        flex: none;
+        overflow: visible;
+        -webkit-mask-image: none;
+        mask-image: none;
+        gap: 6px;
+    }
+    :global(html.tv) .main {
+        gap: 14px;
+        padding: 8px 10px;
+    }
+    /* Both set: Chromium 69's stand-in for aspect-ratio is a fixed height. */
+    :global(html.tv) .thumb {
+        width: 136px;
+        height: 77px;
+    }
+    :global(html.tv) .overview {
+        -webkit-line-clamp: 1;
+        line-clamp: 1;
+    }
 </style>

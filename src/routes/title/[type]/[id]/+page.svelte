@@ -914,4 +914,28 @@
             overflow: visible;
         }
     }
+
+    /* TV: the whole page scrolls (the remote moves through the episodes and
+       the page follows), instead of one-screen columns that each scroll
+       inside themselves, which the remote can't do for Details and Cast.
+       Details and Cast stay in view beside the episodes as you go. */
+    :global(html.tv) .screen {
+        height: auto;
+        min-height: calc(100 * var(--tv-vh, 1vh));
+    }
+    :global(html.tv) .columns {
+        grid-template-rows: auto;
+        align-items: start;
+        padding-bottom: 48px;
+    }
+    :global(html.tv) .main {
+        min-height: auto;
+    }
+    :global(html.tv) .side {
+        overflow: visible;
+        position: -webkit-sticky;
+        position: sticky;
+        top: calc(var(--nav-h) + 16px);
+        padding-bottom: 0;
+    }
 </style>
