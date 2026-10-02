@@ -1,5 +1,7 @@
-# Builds a signed Windows installer and publishes a GitHub Release with the
-# update manifest (latest.json) that the in-app updater reads.
+# Builds a signed Windows installer and adds it, with the update manifest
+# (latest.json) that the in-app updater reads, to the version's GitHub Release.
+# The same tag also builds the iPhone app (ios.yml) and the TV app (tv.yml)
+# into that release (.github/actions/release).
 #
 # To release: bump "version" in src-tauri/tauri.conf.json and package.json,
 # commit, then push a tag like v0.2.0.
@@ -47,6 +49,9 @@ jobs:
           gh release download --repo shinchiro/mpv-winbuild-cmake --pattern "mpv-dev-x86_64-2*.7z" --dir mpv
           7z x (Get-ChildItem mpv/*.7z | Select-Object -First 1).FullName -ompv/out -y
           Copy-Item mpv/out/libmpv-2.dll src-tauri/lib/libmpv-2.dll
+
+      - uses: ./.github/actions/release
+        if: startsWith(github.ref, 'refs/tags/')
 
       - uses: tauri-apps/tauri-action@v0
         env:

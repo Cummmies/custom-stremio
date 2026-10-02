@@ -1,8 +1,9 @@
 # Builds an unsigned iOS app (.ipa) for sideloading with SideStore, AltStore or
 # Sideloadly, which sign it with your own Apple ID when they install it.
 #
-# Run it from the Actions tab (Run workflow), or push a v* tag to also attach
-# the .ipa to that release. The .ipa is under the run's Artifacts.
+# Run it from the Actions tab (Run workflow), or push a v* tag to also add the
+# .ipa to that version's release, next to the Windows and TV apps
+# (.github/actions/release). The .ipa is under the run's Artifacts either way.
 name: iOS
 
 on:
@@ -94,7 +95,10 @@ jobs:
           name: CustomStremio-ios
           path: CustomStremio.ipa
 
-      - name: Attach to the release
+      - uses: ./.github/actions/release
+        if: startsWith(github.ref, 'refs/tags/')
+
+      - name: Add to the release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}

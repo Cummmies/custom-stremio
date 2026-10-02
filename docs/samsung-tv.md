@@ -12,9 +12,11 @@ describes what was built.
   `svelte.config.js`) and `CORE_DIR` (Stremio's core rebuilt without
   WebAssembly reference types, `scripts/build-core-tv.sh`). `tv.yml` packages
   `build/` with `tv/wgt/config.xml` into `CustomStremio.wgt`, signs it with the
-  certificate from `tv-cert.yml`, and attaches it to the **tv** release, which
-  it marks as the latest (TizenBrew Installer takes the latest release's
-  `.wgt`). Every push that touches the app rebuilds it.
+  certificate from `tv-cert.yml`. Every push that touches the app rebuilds
+  it into the **tv** pre-release (with the over-the-air update, below); a
+  version tag (`v*`) also adds it to that version's release, next to the
+  Windows and iPhone apps. That's the latest release, where TizenBrew
+  Installer takes its `.wgt` from.
 - **Over-the-air updates** (`src/lib/tv/webUpdate.ts`, `tv/boot.js`): each
   build's `_app/` files also go to the `tv-web` branch, and its manifest
   (`tv-web.json`: version, native level, entry files, file list, commit) to

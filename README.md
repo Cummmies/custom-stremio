@@ -27,7 +27,7 @@ On top of what Stremio does:
 | `src/lib/updates.svelte.ts` | Updates: the whole app on Windows, the web side on iOS. |
 | `src-tauri/src/` | Rust: libmpv player, streaming server, Discord, Windows media overlay, storage, skip lookups, web updates. |
 | `src-tauri/plugins/mpv/` | The iOS player: a Tauri plugin in Swift on MPVKit (`ios/Sources/MpvPlugin`). |
-| `.github/workflows/` | `release.yml` (Windows), `ios.yml` (iPhone), `web.yml` (iOS web updates). |
+| `.github/workflows/` | `release.yml` (Windows), `ios.yml` (iPhone), `tv.yml` (Samsung TV), `web.yml` (iOS web updates), `preview.yml` and `pages.yml` (GitHub Pages). |
 | `docs/` | Plans, e.g. [`samsung-tv.md`](docs/samsung-tv.md). |
 
 ## Desktop (Windows)
@@ -50,8 +50,18 @@ server; see `src-tauri/server/README.md`. Debrid links don't.
 
 1. Bump `version` in `src-tauri/tauri.conf.json` and `package.json`.
 2. Commit, then push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. `release.yml` builds the signed installer and publishes a GitHub Release with
-   `latest.json`; installed copies offer the update by themselves.
+3. The tag builds all three apps into one GitHub Release, **Custom Stremio
+   v0.2.0**, marked as the latest (`.github/actions/release`; each adds its
+   file as it finishes):
+   - `release.yml`: the signed Windows installer and `latest.json`; installed
+     copies offer the update by themselves.
+   - `ios.yml`: `CustomStremio.ipa` for sideloading.
+   - `tv.yml`: `CustomStremio.wgt`, which TizenBrew Installer installs from the
+     latest release.
+
+Between releases, the iPhone and TV apps update their screens over the air
+(the **web** and **tv** pre-releases), so a new release is only needed for
+native changes or a fresh install.
 
 ## iPhone
 
@@ -60,8 +70,9 @@ sideloading. It needs iOS 18 or later.
 
 ### Building
 
-Actions → **iOS** → **Run workflow** (it also runs for `v*` tags). When it finishes,
-the run's **Artifacts** has **CustomStremio-ios** with `CustomStremio.ipa`.
+Each release (`v*` tag) has `CustomStremio.ipa`. For a build in between:
+Actions → **iOS** → **Run workflow**; when it finishes, the run's **Artifacts**
+has **CustomStremio-ios** with `CustomStremio.ipa`.
 
 The build is unsigned (`tauri ios build --no-sign`) and then ad-hoc signed, so the
 sideloading app can sign it with your Apple ID. A build only needs redoing when

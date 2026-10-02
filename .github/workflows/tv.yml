@@ -1,11 +1,14 @@
 # The Samsung TV app (docs/samsung-tv.md).
 #
 # app: builds the app's TV version (hash routing, Stremio's core compiled for
-#   the TV's WebAssembly), packages it as an installable TV app (.wgt) signed
-#   with the certificate from tv-cert.yml, and publishes it as the repository's
-#   latest release, where TizenBrew Installer finds it: Cummmies/custom-stremio.
-#   The same build is the over-the-air update (src/lib/tv/webUpdate.ts): its
-#   files go to the tv-web branch and its manifest, tv-web.json, to the release.
+#   the TV's WebAssembly) and packages it as an installable TV app (.wgt)
+#   signed with the certificate from tv-cert.yml.
+#   - A push to main: the over-the-air update (src/lib/tv/webUpdate.ts): its
+#     files go to the tv-web branch, its manifest (tv-web.json) and the .wgt to
+#     the "tv" pre-release (a fixed address the installed app checks).
+#   - A v* tag: the .wgt goes to that version's release, next to the Windows
+#     and iPhone apps (.github/actions/release). That's the latest release,
+#     where TizenBrew Installer finds it: Cummmies/custom-stremio.
 # purge: the tv/ test module is loaded by TizenBrew through jsDelivr, which
 #   caches a branch's files for up to 12 hours; this clears that cache.
 name: TV
@@ -13,6 +16,8 @@ name: TV
 on:
   push:
     branches: [main]
+    # Path filters don't apply to tags: every version tag builds it.
+    tags: ['v*']
     paths:
       - 'src/**'
       - 'static/**'
@@ -30,8 +35,9 @@ on:
       - '.github/actions/core-tv/**'
   workflow_dispatch:
 
+# A tag's build doesn't cancel main's (pushed together when releasing).
 concurrency:
-  group: tv
+  group: tv-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -151,10 +157,9 @@ jobs:
           name: CustomStremio-tv
           path: CustomStremio.wgt
 
-      # TizenBrew Installer installs the first .wgt of the latest release; the
-      # installed app updates from tv-web.json (files on the tv-web branch).
-      - name: Publish
-        if: steps.secrets.outputs.ok == 'true'
+      # The installed app updates from tv-web.json (files on the tv-web branch).
+      - name: Publish the over-the-air update
+        if: steps.secrets.outputs.ok == 'true' && github.ref_type == 'branch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -173,15 +178,26 @@ jobs:
           jq --arg c "$(cat "$RUNNER_TEMP/tv-web-commit")" '.commit = $c' build/tv-web.json > tv-web.json
           jq '{version, native, commit, files: (.files | length)}' tv-web.json
 
+          # A pre-release, never the latest: that's the version release (below).
+          notes="The Samsung TV app's newest build ($(git log -1 --format=%h)) and its over-the-air update. To install, use the latest release's CustomStremio.wgt (TizenBrew Installer: Cummmies/custom-stremio). See docs/samsung-tv.md."
           if ! gh release view tv >/dev/null 2>&1; then
-            gh release create tv --target "$GITHUB_SHA" --latest --title "Samsung TV" \
-              --notes "The Samsung TV app. Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
+            gh release create tv --target "$GITHUB_SHA" --prerelease --latest=false --title "Samsung TV (newest build)" --notes "$notes"
           fi
-          gh release edit tv --title "Samsung TV" --latest \
-            --notes "The Samsung TV app ($(git log -1 --format=%h)). Install with TizenBrew Installer: Cummmies/custom-stremio. See docs/samsung-tv.md."
+          gh release edit tv --prerelease --latest=false --title "Samsung TV (newest build)" --notes "$notes"
           gh release upload tv CustomStremio.wgt tv-web.json --clobber
 
+      # A version tag: the .wgt goes to that version's release.
+      - uses: ./.github/actions/release
+        if: steps.secrets.outputs.ok == 'true' && github.ref_type == 'tag'
+
+      - name: Add to the release
+        if: steps.secrets.outputs.ok == 'true' && github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" CustomStremio.wgt --clobber
+
   purge:
+    if: github.ref_type == 'branch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
