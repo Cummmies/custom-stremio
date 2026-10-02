@@ -147,6 +147,7 @@
             : Promise.resolve([]);
         begin();
         return () => {
+            nextTicket++;
             unwatch();
             offEvents();
             offMedia.then((off) => off());
@@ -243,6 +244,8 @@
     let watchdog: ReturnType<typeof setTimeout> | undefined;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
     let switching = $state<string | null>(null);
+    /** Looking for the next episode's source (named here) before playing it. */
+    let findingNext = $state<string | null>(null);
     /** Reactive twin of firstFrame, for effects that wait on playback starting. */
     let firstFrameSeen = $state(false);
     /** Which video mpv's current file belongs to. The URL changes first when moving to
@@ -663,6 +666,10 @@
     // already remembers a source for it.)
     let prefetched: { video: string; picks: Pick[]; anime: boolean } | null = null;
     let prefetchFor: string | null = null;
+    /** The search still running, for Next pressed before it's done. */
+    let prefetching: Promise<{ picks: Pick[]; anime: boolean }> | null = null;
+    /** Bumped when you leave the player or press Next again: an older search's result is dropped. */
+    let nextTicket = 0;
     const PREFETCH_LEAD = 60;
     $effect(() => {
         const next = model?.nextVideo;
@@ -674,7 +681,8 @@
         const cardAt = Math.min(credits?.start ?? d, d - nextThreshold);
         if (player.time < cardAt - PREFETCH_LEAD) return;
         prefetchFor = next.id;
-        prefetchPicks(type, id, next.id, likeThis()).then(({ picks, anime: isAnime }) => {
+        prefetching = prefetchPicks(type, id, next.id, likeThis());
+        prefetching.then(({ picks, anime: isAnime }) => {
             if (picks.length) prefetched = { video: next.id, picks, anime: isAnime };
         });
     });
@@ -739,21 +747,31 @@
         // Stremio found no source for the next episode in the same "binge group" as this one
         // (many addons don't tag them). Like Stremio, don't make you choose again: pick the
         // best source, preferring the addon and quality you were just watching. Usually
-        // that's already been done in the background (above).
-        if (prefetched?.video === next.id) {
-            const { picks, anime: isAnime } = prefetched;
-            prefetched = null;
-            easyQueue.start(next.id, picks, isAnime);
-            await goto(picks[0].href, { replaceState: true });
+        // that's already been done in the background (above); otherwise wait for it here,
+        // in the player (going by the title page flashed it and, on a phone, turned the
+        // screen upright and back).
+        if (!type || !id) return;
+        let found = prefetched?.video === next.id ? prefetched : null;
+        prefetched = null;
+        const ticket = ++nextTicket;
+        if (!found) {
+            const search = prefetchFor === next.id && prefetching ? prefetching : prefetchPicks(type, id, next.id, likeThis());
+            prefetchFor = next.id;
+            findingNext = next.season != null ? `S${next.season} · E${next.episode}` : next.title || 'the next episode';
+            player.setPaused(true);
+            const result = await search;
+            // You left, or pressed Next again, while it looked.
+            if (ticket !== nextTicket) return;
+            findingNext = null;
+            found = result.picks.length ? { video: next.id, ...result } : null;
+        }
+        if (found) {
+            easyQueue.start(next.id, found.picks, found.anime);
+            await goto(found.picks[0].href, { replaceState: true });
             return begin();
         }
-        if (type && id) {
-            const q: Record<string, string> = { video: next.id, auto: '1' };
-            const like = likeThis();
-            if (like.addonUrl) q.likeAddon = like.addonUrl;
-            if (like.resolution) q.likeRes = String(like.resolution);
-            goto(titleHref(type, id, q), { replaceState: true });
-        }
+        // Nothing it can play by itself: the sources to choose from.
+        goto(titleHref(type, id, { video: next.id, nomatch: '1' }), { replaceState: true });
     }
 
     /** The addon and quality of what's playing, for choosing the next episode's source. */
@@ -1160,6 +1178,8 @@
 
     {#if switching}
         <div class="switching" role="status">{switching}</div>
+    {:else if findingNext}
+        <div class="switching" role="status">Finding the best source for {findingNext}…</div>
     {/if}
 
     {#if (startError || player.error) && !easyQueue.activeFor(videoId) && !adopting}
@@ -1173,7 +1193,7 @@
                 </button>
             </div>
         </div>
-    {:else if loadingVideo}
+    {:else if loadingVideo || findingNext}
         <div class="spinner" role="status" aria-label="Loading">
             <span></span>
             {#if player.bufferingPercent != null && player.bufferingPercent < 100}<em>{player.bufferingPercent}%</em>{/if}

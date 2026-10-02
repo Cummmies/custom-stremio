@@ -77,6 +77,31 @@ export function rankedPicks(
     return { picks, top: ranked[0] ?? null, anime };
 }
 
+/** How long to wait on slow addons once something playable has turned up. */
+export const PICK_WAIT_MS = 7000;
+
+/**
+ * The picks so far are worth starting now: every addon has answered, the best
+ * is a cached debrid source (from the addon you were watching, once it has
+ * answered), or `PICK_WAIT_MS` has passed with something to play.
+ */
+export function readyToPick(
+    streams: MetaDetails['streams'],
+    { picks, top }: { picks: Pick[]; top: Candidate | null },
+    like: Like | null | undefined,
+    elapsedMs: number
+): boolean {
+    if (!picks.length) return false;
+    const pending = streams.some((g) => g.content.type === 'Loading');
+    const likeAddonDone = !like?.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl && g.content.type === 'Loading');
+    const great =
+        !!top &&
+        top.parsed.kind === 'debrid' &&
+        likeAddonDone &&
+        (!like?.addonUrl || top.addonUrl === like.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl));
+    return great || !pending || elapsedMs > PICK_WAIT_MS;
+}
+
 /** The fallback queue for the video being auto-played (survives page changes). */
 class EasyQueue {
     videoId: string | null = null;

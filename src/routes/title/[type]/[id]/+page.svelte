@@ -7,7 +7,7 @@
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
-    import { easyQueue, rankedPicks, type Like, type Pick } from '$lib/player/easy';
+    import { easyQueue, PICK_WAIT_MS, rankedPicks, readyToPick, type Like, type Pick } from '$lib/player/easy';
     import { looksLikeAnime } from '$lib/player/ranking';
     import { anime } from '$lib/anime.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
@@ -161,22 +161,19 @@
 
         const streams = details.streams;
         const pending = streams.some((g) => g.content.type === 'Loading');
-        const { picks, top, anime: pickedAnime } = rankedPicks(streams, like, listSaysAnime);
+        const ranked = rankedPicks(streams, like, listSaysAnime);
+        const { picks, anime: pickedAnime } = ranked;
         const elapsed = performance.now() - autoStarted;
 
-        // A cached debrid source at your preferred quality is as good as it gets: go now.
-        // Continuing an episode, it has to be from the addon you were watching (once it has answered).
-        const likeAddonDone = !like?.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl && g.content.type === 'Loading');
-        const great = top && top.parsed.kind === 'debrid' && likeAddonDone && (!like?.addonUrl || top.addonUrl === like.addonUrl || !streams.some((g) => g.addon.transportUrl === like.addonUrl));
         clearTimeout(autoTimer);
-        if (picks.length && (great || !pending || elapsed > 7000)) {
+        if (readyToPick(streams, ranked, like, elapsed)) {
             startEasy(picks, pickedAnime);
         } else if (!pending && !picks.length) {
             autoStarted = 0;
             goto(titleHref(type, id, { video: videoId, nomatch: '1' }), { noScroll: true, keepFocus: true, replaceState: true });
         } else {
             // Re-check when the slowest addons time out.
-            autoTimer = setTimeout(() => (details = details ? { ...details } : details), Math.max(250, 7000 - elapsed));
+            autoTimer = setTimeout(() => (details = details ? { ...details } : details), Math.max(250, PICK_WAIT_MS - elapsed));
         }
     });
 
