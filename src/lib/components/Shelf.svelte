@@ -132,6 +132,13 @@
         margin-top: -18px;
         margin-bottom: -22px;
     }
+    /* Chromium 69 leaves a scroller's end padding out of what it can scroll,
+       so the last item stopped cut off at the screen's edge: a spacer instead. */
+    :global(html.tv-legacy) .track::after {
+        content: '';
+        width: var(--gutter);
+        height: 1px;
+    }
     .track::-webkit-scrollbar {
         display: none;
     }

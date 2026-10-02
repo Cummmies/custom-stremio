@@ -11,7 +11,7 @@
     import { looksLikeAnime } from '$lib/player/ranking';
     import { anime } from '$lib/anime.svelte';
     import { playerPrefs } from '$lib/player/prefs.svelte';
-    import { canPlay } from '$lib/platform';
+    import { canPlay, isTV } from '$lib/platform';
     import Icon from '$lib/components/Icon.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import EpisodeList from '$lib/components/detail/EpisodeList.svelte';
@@ -341,7 +341,8 @@
                             <button role="tab" aria-selected={tab === 'episodes'} class:on={tab === 'episodes'} onclick={() => (tab = 'episodes')}>Episodes</button>
                         {/if}
                         {#if trailers.length}
-                            <button role="tab" aria-selected={tab === 'extras'} class:on={tab === 'extras'} onclick={() => (tab = 'extras')}>Trailers & Extras</button>
+                            <!-- TV: alone (a movie's), it's a heading, not a stop for the remote. -->
+                            <button role="tab" aria-selected={tab === 'extras'} class:on={tab === 'extras'} tabindex={isTV && !isSeries ? -1 : undefined} onclick={() => (tab = 'extras')}>Trailers & Extras</button>
                         {/if}
                         <!-- Narrow windows have no room for the Details column: it becomes a tab. -->
                         <button class="narrow-only" role="tab" aria-selected={tab === 'details'} class:on={tab === 'details'} onclick={() => (tab = 'details')}>Details</button>

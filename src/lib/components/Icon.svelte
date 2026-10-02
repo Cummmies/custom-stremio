@@ -75,9 +75,15 @@
         const apply = () => {
             const gap = svg.parentElement ? getComputedStyle(svg.parentElement).columnGap : '';
             const space = gap && gap !== 'normal' ? gap : '6px';
-            const text = (n: Node | null) => n?.nodeType === Node.TEXT_NODE && !!n.textContent?.trim();
-            svg.style.marginRight = text(svg.nextSibling) ? space : '';
-            svg.style.marginLeft = text(svg.previousSibling) ? space : '';
+            // The nearest real neighbour: Svelte leaves comments (its anchors)
+            // and blank text between an icon and its label.
+            const near = (n: Node | null, next: boolean): Node | null => {
+                while (n && (n.nodeType === Node.COMMENT_NODE || (n.nodeType === Node.TEXT_NODE && !n.textContent?.trim()))) n = next ? n.nextSibling : n.previousSibling;
+                return n;
+            };
+            const text = (n: Node | null) => n?.nodeType === Node.TEXT_NODE;
+            svg.style.marginRight = text(near(svg.nextSibling, true)) ? space : '';
+            svg.style.marginLeft = text(near(svg.previousSibling, false)) ? space : '';
         };
         // Siblings are in place after this tick.
         requestAnimationFrame(apply);

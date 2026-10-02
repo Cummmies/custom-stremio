@@ -101,6 +101,12 @@ function nearest(from: DOMRect, dir: Dir, list: { el: HTMLElement; r: DOMRect }[
                 side = Math.max(0, Math.max(r.left, from.left) - Math.min(r.right, from.right)) || Math.abs(r.left + r.width / 2 - cx) * 0.1;
                 break;
         }
+        // An item drawn on top of this one (an episode's Watched button) is
+        // next to it, on the side its middle is.
+        const rx = r.left + r.width / 2;
+        const ry = r.top + r.height / 2;
+        const overlaps = r.left < from.right && r.right > from.left && r.top < from.bottom && r.bottom > from.top;
+        if (overlaps && (dir === 'right' ? rx > cx + 1 : dir === 'left' ? rx < cx - 1 : dir === 'down' ? ry > cy + 1 : ry < cy - 1)) along = Math.max(0, along);
         // Allow a little overlap (items in the same row aren't pixel-aligned).
         if (along < -Math.min(r.width, r.height, 24) / 2) continue;
         // Left and right stay in the row: the item has to share the current
@@ -129,6 +135,15 @@ function focusEl(el: HTMLElement) {
     // Instantly: smooth scrolling falls behind on a TV (and stops short when
     // the next press comes before it ends).
     el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    // Chromium 69 leaves a row unscrolled (its last items stay cut off at the
+    // screen's edge): scroll it by hand when it didn't.
+    const row = rowOf(el);
+    if (row) {
+        const rr = row.getBoundingClientRect();
+        const er = el.getBoundingClientRect();
+        if (er.right > rr.right) row.scrollLeft += er.right - rr.right;
+        else if (er.left < rr.left) row.scrollLeft -= rr.left - er.left;
+    }
     // Within the first screen (the Home banner, a title's header): show the
     // page from the top, as tvOS does, instead of centring the item.
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
@@ -181,9 +196,28 @@ function first(list: { el: HTMLElement; r: DOMRect }[]) {
     const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     const onScreen = list.filter(({ r }) => r.bottom > 0 && r.top < innerHeight / zoom && r.right > 0 && r.left < innerWidth / zoom);
     // The page before the top bar (focus starts in the content, as on tvOS).
-    const inBar = (el: HTMLElement) => (el.closest('header') ? 1 : 0);
-    onScreen.sort((a, b) => inBar(a.el) - inBar(b.el) || a.r.top - b.r.top || a.r.left - b.r.left);
+    onScreen.sort((a, b) => Number(inBar(a.el)) - Number(inBar(b.el)) || a.r.top - b.r.top || a.r.left - b.r.left);
     return onScreen[0]?.el ?? null;
+}
+
+/** Where focus was in the page before it went up to the top bar. */
+let beforeBar: HTMLElement | null = null;
+const inBar = (el: Element) => !!el.closest('header.nav');
+
+/**
+ * Down from the top bar: back where you were in the page, else the page's
+ * main action, else its first item, whatever is on screen (as tvOS's tab bar
+ * does), never the nearest thing straight below (on a title page, a link
+ * halfway down the page).
+ */
+function belowBar(list: { el: HTMLElement; r: DOMRect }[]): HTMLElement | null {
+    const ok = (el: HTMLElement | null | undefined): el is HTMLElement =>
+        !!el && el.isConnected && !inBar(el) && list.some((c) => c.el === el) && onScreen(el);
+    if (ok(beforeBar)) return beforeBar;
+    const main = document.querySelector('main') ?? document;
+    const primary = main.querySelector<HTMLElement>('[data-tv-focus]');
+    if (ok(primary)) return primary;
+    return first(list.filter(({ el }) => !inBar(el)));
 }
 
 function move(dir: Dir): boolean {
@@ -194,6 +228,13 @@ function move(dir: Dir): boolean {
         const el = first(list);
         if (el) focusEl(el);
         return !!el;
+    }
+    if (dir === 'down' && inBar(active!)) {
+        const el = belowBar(list);
+        if (el) {
+            focusEl(el);
+            return true;
+        }
     }
     // Reversing a vertical move goes back where you came from (as on tvOS).
     const key = rowOf(active!) ?? active!;
@@ -207,6 +248,7 @@ function move(dir: Dir): boolean {
         const nextKey = rowOf(next) ?? next;
         (dir === 'down' ? cameFromAbove : cameFromBelow).set(nextKey, active!);
     }
+    if (next && dir === 'up' && inBar(next) && !inBar(active!)) beforeBar = active;
     if (next) focusEl(next);
     return !!next;
 }
@@ -272,7 +314,10 @@ export function focusPrimary(root: ParentNode = document.querySelector('main') ?
             takeOver || !active || active === document.body || !document.contains(active) || active === ours || active === stopgap;
         // Something already has focus (a tab in the top bar keeps it, as on tvOS).
         if (!free) return;
-        const marked = [...root.querySelectorAll<HTMLElement>('[data-tv-focus]')].find((el) => visible(el));
+        // A page with nothing of its own to focus (Search, before you type)
+        // can mark one in the top bar.
+        const inRoot = candidates().some(({ el }) => root.contains(el));
+        const marked = [...(inRoot ? root : document).querySelectorAll<HTMLElement>('[data-tv-focus]')].find((el) => visible(el));
         if (marked) {
             if (marked !== active) focusEl(marked);
             return;
@@ -316,7 +361,7 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
     document.addEventListener('focusout', (e) => {
         const gone = e.target as HTMLElement;
         const rect = gone.getBoundingClientRect();
-        const wasInBar = !!gone.closest('header');
+        const wasInBar = !!gone.closest('header.nav');
         requestAnimationFrame(() => {
             if (gone.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
             // In the player, the video itself takes focus (OK pauses, arrows seek).
@@ -328,7 +373,7 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             // From the page, stay in the page: while a new page is still
             // loading the top bar would be all that's left (the logo lit up);
             // its main action takes focus when it appears (focusPrimary).
-            const list = candidates().filter(({ el }) => wasInBar || !el.closest('header'));
+            const list = candidates().filter(({ el }) => wasInBar || !el.closest('header.nav'));
             if (!list.length) return;
             const cx = rect.left + rect.width / 2;
             const cy = rect.top + rect.height / 2;

@@ -1,0 +1,173 @@
+# The preview site (preview/README.md): every push builds the app's TV build
+# with sample data, checks it (screenshots on every device, the TV remote
+# walked on every screen, on both of the TV's engines) and publishes it to
+# GitHub Pages under the branch's name:
+#
+#   https://cummmies.github.io/custom-stremio/<branch>/
+#
+# One-time setup: Settings → Pages → Build and deployment → Source: "Deploy
+# from a branch", branch gh-pages, folder / (root).
+name: Preview
+
+on:
+  push:
+    branches-ignore: [gh-pages, tv-web]
+    paths:
+      - 'src/**'
+      - 'static/**'
+      - 'preview/**'
+      - 'scripts/preview/**'
+      - 'scripts/tv-boot.mjs'
+      - 'scripts/tv-legacy-css.mjs'
+      - 'tv/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'svelte.config.js'
+      - 'vite.config.js'
+      - '.github/workflows/preview.yml'
+      - '.github/actions/core-tv/**'
+  workflow_dispatch:
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Chromium builds matching the TV's two engines (chromium-browser-snapshots).
+  CHROMIUM_69: '576713'
+  CHROMIUM_94: '911515'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      failed: ${{ steps.check.outcome == 'failure' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: ./.github/actions/core-tv
+        id: core
+
+      - name: Build the app (TV), as tv.yml does
+        env:
+          TV_BUILD: '1'
+          CORE_DIR: ${{ steps.core.outputs.dir }}
+        run: |
+          sed -i '/export const ssr/d' src/routes/+layout.ts
+          npm run build
+          node scripts/tv-boot.mjs build "$(git log -1 --format=%ct)"
+          git checkout src/routes/+layout.ts
+
+      - name: Make the preview site
+        run: node scripts/preview/make-site.mjs build site
+
+      - uses: actions/cache@v4
+        id: chromium
+        with:
+          path: ~/chromium
+          key: chromium-${{ env.CHROMIUM_69 }}-${{ env.CHROMIUM_94 }}
+
+      - name: Get Chromium 69 and 94
+        if: steps.chromium.outputs.cache-hit != 'true'
+        run: |
+          for v in 69:$CHROMIUM_69 94:$CHROMIUM_94; do
+            name=${v%%:*}; pos=${v#*:}
+            curl -fsSLo c.zip "https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/$pos/chrome-linux.zip"
+            mkdir -p ~/chromium/$name && unzip -q c.zip -d ~/chromium/$name && rm c.zip
+          done
+
+      - name: Check
+        id: check
+        continue-on-error: true
+        run: |
+          for v in 69 94; do ~/chromium/$v/chrome-linux/chrome --version; done
+          google-chrome --version
+          node scripts/preview/check.mjs site \
+            --tv69 ~/chromium/69/chrome-linux/chrome \
+            --tv94 ~/chromium/94/chrome-linux/chrome \
+            --chrome "$(command -v google-chrome)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview-site
+          path: site
+          retention-days: 7
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # One at a time: each publish rewrites the gh-pages branch.
+    concurrency:
+      group: preview-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: preview-site
+          path: site
+
+      - name: Publish to the gh-pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -e
+          slug=$(echo "$BRANCH" | tr '/' '-' | tr -cd 'A-Za-z0-9._-')
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 --branch gh-pages "$url" pages 2>/dev/null; then :; else
+            git init -q pages && git -C pages checkout -q -b gh-pages && git -C pages remote add origin "$url"
+          fi
+          cd pages
+          # main's last pictures are what the next main run compares with;
+          # other branches compare with main.
+          baseline=""; label=""
+          rm -rf "$RUNNER_TEMP/before"
+          if [ "$slug" = main ] && [ -d main/report ]; then cp -r main/report "$RUNNER_TEMP/before"; fi
+          rm -rf "$slug" && cp -r ../site "$slug"
+          if [ "$slug" = main ]; then
+            if [ -d "$RUNNER_TEMP/before" ]; then
+              mkdir -p main/before && mv "$RUNNER_TEMP/before" main/before/report
+              baseline=before/; label="the last version"
+            fi
+          elif [ -d main/report ]; then
+            baseline=../main/; label=main
+          fi
+          printf '{"branch":"%s","commit":"%s","baseline":"%s","baselineLabel":"%s"}\n' "$BRANCH" "$GITHUB_SHA" "$baseline" "$label" > "$slug/deploy.json"
+          touch .nojekyll
+          # The front page: a link per branch.
+          {
+            echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stremio Previews</title>'
+            echo '<style>body{background:#0d0d12;color:#ececf1;font:16px system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px}a{display:block;padding:14px 16px;margin:8px 0;background:#17171f;border-radius:12px;color:inherit;text-decoration:none}</style>'
+            echo '<h1>Stremio Previews</h1>'
+            for d in */; do [ -f "$d/deploy.json" ] && echo "<a href=\"${d}\">${d%/}</a>"; done
+          } > index.html
+          # One commit, no history: the pictures would otherwise pile up.
+          git checkout -q --orphan next
+          git add -A
+          git commit -qm "Preview: $BRANCH ${GITHUB_SHA::7}"
+          for i in 1 2 3 4; do git push -qf origin next:gh-pages && break; sleep $((i * 4)); done
+          owner=$(echo "${GITHUB_REPOSITORY%%/*}" | tr 'A-Z' 'a-z')
+          echo "### Preview: https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/${slug}/" >> "$GITHUB_STEP_SUMMARY"
+
+  # The run shows red when the checks found problems (after publishing them).
+  result:
+    needs: [check, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Navigation and app errors
+        if: needs.check.outputs.failed == 'true'
+        run: |
+          echo "::error::The checks found problems: see the preview's Navigation tab."
+          exit 1
+      - run: echo "No problems found."

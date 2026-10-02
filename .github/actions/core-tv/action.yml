@@ -1,0 +1,54 @@
+# Stremio's core built for the TVs' WebAssembly (scripts/build-core-tv.sh),
+# cached per core version. Used by tv.yml and preview.yml (after npm ci).
+name: Core for the TV
+description: Builds (or restores) stremio-core-web for the TV's WebAssembly.
+outputs:
+  dir:
+    description: The built core (CORE_DIR for the TV build)
+    value: ${{ steps.core.outputs.dir }}
+runs:
+  using: composite
+  steps:
+    - name: Core version
+      id: core
+      shell: bash
+      run: |
+        echo "version=$(node -p "require('./node_modules/@stremio/stremio-core-web/package.json').version")" >> "$GITHUB_OUTPUT"
+        echo "dir=$RUNNER_TEMP/core-tv" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      id: core-cache
+      with:
+        path: ${{ steps.core.outputs.dir }}
+        key: core-tv-${{ steps.core.outputs.version }}-${{ hashFiles('scripts/build-core-tv.sh', 'scripts/strip-wasm-section.py', 'scripts/check-wasm-features.mjs') }}
+
+    - name: Get the core's source
+      if: steps.core-cache.outputs.cache-hit != 'true'
+      id: src
+      shell: bash
+      run: |
+        git clone --quiet --filter=blob:none https://github.com/Stremio/stremio-core "$RUNNER_TEMP/stremio-core"
+        git -C "$RUNNER_TEMP/stremio-core" checkout --quiet "stremio-core-web-v${{ steps.core.outputs.version }}"
+        WB=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' "$RUNNER_TEMP/stremio-core/Cargo.lock")
+        echo "wasm-bindgen $WB"
+        echo "wasm_bindgen=$WB" >> "$GITHUB_OUTPUT"
+
+    - uses: dtolnay/rust-toolchain@stable
+      if: steps.core-cache.outputs.cache-hit != 'true'
+      with:
+        targets: wasm32-unknown-unknown
+
+    - uses: taiki-e/install-action@v2
+      if: steps.core-cache.outputs.cache-hit != 'true'
+      with:
+        tool: wasm-bindgen-cli@${{ steps.src.outputs.wasm_bindgen }}
+
+    - name: Build the core
+      if: steps.core-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        CORE_SRC: ${{ runner.temp }}/stremio-core
+      run: |
+        # The core pins its Rust version (rust-toolchain.toml); add the target to it.
+        (cd "$CORE_SRC/stremio-core-web" && rustup target add wasm32-unknown-unknown)
+        scripts/build-core-tv.sh "${{ steps.core.outputs.dir }}"

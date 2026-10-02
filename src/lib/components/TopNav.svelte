@@ -128,6 +128,7 @@
                 spellcheck="false"
                 autocomplete="off"
                 tabindex={expanded ? 0 : -1}
+                data-tv-focus={onSearchPage && !query ? '' : undefined}
             />
         </div>
 
