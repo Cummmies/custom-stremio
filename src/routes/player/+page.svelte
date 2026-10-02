@@ -155,6 +155,7 @@
             document.removeEventListener('visibilitychange', onVisible);
             if (isIOS) invoke('plugin:mpv|orientation', { landscape: false }).catch(() => {});
             if (isDesktop) invoke('media_clear').catch(() => {});
+            if (isIOS) invoke('plugin:mpv|now_playing_clear').catch(() => {});
             if (isDesktop) invoke('discord_clear').catch(() => {});
             document.documentElement.classList.remove('player-active', 'player-idle');
             clearTimeout(idleTimer);
@@ -467,6 +468,15 @@
         if (!isDesktop || !player.loaded || !model) return;
         const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
         invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: player.paused }).catch(() => {});
+    });
+
+    // --- iOS Now Playing (Control Center, the Lock Screen): the same; the
+    // player adds the position and play/pause itself (MpvPlugin.swift). An app
+    // installed before this existed doesn't have it: nothing happens there.
+    $effect(() => {
+        if (!isIOS || !player.loaded || !model) return;
+        const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
+        invoke('plugin:mpv|now_playing', { title: heading, subtitle: subheading ?? '', image }).catch(() => {});
     });
 
     // --- Discord: "Watching <show> · S3 · E7" with time left (Settings, off by default) ---

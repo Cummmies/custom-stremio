@@ -9,10 +9,17 @@
 // The video draws into a Metal layer in a view *behind* the web view, which
 // is made see-through; the player page's own background is transparent, so
 // the Svelte controls sit on top of the picture exactly as on Windows.
+//
+// Now Playing (Control Center, the Lock Screen): mpv doesn't report to iOS
+// the way AVPlayer does, so the page sends the title, episode and artwork
+// (`nowPlaying`) and this file adds the position, length and play/pause
+// state from mpv's own properties. The system's buttons (play/pause, ±10s,
+// dragging the bar) act on mpv here; the page hears the result as usual.
 
 import AVFoundation
 import Foundation
 import Libmpv
+import MediaPlayer
 import MpvSystemLinks
 import Tauri
 import UIKit
@@ -46,6 +53,13 @@ private struct ThumbArgs: Decodable {
 private struct ThumbResult: Encodable {
     /// Base64 JPEG.
     let data: String
+}
+
+private struct NowPlayingArgs: Decodable {
+    let title: String
+    let subtitle: String
+    /// Artwork (an http(s) URL), if any.
+    let image: String?
 }
 
 private struct OrientationArgs: Decodable {
@@ -134,6 +148,17 @@ class MpvPlugin: Plugin {
     private weak var webView: WKWebView?
     private var videoView: VideoView?
     private var lastTimeEmit = Date.distantPast
+
+    // Now Playing: what the page sent, and mpv's playback state (written on
+    // the event thread, read on the main thread).
+    private var nowPlayingInfo: [String: Any]?
+    private var artworkURL: String?
+    private var remoteCommandsReady = false
+    private let stateLock = NSLock()
+    private var position = 0.0
+    private var duration = 0.0
+    private var paused = true
+    private var speed = 1.0
 
     override func load(webview: WKWebView) {
         webView = webview
@@ -246,6 +271,124 @@ class MpvPlugin: Plugin {
         }
     }
 
+    // MARK: Now Playing
+
+    /// Shows (or updates) what's playing in Control Center and on the Lock Screen.
+    @objc public func nowPlaying(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(NowPlayingArgs.self)
+        DispatchQueue.main.async { [self] in
+            var info = nowPlayingInfo ?? [:]
+            info[MPMediaItemPropertyTitle] = args.title
+            info[MPMediaItemPropertyArtist] = args.subtitle
+            info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue
+            let image = args.image.flatMap { $0.hasPrefix("http") ? $0 : nil }
+            if image != artworkURL {
+                artworkURL = image
+                info[MPMediaItemPropertyArtwork] = nil
+                if let image { loadArtwork(image) }
+            }
+            nowPlayingInfo = info
+            setUpRemoteCommands()
+            setRemoteCommands(enabled: true)
+            publishNowPlaying()
+            invoke.resolve()
+        }
+    }
+
+    /// Takes the app out of Now Playing (leaving the player).
+    @objc public func nowPlayingClear(_ invoke: Invoke) {
+        DispatchQueue.main.async { [self] in
+            clearNowPlaying()
+            invoke.resolve()
+        }
+    }
+
+    /// Sends the latest title and playback state to the system (main thread).
+    private func publishNowPlaying() {
+        guard var info = nowPlayingInfo else { return }
+        stateLock.lock()
+        let (position, duration, paused, speed) = (self.position, self.duration, self.paused, self.speed)
+        stateLock.unlock()
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = position
+        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        // The system moves the bar along by itself at this rate between updates.
+        info[MPNowPlayingInfoPropertyPlaybackRate] = paused ? 0.0 : speed
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlaying() {
+        nowPlayingInfo = nil
+        artworkURL = nil
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        setRemoteCommands(enabled: false)
+    }
+
+    private func loadArtwork(_ url: String) {
+        guard let u = URL(string: url) else { return }
+        URLSession.shared.dataTask(with: u) { [weak self] data, _, _ in
+            guard let data, let image = UIImage(data: data) else { return }
+            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            DispatchQueue.main.async {
+                guard let self, self.artworkURL == url, self.nowPlayingInfo != nil else { return }
+                self.nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
+                self.publishNowPlaying()
+            }
+        }.resume()
+    }
+
+    /// Control Center's and the Lock Screen's buttons, acting on mpv directly.
+    private func setUpRemoteCommands() {
+        guard !remoteCommandsReady else { return }
+        remoteCommandsReady = true
+        let center = MPRemoteCommandCenter.shared()
+        let run: ([String]) -> MPRemoteCommandHandlerStatus = { [weak self] args in
+            guard let mpv = self?.mpv else { return .noActionableNowPlayingItem }
+            return withCStrings(args) { mpv_command(mpv, $0) } >= 0 ? .success : .commandFailed
+        }
+        center.playCommand.addTarget { _ in run(["set", "pause", "no"]) }
+        center.pauseCommand.addTarget { _ in run(["set", "pause", "yes"]) }
+        center.togglePlayPauseCommand.addTarget { _ in run(["cycle", "pause"]) }
+        center.skipForwardCommand.preferredIntervals = [10]
+        center.skipForwardCommand.addTarget { _ in run(["seek", "10", "relative"]) }
+        center.skipBackwardCommand.preferredIntervals = [10]
+        center.skipBackwardCommand.addTarget { _ in run(["seek", "-10", "relative"]) }
+        center.changePlaybackPositionCommand.addTarget { event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            return run(["seek", String(event.positionTime), "absolute"])
+        }
+        // Not tracks: the player's own Next Episode does that.
+        center.nextTrackCommand.isEnabled = false
+        center.previousTrackCommand.isEnabled = false
+    }
+
+    private func setRemoteCommands(enabled: Bool) {
+        guard remoteCommandsReady else { return }
+        let center = MPRemoteCommandCenter.shared()
+        for command in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand,
+                        center.skipForwardCommand, center.skipBackwardCommand, center.changePlaybackPositionCommand] {
+            command.isEnabled = enabled
+        }
+    }
+
+    /// mpv's playback state as it changes (event thread): kept for Now
+    /// Playing, and sent on when it changes in a way the clock wouldn't.
+    private func trackPlayback(_ name: String, _ value: String?) {
+        let number = value.flatMap(Double.init)
+        stateLock.lock()
+        var changed = true
+        switch name {
+        case "time-pos": position = number ?? 0; changed = false
+        case "duration": duration = number ?? 0
+        case "pause": paused = value == "yes"
+        case "speed": speed = number ?? 1
+        default: changed = false
+        }
+        stateLock.unlock()
+        if changed { DispatchQueue.main.async { [weak self] in self?.publishNowPlaying() } }
+    }
+
     /// Stops playback and shuts mpv down; the event thread finishes the teardown.
     @objc public func stop(_ invoke: Invoke) {
         if let mpv {
@@ -327,6 +470,7 @@ class MpvPlugin: Plugin {
                        let s = data.assumingMemoryBound(to: UnsafePointer<CChar>?.self).pointee {
                         value = String(cString: s)
                     }
+                    self?.trackPlayback(name, value)
                     // Position changes every frame; the UI only needs a few updates a second.
                     if name == "time-pos", let self {
                         if Date().timeIntervalSince(self.lastTimeEmit) < 0.2 { break }
@@ -336,6 +480,8 @@ class MpvPlugin: Plugin {
                 case MPV_EVENT_FILE_LOADED:
                     self?.emit("event", PlayerEvent(kind: "file-loaded"))
                 case MPV_EVENT_PLAYBACK_RESTART:
+                    // After a seek: Now Playing's bar jumps to the new position.
+                    DispatchQueue.main.async { self?.publishNowPlaying() }
                     self?.emit("event", PlayerEvent(kind: "playback-restart"))
                 case MPV_EVENT_END_FILE:
                     guard let end = ev.data?.assumingMemoryBound(to: mpv_event_end_file.self).pointee else { break }
@@ -355,6 +501,7 @@ class MpvPlugin: Plugin {
                     DispatchQueue.main.sync {
                         if self?.mpv == handle { self?.mpv = nil }
                         self?.detachVideoView()
+                        self?.clearNowPlaying()
                     }
                     mpv_terminate_destroy(handle)
                     self?.emit("event", PlayerEvent(kind: "shutdown"))

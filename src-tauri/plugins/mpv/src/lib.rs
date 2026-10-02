@@ -1,7 +1,8 @@
 //! mpv on iOS. The player itself is Swift (ios/Sources/MpvPlugin), built on
 //! MPVKit; the web side calls it as `plugin:mpv|start`, `|command`, `|set`,
-//! `|get` and `|stop`, and hears `prop` and `event` back, the same shape as the
-//! desktop player's `mpv_*` commands and `mpv://` events (src/player.rs).
+//! `|get` and `|stop` (and `|now_playing` for Control Center), and hears `prop`
+//! and `event` back, the same shape as the desktop player's `mpv_*` commands
+//! and `mpv://` events (src/player.rs).
 
 use tauri::{
     plugin::{Builder, TauriPlugin},

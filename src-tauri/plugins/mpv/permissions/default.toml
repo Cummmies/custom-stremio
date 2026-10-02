@@ -1,5 +1,5 @@
 [default]
-description = "Everything the player screen needs: start, control and stop mpv."
+description = "Everything the player screen needs: start, control and stop mpv, and show it in Now Playing."
 permissions = [
     "allow-start",
     "allow-command",
@@ -9,6 +9,8 @@ permissions = [
     "allow-orientation",
     "allow-thumb-frame",
     "allow-thumb-close",
+    "allow-now-playing",
+    "allow-now-playing-clear",
     "allow-register-listener",
     "allow-remove-listener",
 ]
