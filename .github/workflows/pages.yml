@@ -1,0 +1,53 @@
+# Pages the apps use, published to GitHub Pages next to the preview site:
+#
+#   pages/youtube/  → https://cummmies.github.io/custom-stremio/youtube/
+#                     (the trailer player on iOS and the TV: TrailerDialog.svelte)
+#
+# They live on the gh-pages branch alongside the previews (preview.yml keeps
+# whatever else is there), so they don't depend on a preview being built.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pages/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # The same group as the preview's publish: one writer of gh-pages at a time.
+    concurrency:
+      group: preview-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Publish to the gh-pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 --branch gh-pages "$url" pages 2>/dev/null; then :; else
+            git init -q pages && git -C pages checkout -q -b gh-pages && git -C pages remote add origin "$url"
+          fi
+          cd pages
+          for d in ../repo/pages/*/; do
+            name=$(basename "$d")
+            rm -rf "$name" && cp -r "$d" "$name"
+          done
+          touch .nojekyll
+          # One commit, no history (as preview.yml does).
+          git checkout -q --orphan next
+          git add -A
+          git commit -qm "Pages: ${GITHUB_SHA::7}"
+          for i in 1 2 3 4; do git push -qf origin next:gh-pages && break; sleep $((i * 4)); done

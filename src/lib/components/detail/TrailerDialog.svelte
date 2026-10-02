@@ -4,6 +4,15 @@
     let { ytId, title, onclose }: { ytId: string; title: string; onclose: () => void } = $props();
     let dialog = $state<HTMLDialogElement>();
 
+    // YouTube refuses an embed that doesn't say which website it's on (Error
+    // 153). The iOS app (tauri://) and the TV (a local file) aren't on one: they
+    // show our page on GitHub Pages (pages/youtube), which embeds it instead.
+    const src = $derived(
+        location.protocol === 'http:' || location.protocol === 'https:'
+            ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(ytId)}?autoplay=1&rel=0&modestbranding=1&playsinline=1`
+            : `https://cummmies.github.io/custom-stremio/youtube/?v=${encodeURIComponent(ytId)}`
+    );
+
     $effect(() => {
         dialog?.showModal();
     });
@@ -14,8 +23,9 @@
         <Icon name="close" size={16} />
     </button>
     <iframe
-        src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(ytId)}?autoplay=1&rel=0&modestbranding=1`}
+        {src}
         title={`${title} trailer`}
+        referrerpolicy="strict-origin-when-cross-origin"
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowfullscreen
     ></iframe>
