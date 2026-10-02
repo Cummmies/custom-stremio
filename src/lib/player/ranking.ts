@@ -81,6 +81,25 @@ const DEBRID_TAG = new RegExp(`\\[(${SERVICES})(\\+|⚡|⏳| ?download)?\\]`, 'i
 // AIOStreams name template "AIOStreams (Instant TB) (1080p)" / "AIOStreams (TB) (1080p)".
 const DEBRID_PAREN = new RegExp(`\\(([Ii]nstant\\s+)?(${SERVICES})\\)`);
 
+// A video file or stream by its address: "….mkv", "….m3u8?token=…".
+const VIDEO_URL = /\.(?:mkv|mp4|m4v|avi|mov|webm|ts|m2ts|m3u8|mpd|flv|wmv)$/i;
+// What describes a video: a resolution, a size, a release type or a codec.
+const VIDEO_WORDS =
+    /\b(?:\d{3,4}p|4k|uhd|sd|hd|remux|blu-?ray|bdrip|brrip|web-?dl|webrip|web|hdtv|dvdrip|x26[45]|h\.?26[45]|hevc|avc|av1|hdr(?:10)?\+?|dv|atmos|aac|ac-?3|ddp?5?|dts)\b|\d+(?:[.,]\d+)?\s*(?:TB|GB|MB)\b/i;
+
+/**
+ * An untagged link that says something about being a video. Addons that only
+ * show information in the source list (Age Ratings, parents' guides) send
+ * plain links with a rating or a note and nothing like a resolution, size or
+ * file: not something to auto-play (you can still open them yourself).
+ */
+function saysVideo(s: Stream, text: string): boolean {
+    const hints = s.behaviorHints;
+    if (hints?.filename || hints?.videoSize || hints?.bingeGroup) return true;
+    if (s.url && VIDEO_URL.test(s.url.split(/[?#]/)[0])) return true;
+    return VIDEO_WORDS.test(text);
+}
+
 function parseSize(text: string, hint?: number): number | null {
     if (hint && hint > 0) return hint;
     const m = text.match(/(?:💾\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB|MB)\b/i);
@@ -110,6 +129,7 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
         if (/\[P2P\]/i.test(s.name ?? '')) kind = 'torrent';
         else if (tag) kind = tag[2] && /[+⚡]/u.test(tag[2]) ? 'debrid' : 'debrid-uncached';
         else if (paren) kind = paren[1] ? 'debrid' : 'debrid-uncached';
+        else if (!saysVideo(s, text)) kind = 'skip';
         else kind = /⏳/.test(text) ? 'debrid-uncached' : 'debrid';
     }
 
