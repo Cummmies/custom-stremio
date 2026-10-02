@@ -2,8 +2,7 @@
     // Side sheet listing every addon's streams for one movie or episode.
     // A focused, dismissible task: Esc, the close button or the backdrop all close it.
     import type { MetaDetails, Stream } from '$lib/core/types';
-    import { goto, appUrl } from '$lib/nav';
-    import { page } from '$app/state';
+    import { goto } from '$lib/nav';
     import { openExternal } from '$lib/links';
     import { canPlay, isTV } from '$lib/platform';
     import { parsePlayerDeepLink, playerHref } from '$lib/player/deeplink';
@@ -20,7 +19,6 @@
         streams,
         notice = null,
         anime = false,
-        passThrough = false,
         onclose,
     }: {
         title: string;
@@ -30,12 +28,6 @@
         notice?: string | null;
         /** Anime reads "Dubbed" / "Dual Audio" as an English dub. */
         anime?: boolean;
-        /**
-         * The title page was only a step on the way to playing (a Play button
-         * elsewhere): the player takes its place, so Back from the player
-         * returns to where you were.
-         */
-        passThrough?: boolean;
         onclose: () => void;
     } = $props();
 
@@ -94,15 +86,11 @@
         easyQueue.clear();
         easyQueue.handPicked = link?.videoId ?? null;
         if (!link || !url) return;
-        if (passThrough) {
-            goto(playerHref(link, url), { replaceState: true });
-            return;
-        }
-        // Coming back from the player should land on the title, not reopen this
-        // sheet: take the picked video out of this page's address first.
-        const here = new URL(appUrl(page.url));
-        ['video', 'play', 'auto', 'failed', 'nomatch'].forEach((k) => here.searchParams.delete(k));
-        goto(here.pathname + here.search, { replaceState: true, noScroll: true, keepFocus: true }).then(() => goto(playerHref(link, url)));
+        // The player takes this sheet's place in history: Back from it returns
+        // to what was under the sheet, the title page if you opened it, or
+        // wherever you pressed Play (Home, Continue Watching), without the
+        // sheet reopening on the way.
+        goto(playerHref(link, url), { replaceState: true });
     }
 
     async function copy(s: Stream, key: string) {

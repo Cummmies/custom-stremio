@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { untrack } from 'svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { core } from '$lib/core';
@@ -119,16 +118,6 @@
         return () => wide.removeEventListener('change', onChange);
     });
 
-    // Arrived straight into sources (a Play button elsewhere, Continue
-    // Watching): this page is only a step on the way to the player, which
-    // takes its place in history (SourcesSheet). Closing the sheet ends that.
-    let passThrough = $state(false);
-    $effect(() => {
-        id;
-        const p = untrack(() => appUrl(page.url).searchParams);
-        passThrough = !!(p.get('play') || p.get('video'));
-    });
-
     // Arriving from a Play button: jump straight to sources.
     $effect(() => {
         if (meta && appUrl(page.url).searchParams.get('play')) play(true);
@@ -204,7 +193,6 @@
     }
 
     function closeSources() {
-        passThrough = false;
         goto(titleHref(type, id), { noScroll: true, keepFocus: true, replaceState: true });
     }
 
@@ -404,7 +392,7 @@
 {/if}
 
 {#if sheetOpen && meta && details}
-    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} anime={isAnime} notice={easyNotice} {passThrough} onclose={closeSources} />
+    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} anime={isAnime} notice={easyNotice} onclose={closeSources} />
 {/if}
 
 {#if auto && meta}

@@ -169,6 +169,12 @@ function recalled(target: HTMLElement, current: Element | null): HTMLElement {
     return last && last.isConnected && visible(last) ? last : target;
 }
 
+function onScreen(el: Element) {
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < innerHeight / zoom && r.right > 0 && r.left < innerWidth / zoom;
+}
+
 /** The item to start from when nothing (or the page itself) has focus: top left. */
 function first(list: { el: HTMLElement; r: DOMRect }[]) {
     // The window in the page's units (the TV app is zoomed).
@@ -192,7 +198,10 @@ function move(dir: Dir): boolean {
     // Reversing a vertical move goes back where you came from (as on tvOS).
     const key = rowOf(active!) ?? active!;
     const back = dir === 'up' ? cameFromAbove.get(key) : dir === 'down' ? cameFromBelow.get(key) : undefined;
-    let next = back && back !== active && back.isConnected && visible(back) ? back : nearest(active!.getBoundingClientRect(), dir, list, active);
+    // Only to something still on screen: the memory is for stepping back and
+    // forth between neighbours, not for jumping down the page to wherever an
+    // earlier move happened to come from.
+    let next = back && back !== active && back.isConnected && visible(back) && onScreen(back) ? back : nearest(active!.getBoundingClientRect(), dir, list, active);
     if (next && next !== back && (dir === 'up' || dir === 'down')) next = recalled(next, active);
     if (next && (dir === 'up' || dir === 'down')) {
         const nextKey = rowOf(next) ?? next;

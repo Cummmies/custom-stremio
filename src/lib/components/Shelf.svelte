@@ -77,6 +77,11 @@
         contain-intrinsic-size: auto 320px;
         scroll-margin-top: calc(var(--nav-h) + 16px);
     }
+    /* TV: every row laid out, so the remote finds its posters where they are
+       (rows skipped while off screen can be passed over). */
+    :global(html.tv) .shelf {
+        content-visibility: visible;
+    }
     header {
         display: flex;
         align-items: baseline;

@@ -19,6 +19,7 @@
     import { interleave } from '$lib/homeLayout.svelte';
     import { core } from '$lib/core';
     import CatalogRow from './CatalogRow.svelte';
+    import { isTV } from '$lib/platform';
 
     let {
         model,
@@ -74,7 +75,10 @@
             clearTimeout(timer);
             timer = setTimeout(loadVisibleRange, 120);
         },
-        { rootMargin: '300px 0px' }
+        // TV: further ahead, so the row the remote moves into already has its
+        // posters (a row still loading has nothing to land on, and the move
+        // would skip past it).
+        { rootMargin: isTV ? '1600px 0px' : '300px 0px' }
     );
 
     function loadVisibleRange() {

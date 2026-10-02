@@ -164,6 +164,9 @@
     }
     li {
         position: relative;
+        /* The list scrolls; its rows keep their height (Chromium 69 squeezed
+           them into the list's height instead, on top of each other). */
+        flex-shrink: 0;
         display: flex;
         align-items: center;
         border-radius: var(--radius);
