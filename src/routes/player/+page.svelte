@@ -641,20 +641,33 @@
     });
 
     // With "Play next episode automatically" on, the card counts down and starts the
-    // next episode when it runs out: `nextThreshold` seconds after the card appears,
-    // or at the end if that's sooner. Counted in video time, so pausing pauses it.
+    // next episode when it runs out: `AUTOPLAY_COUNTDOWN` seconds into the credits,
+    // or the episode's last seconds when where the credits are isn't known (never
+    // cutting off the end of the story). Counted in video time, so pausing pauses it.
+    const AUTOPLAY_COUNTDOWN = 10;
     let nextCardAt = $state<number | null>(null);
+    let nextCardInCredits = false;
     let autoplayFired = false;
     let nextThumbFailed = $state(false);
     $effect(() => {
         if (!showNext) nextCardAt = null;
-        else if (nextCardAt == null) nextCardAt = player.time;
+        else if (nextCardAt == null) {
+            nextCardAt = player.time;
+            nextCardInCredits = untrack(() => currentSegment?.kind === 'credits');
+        }
+    });
+    /** When the countdown starts and ends (video time), once the card is up. */
+    const countdown = $derived.by(() => {
+        const d = player.duration;
+        if (!d || nextCardAt == null) return null;
+        const from = nextCardInCredits ? nextCardAt : Math.max(nextCardAt, d - AUTOPLAY_COUNTDOWN);
+        return { from, to: Math.min(d, from + AUTOPLAY_COUNTDOWN) };
     });
     const autoplayIn = $derived.by(() => {
-        if (!settings?.bingeWatching || !showNext || nextCardAt == null || !player.duration) return null;
-        return Math.max(0, Math.min(player.duration, nextCardAt + nextThreshold) - player.time);
+        if (!settings?.bingeWatching || !showNext || !countdown || player.time < countdown.from) return null;
+        return Math.max(0, countdown.to - player.time);
     });
-    const autoplayTotal = $derived(player.duration && nextCardAt != null ? Math.min(player.duration, nextCardAt + nextThreshold) - nextCardAt : 0);
+    const autoplayTotal = $derived(countdown ? countdown.to - countdown.from : 0);
     $effect(() => {
         if (autoplayIn == null || autoplayIn > 0.25 || autoplayFired) return;
         autoplayFired = true;
@@ -1922,6 +1935,55 @@
     }
     .touch.hidden .skip {
         bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px));
+    }
+    /* Phones: a compact card, a small still beside the title, that leaves most
+       of the picture (the credits) in view, inside the safe area, with 44 pt
+       buttons; down to the corner when the controls hide, as Skip does. */
+    @media (max-width: 700px), (max-height: 500px) {
+        .touch .next {
+            right: max(16px, env(safe-area-inset-right));
+            box-sizing: border-box;
+            width: min(400px, calc(100% - 32px));
+            flex-direction: row;
+            align-items: center;
+            gap: 12px;
+            padding: 10px;
+            border-radius: 20px;
+            transition:
+                opacity 240ms var(--ease),
+                transform 240ms var(--ease),
+                bottom 240ms var(--ease);
+        }
+        .touch.hidden .next {
+            bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+        }
+        .touch .next-thumb {
+            flex: none;
+            width: 112px;
+            border-radius: 10px;
+        }
+        .touch .next-body {
+            flex: 1;
+            min-width: 0;
+            gap: 2px;
+            padding: 0;
+        }
+        .touch .next-title {
+            overflow: hidden;
+            font-size: 15px;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .touch .next-actions {
+            margin-top: 8px;
+        }
+        .touch .next-actions button {
+            flex: 1;
+            justify-content: center;
+            height: 44px;
+            padding: 0 12px;
+            font-size: 15px;
+        }
     }
     /* iOS keeps :hover on a tapped button, which would leave a grey disc. */
     .touch .icon:hover:not(:disabled) {
