@@ -259,7 +259,12 @@ function move(dir: Dir): boolean {
     // Only to something still on screen: the memory is for stepping back and
     // forth between neighbours, not for jumping down the page to wherever an
     // earlier move happened to come from.
-    let next = back && back !== active && back.isConnected && visible(back) && onScreen(back) ? back : nearest(active!.getBoundingClientRect(), dir, list, active);
+    // Nor past something in between (a row's See All, above its posters).
+    const near = nearest(active!.getBoundingClientRect(), dir, list, active);
+    const backRect = back && back !== active && back.isConnected && visible(back) && onScreen(back) ? back.getBoundingClientRect() : null;
+    const nearRect = near?.getBoundingClientRect();
+    const skips = !!backRect && !!nearRect && (dir === 'up' ? nearRect.top >= backRect.bottom - 2 : nearRect.bottom <= backRect.top + 2);
+    let next = backRect && !skips ? back! : near;
     if (next && next !== back && (dir === 'up' || dir === 'down')) next = recalled(next, active);
     if (next && (dir === 'up' || dir === 'down')) {
         const nextKey = rowOf(next) ?? next;
