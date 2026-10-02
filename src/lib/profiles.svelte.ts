@@ -42,7 +42,7 @@ function load<T>(key: string, fallback: T): T {
     }
 }
 
-function nameFromEmail(email: string) {
+export function nameFromEmail(email: string) {
     const local = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\d+$/, '').trim() || email;
     return local.charAt(0).toUpperCase() + local.slice(1);
 }

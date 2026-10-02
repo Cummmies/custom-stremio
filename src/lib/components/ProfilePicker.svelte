@@ -12,7 +12,7 @@
     import Toggle from './Toggle.svelte';
     import LinkLogin from './LinkLogin.svelte';
     import { isTV } from '$lib/platform';
-    import logo from '$lib/assets/logo.png';
+    import logo from '$lib/assets/logo.svg';
 
     let dialog = $state<HTMLDialogElement>();
     let view = $state<'pick' | 'add' | 'edit'>(profiles.pickerView);

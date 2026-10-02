@@ -163,7 +163,7 @@ jobs:
           rm -rf wgt && mkdir wgt
           cp -r build/. wgt/
           cp tv/wgt/config.xml wgt/
-          cp src-tauri/icons/128x128.png wgt/icon.png
+          cp tv/wgt/icon.png wgt/icon.png
           # A new version each build, so the TV takes it as an update.
           sed -i "s/version=\"0.1.0\"/version=\"0.1.${{ github.run_number }}\"/" wgt/config.xml
           du -sh wgt

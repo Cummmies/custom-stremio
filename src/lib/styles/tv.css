@@ -194,6 +194,12 @@ html.tv-legacy :is(button, a) > svg:only-child {
     margin-right: auto;
 }
 
+/* The logo beside "Stremio" (top bar, Who's watching): the word is text, so
+   the legacy gap margins don't reach it. */
+html.tv-legacy .brand > img {
+    margin-right: 10px;
+}
+
 /* --- performance --------------------------------------------------------- */
 
 /* Background blur is costly on a TV's GPU and makes scrolling stutter. */

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import logo from '$lib/assets/logo.png';
+    import logo from '$lib/assets/logo.svg';
     // Floating navigation over the hero: brand, a pill of sections, search and account.
     // Transparent at rest; picks up a glass backing once content scrolls under it.
     import { goto, appUrl } from '$lib/nav';

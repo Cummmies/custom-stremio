@@ -11,6 +11,7 @@
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { profiles } from '$lib/profiles.svelte';
+    import { cloudSync } from '$lib/cloudSync.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
@@ -169,6 +170,20 @@
                 {/if}
             {/if}
             {#if app.user}
+                <div class="row">
+                    <div>
+                        <div class="title">Sync</div>
+                        <div class="sub" class:sync-error={!!cloudSync.status?.error}>
+                            {#if cloudSync.status?.error}
+                                Couldn’t save to your Stremio account: {cloudSync.status.error}
+                            {:else if cloudSync.status}
+                                Saved to your Stremio account at {new Date(cloudSync.status.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.
+                            {:else}
+                                Your profile name and picture, Home rows and app settings follow your Stremio account.
+                            {/if}
+                        </div>
+                    </div>
+                </div>
                 <button class="row action destructive" onclick={() => app.logout()}>Log Out</button>
             {/if}
         </div>
@@ -575,6 +590,9 @@
     .name-input:focus {
         outline: none;
         border-color: var(--accent-hover);
+    }
+    .sync-error {
+        color: var(--bad);
     }
     .account-actions {
         display: flex;

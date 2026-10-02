@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#555555"/>
+      <stop offset="0.5" stop-color="#363636"/>
+      <stop offset="1" stop-color="#232323"/>
+    </linearGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e8e8e8"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded diamond -->
+  <rect x="32" y="32" width="192" height="192" rx="26" ry="26"
+        transform="rotate(45 128 128)" fill="url(#bg)"/>
+  <!-- Play triangle with rounded corners -->
+  <path d="M113 90 L113 166 L169 128 Z"
+        fill="url(#play)" stroke="url(#play)" stroke-width="12" stroke-linejoin="round"/>
+</svg>
