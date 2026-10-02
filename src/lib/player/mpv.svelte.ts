@@ -197,6 +197,10 @@ class Mpv implements PlayerBackend {
         this.duration = null;
         // Set `start` as a property so it works across mpv versions' loadfile syntax.
         await this.set('start', startSeconds > 0 ? String(startSeconds) : 'none');
+        // mpv keeps `pause` from file to file: a new file plays (the one before may
+        // have been paused on the way out, an addon's error clip or a source that
+        // didn't work), as AVPlay's does.
+        await this.set('pause', false);
         await this.command('loadfile', url, 'replace');
     }
 
