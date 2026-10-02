@@ -135,6 +135,12 @@ jobs:
           rm -rf "$RUNNER_TEMP/before"
           if [ "$slug" = main ] && [ -d main/report ]; then cp -r main/report "$RUNNER_TEMP/before"; fi
           rm -rf "$slug" && cp -r ../site "$slug"
+          # Branches deleted since: their previews go too.
+          live=$(git ls-remote --heads origin | sed 's#.*refs/heads/##' | tr '/' '-' | tr -cd 'A-Za-z0-9._\n-')
+          for d in */; do
+            d=${d%/}
+            if [ -f "$d/deploy.json" ] && ! echo "$live" | grep -qxF "$d"; then rm -rf "$d"; fi
+          done
           if [ "$slug" = main ]; then
             if [ -d "$RUNNER_TEMP/before" ]; then
               mkdir -p main/before && mv "$RUNNER_TEMP/before" main/before/report
