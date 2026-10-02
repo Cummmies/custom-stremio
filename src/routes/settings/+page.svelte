@@ -479,11 +479,12 @@
                         </div>
                         <div class="sub">
                             {#if updates.phase === 'error'}Check your connection and try again.
+                            {:else if updates.reloads}Updates download in the background and install when you reload.
                             {:else}Updates download in the background and install when you restart.{/if}
                         </div>
                     </div>
                     {#if updates.phase === 'ready'}
-                        <button class="btn primary" onclick={() => updates.restartToUpdate()}>Restart to Update</button>
+                        <button class="btn primary" onclick={() => updates.restartToUpdate()}>{updates.reloads ? 'Reload to Update' : 'Restart to Update'}</button>
                     {:else}
                         <button class="btn" disabled={updates.phase === 'checking' || updates.phase === 'downloading'} onclick={() => updates.check()}>
                             Check for Updates

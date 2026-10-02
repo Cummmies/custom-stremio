@@ -1,9 +1,14 @@
 <script lang="ts">
+    import { page } from '$app/state';
+    import { appUrl } from '$lib/nav';
     import { updates } from '$lib/updates.svelte';
     import Icon from './Icon.svelte';
+
+    // Settings has its own Updates row with the same button: one is enough there.
+    const onSettings = $derived(appUrl(page.url).pathname === '/settings');
 </script>
 
-{#if updates.phase === 'ready' && !updates.dismissed}
+{#if updates.phase === 'ready' && !updates.dismissed && !onSettings}
     <aside class="toast" role="status" aria-live="polite">
         <div class="text">
             <strong>Update ready</strong>
