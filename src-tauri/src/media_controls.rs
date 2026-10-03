@@ -1,7 +1,13 @@
 //! Windows media overlay (System Media Transport Controls): the panel that shows
 //! what's playing next to the volume flyout, and the keyboard's media keys.
-//! We show the title, episode and a picture, and let its play/pause button (or
-//! the media key) control the player. The page sends play/pause back to mpv itself.
+//! We show the title, episode and a picture, the position on a timeline you can
+//! drag, and play/pause, next episode and stop. Each comes back to the page as a
+//! `media://button` ("play", "pause", "toggle", "next", "stop") or `media://seek`
+//! (seconds) event; the page acts on mpv itself.
+//!
+//! While a video plays, the PC and screen are kept awake, and the taskbar
+//! button gets a play/pause button and a progress bar (taskbar.rs), as in
+//! stremio-native.
 //!
 //! Windows names the app in that panel from its AppUserModelID: `register`
 //! gives the process one and records a display name and icon for it.
@@ -18,9 +24,11 @@ mod imp {
     use windows::core::HSTRING;
     use windows::Foundation::{TypedEventHandler, Uri};
     use windows::Storage::Streams::RandomAccessStreamReference;
+    use windows::Foundation::TimeSpan;
     use windows::Media::{
-        MediaPlaybackStatus, MediaPlaybackType, SystemMediaTransportControls, SystemMediaTransportControlsButton,
-        SystemMediaTransportControlsButtonPressedEventArgs,
+        MediaPlaybackStatus, MediaPlaybackType, PlaybackPositionChangeRequestedEventArgs, SystemMediaTransportControls,
+        SystemMediaTransportControlsButton, SystemMediaTransportControlsButtonPressedEventArgs,
+        SystemMediaTransportControlsTimelineProperties,
     };
     use windows::Win32::Foundation::HWND;
     use windows::Win32::System::WinRT::ISystemMediaTransportControlsInterop;
@@ -39,7 +47,8 @@ mod imp {
         let controls: SystemMediaTransportControls = unsafe { interop.GetForWindow(HWND(hwnd)) }?;
         controls.SetIsPlayEnabled(true)?;
         controls.SetIsPauseEnabled(true)?;
-        let app = app.clone();
+        controls.SetIsStopEnabled(true)?;
+        let buttons = app.clone();
         controls.ButtonPressed(&TypedEventHandler::new(
             move |_, args: &Option<SystemMediaTransportControlsButtonPressedEventArgs>| {
                 if let Some(args) = args {
@@ -48,10 +57,25 @@ mod imp {
                         "play"
                     } else if button == SystemMediaTransportControlsButton::Pause {
                         "pause"
+                    } else if button == SystemMediaTransportControlsButton::Next {
+                        "next"
+                    } else if button == SystemMediaTransportControlsButton::Stop {
+                        "stop"
                     } else {
                         return Ok(());
                     };
-                    let _ = app.emit("media://button", action);
+                    let _ = buttons.emit("media://button", action);
+                }
+                Ok(())
+            },
+        ))?;
+        // Dragging the overlay's timeline.
+        let seeks = app.clone();
+        controls.PlaybackPositionChangeRequested(&TypedEventHandler::new(
+            move |_, args: &Option<PlaybackPositionChangeRequestedEventArgs>| {
+                if let Some(args) = args {
+                    let seconds = args.RequestedPlaybackPosition()?.Duration as f64 / 10_000_000.0;
+                    let _ = seeks.emit("media://seek", seconds);
                 }
                 Ok(())
             },
@@ -67,9 +91,11 @@ mod imp {
         subtitle: &str,
         image: Option<&str>,
         paused: bool,
+        can_next: bool,
     ) -> windows::core::Result<()> {
         let controls = controls(app, hwnd)?;
         controls.SetIsEnabled(true)?;
+        controls.SetIsNextEnabled(can_next)?;
         controls.SetPlaybackStatus(if paused { MediaPlaybackStatus::Paused } else { MediaPlaybackStatus::Playing })?;
         let display = controls.DisplayUpdater()?;
         // Start clean so a picture from the last episode doesn't linger.
@@ -83,6 +109,19 @@ mod imp {
             display.SetThumbnail(&RandomAccessStreamReference::CreateFromUri(&Uri::CreateUri(&HSTRING::from(url))?)?)?;
         }
         display.Update()
+    }
+
+    /// The overlay's timeline: where playback is, out of how long.
+    pub fn timeline(app: &AppHandle, hwnd: isize, position: f64, duration: f64) -> windows::core::Result<()> {
+        let controls = controls(app, hwnd)?;
+        let span = |seconds: f64| TimeSpan { Duration: (seconds.max(0.0) * 10_000_000.0) as i64 };
+        let timeline = SystemMediaTransportControlsTimelineProperties::new()?;
+        timeline.SetStartTime(span(0.0))?;
+        timeline.SetMinSeekTime(span(0.0))?;
+        timeline.SetEndTime(span(duration))?;
+        timeline.SetMaxSeekTime(span(duration))?;
+        timeline.SetPosition(span(position.min(duration)))?;
+        controls.UpdateTimelineProperties(&timeline)
     }
 
     pub fn clear() -> windows::core::Result<()> {
@@ -188,33 +227,75 @@ mod imp {
     }
 }
 
-/// Shows (or updates) what's playing in the Windows media overlay.
+/// Shows (or updates) what's playing in the Windows media overlay, the taskbar
+/// button's play/pause, and keeps the PC awake while it plays.
 #[tauri::command]
-pub fn media_update(app: AppHandle, window: WebviewWindow, title: String, subtitle: String, image: Option<String>, paused: bool) {
+#[allow(clippy::too_many_arguments)]
+pub fn media_update(
+    app: AppHandle,
+    window: WebviewWindow,
+    title: String,
+    subtitle: String,
+    image: Option<String>,
+    paused: bool,
+    can_next: Option<bool>,
+) {
     #[cfg(windows)]
     {
         let Some(hwnd) = imp::hwnd(&window) else { return };
+        crate::taskbar::keep_awake(!paused);
         let handle = app.clone();
         let _ = app.run_on_main_thread(move || {
             let image = image.as_deref().filter(|u| u.starts_with("http"));
-            if let Err(e) = imp::update(&handle, hwnd, &title, &subtitle, image, paused) {
+            if let Err(e) = imp::update(&handle, hwnd, &title, &subtitle, image, paused, can_next.unwrap_or(false)) {
                 eprintln!("media controls: {e}");
+            }
+            crate::taskbar::set_state(&handle, hwnd, Some(paused));
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, window, title, subtitle, image, paused, can_next);
+}
+
+/// The position: the overlay's timeline and the taskbar button's progress bar.
+#[tauri::command]
+pub fn media_timeline(app: AppHandle, window: WebviewWindow, position: f64, duration: f64) {
+    #[cfg(windows)]
+    {
+        if !(duration > 0.0) || !position.is_finite() {
+            return;
+        }
+        let Some(hwnd) = imp::hwnd(&window) else { return };
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Err(e) = imp::timeline(&handle, hwnd, position, duration) {
+                eprintln!("media controls: {e}");
+            }
+            crate::taskbar::set_progress(hwnd, position, duration);
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, window, position, duration);
+}
+
+/// Removes the app from the Windows media overlay and the taskbar button's
+/// controls, and lets the PC sleep again (leaving the player).
+#[tauri::command]
+pub fn media_clear(app: AppHandle, window: WebviewWindow) {
+    #[cfg(windows)]
+    {
+        crate::taskbar::keep_awake(false);
+        let hwnd = imp::hwnd(&window);
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let _ = imp::clear();
+            if let Some(hwnd) = hwnd {
+                crate::taskbar::set_state(&handle, hwnd, None);
             }
         });
     }
     #[cfg(not(windows))]
-    let _ = (app, window, title, subtitle, image, paused);
-}
-
-/// Removes the app from the Windows media overlay (leaving the player).
-#[tauri::command]
-pub fn media_clear(app: AppHandle) {
-    #[cfg(windows)]
-    let _ = app.run_on_main_thread(|| {
-        let _ = imp::clear();
-    });
-    #[cfg(not(windows))]
-    let _ = app;
+    let _ = (app, window);
 }
 
 /// Call at the very start, before any window is created (Windows only).

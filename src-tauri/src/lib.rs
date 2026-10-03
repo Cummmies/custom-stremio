@@ -9,6 +9,8 @@ mod media_controls;
 mod player;
 #[cfg(desktop)]
 mod server;
+#[cfg(windows)]
+mod taskbar;
 mod skips;
 mod storage;
 // Wired up on iOS only (the desktop app has the full updater); compiled
@@ -123,6 +125,7 @@ fn run_desktop() {
             window_modes::start_dragging,
             media_controls::media_update,
             media_controls::media_clear,
+            media_controls::media_timeline,
             discord::discord_set,
             discord::discord_clear,
         ])

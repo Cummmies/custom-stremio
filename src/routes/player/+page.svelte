@@ -128,12 +128,22 @@
         const offIosPip = isIOS ? addPluginListener<IosPip>('mpv', 'pip', onIosPip).catch(() => null) : Promise.resolve(null);
         const unwatch = core.watch<PlayerModel>('player', (s) => (model = s));
         const offEvents = player.onEvent(onPlayerEvent);
-        // Play/pause from the Windows media overlay or the keyboard's media keys.
+        // The Windows media overlay, the keyboard's media keys and the taskbar
+        // button (media_controls.rs, taskbar.rs): play/pause, next, stop, seeking.
         const offMedia = isDesktop
-            ? listen<string>('media://button', (e) => {
-                  markActive();
-                  player.setPaused(e.payload === 'pause');
-              })
+            ? Promise.all([
+                  listen<string>('media://button', (e) => {
+                      markActive();
+                      if (e.payload === 'play' || e.payload === 'pause') player.setPaused(e.payload === 'pause');
+                      else if (e.payload === 'toggle') player.togglePause();
+                      else if (e.payload === 'next' && model?.nextVideo) playNext();
+                      else if (e.payload === 'stop') exit();
+                  }),
+                  listen<number>('media://seek', (e) => {
+                      markActive();
+                      player.seek(e.payload);
+                  }),
+              ]).then((offs) => () => offs.forEach((off) => off()))
             : Promise.resolve(() => {});
         // Pause on minimize / on switching to another window (Settings → Playback).
         const win = isDesktop ? getCurrentWindow() : null;
@@ -473,7 +483,22 @@
     $effect(() => {
         if (!isDesktop || !player.loaded || !model) return;
         const image = episodeVideo?.thumbnail || meta?.background || meta?.poster || null;
-        invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: player.paused }).catch(() => {});
+        invoke('media_update', { title: heading, subtitle: subheading ?? '', image, paused: player.paused, canNext: !!model?.nextVideo }).catch(() => {});
+    });
+
+    // ...and where playback is: the overlay's timeline and the taskbar button's
+    // progress bar. Every few seconds, and straight away after a pause or seek.
+    let timelineSent = 0;
+    let timelineKey = '';
+    $effect(() => {
+        if (!isDesktop || !player.loaded || !player.duration) return;
+        const position = player.time;
+        const key = `${player.paused}|${seeks}`;
+        const now = Date.now();
+        if (key === timelineKey && now - timelineSent < 4000) return;
+        timelineKey = key;
+        timelineSent = now;
+        invoke('media_timeline', { position, duration: player.duration }).catch(() => {});
     });
 
     // --- iOS Now Playing (Control Center, the Lock Screen): the same; the
