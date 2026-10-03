@@ -447,10 +447,6 @@ class AVPlayBackend implements PlayerBackend {
     async chapters(): Promise<RawChapter[]> {
         return [];
     }
-
-    async bufferedAhead() {
-        return 0;
-    }
 }
 
 export const avplay = new AVPlayBackend();

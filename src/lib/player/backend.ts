@@ -118,8 +118,6 @@ export interface PlayerBackend {
 
     // --- about the file ---
     chapters(): Promise<RawChapter[]>;
-    /** Seconds buffered ahead of the playhead. */
-    bufferedAhead(): Promise<number>;
 
     // --- optional extras (see `features`) ---
     setUpscaler?(kind: Upscaler): Promise<void>;

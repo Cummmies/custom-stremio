@@ -1,52 +1,58 @@
 // Seek-bar thumbnails from a second, silent mpv: the Rust thumbnailer on the
 // desktop (raw pixels), the Swift one on iOS (JPEGs; plugins/mpv).
 //
-// Network streams take seconds per frame, so hovering can't wait for an exact
-// frame. Instead we fill a spread of frames across the whole video in the
-// background (coarse first, then finer) and always show the nearest one we
-// have; the exact frame for where you hover is fetched first and swaps in.
+// As stremio-native does it (after thumbfast): only the frame for where you
+// hover is fetched, and the newest hover always wins. While the pointer moves,
+// a quick frame from the nearest keyframe (at most one every 50 ms); once it
+// rests for 100 ms, the exact frame, which replaces it. Frames are kept in a
+// 16 MiB cache at 0.1 s, the least recently shown going first. While a frame
+// is on its way, the nearest one already cached stands in.
 import { invoke } from '@tauri-apps/api/core';
 import { isIOS } from '$lib/platform';
 
-const WIDTH = 224;
-const BUCKET = 2; // seconds; nearby hovers share a frame
-const BACKGROUND_GAP_MS = 1200; // breathing room between background fetches
-const MAX_FRAMES = 600;
+const WIDTH = 320;
+const BUCKET = 0.1; // seconds
+const CACHE_BYTES = 16 * 1024 * 1024;
+const FAST_GAP_MS = 50;
+const EXACT_DELAY_MS = 100;
+
+type Frame = { bitmap: ImageBitmap; bytes: number; exact: boolean };
 
 export class Thumbnails {
     #url: string;
-    #cache = new Map<number, ImageBitmap>();
+    /** Bucket → frame; Map order is least to most recently used. */
+    #cache = new Map<number, Frame>();
+    #bytes = 0;
     #busy = false;
-    #hover: number | null = null;
-    #background: number[] = [];
+    #fast: number | null = null;
+    #exact: number | null = null;
+    #exactTimer: ReturnType<typeof setTimeout> | undefined;
+    #lastFast = 0;
     #listeners = new Set<() => void>();
     #failed = false;
     #closed = false;
-    #paused: () => boolean;
 
-    /** `paused` lets the player hold background work (e.g. while it's buffering). */
-    constructor(url: string, paused: () => boolean = () => false) {
+    constructor(url: string) {
         this.#url = url;
-        this.#paused = paused;
     }
 
     get available() {
         return !this.#failed;
     }
 
-    get count() {
-        return this.#cache.size;
-    }
-
-    /** The cached frame closest to `time`, or null if we have none yet. */
+    /** The frame for `time` if cached, else the nearest cached one (or null). */
     nearest(time: number): ImageBitmap | null {
-        const exact = this.#cache.get(this.#bucket(time));
-        if (exact) return exact;
+        const b = this.#bucket(time);
+        const hit = this.#cache.get(b);
+        if (hit) {
+            this.#touch(b, hit);
+            return hit.bitmap;
+        }
         let best: number | null = null;
         for (const t of this.#cache.keys()) {
             if (best == null || Math.abs(t - time) < Math.abs(best - time)) best = t;
         }
-        return best == null ? null : this.#cache.get(best)!;
+        return best == null ? null : this.#cache.get(best)!.bitmap;
     }
 
     onChange(fn: () => void) {
@@ -54,35 +60,16 @@ export class Thumbnails {
         return () => this.#listeners.delete(fn);
     }
 
-    /** Hovering: fetch this spot next, ahead of any background work. */
+    /** The pointer is over `time`: a quick frame now, the exact one when it rests. */
     request(time: number) {
         if (this.#failed || this.#closed) return;
-        const b = this.#bucket(time);
-        if (this.#cache.has(b)) return;
-        this.#hover = b;
-        this.#pump();
-    }
-
-    /**
-     * Starts filling frames across the video. Order is coarse-to-fine (halves,
-     * then quarters, then eighths…) so the whole bar is covered quickly.
-     */
-    warmUp(duration: number) {
-        if (this.#failed || this.#closed || !duration) return;
-        const step = Math.max(10, duration / 150);
-        const slots = Math.floor(duration / step);
-        const order: number[] = [];
-        const seen = new Set<number>();
-        for (let div = 2; order.length < slots && div <= slots * 2; div *= 2) {
-            for (let k = 1; k < div; k += 2) {
-                const s = Math.round((k / div) * slots);
-                if (s > 0 && s < slots && !seen.has(s)) {
-                    seen.add(s);
-                    order.push(s);
-                }
-            }
-        }
-        this.#background = order.map((s) => this.#bucket(s * step));
+        if (this.#cache.get(this.#bucket(time))?.exact) return;
+        this.#fast = time;
+        clearTimeout(this.#exactTimer);
+        this.#exactTimer = setTimeout(() => {
+            this.#exact = time;
+            this.#pump();
+        }, EXACT_DELAY_MS);
         this.#pump();
     }
 
@@ -91,39 +78,54 @@ export class Thumbnails {
         this.#busy = true;
         try {
             while (!this.#closed && !this.#failed) {
-                let b: number | undefined;
-                let fromHover = false;
-                if (this.#hover != null) {
-                    b = this.#hover;
-                    this.#hover = null;
-                    fromHover = true;
-                } else if (this.#background.length && !this.#paused()) {
-                    b = this.#background.shift();
-                } else if (this.#background.length) {
-                    // Buffering: check again shortly without hogging the stream.
-                    await new Promise((r) => setTimeout(r, 1000));
-                    continue;
+                let time: number;
+                let exact = false;
+                if (this.#exact != null) {
+                    time = this.#exact;
+                    this.#exact = null;
+                    exact = true;
+                } else if (this.#fast != null) {
+                    time = this.#fast;
+                    this.#fast = null;
                 } else {
                     break;
                 }
-                if (b == null || this.#cache.has(b)) continue;
-                await this.#fetch(b);
-                if (!fromHover && this.#hover == null) await new Promise((r) => setTimeout(r, BACKGROUND_GAP_MS));
+                const b = this.#bucket(time);
+                const hit = this.#cache.get(b);
+                if (hit && (hit.exact || !exact)) continue;
+                if (!exact) {
+                    const wait = FAST_GAP_MS - (Date.now() - this.#lastFast);
+                    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+                    // A newer hover (or the exact frame) came meanwhile: that instead.
+                    if (this.#fast != null || this.#exact != null) continue;
+                    this.#lastFast = Date.now();
+                }
+                await this.#fetch(b, time, exact);
             }
         } finally {
             this.#busy = false;
         }
     }
 
-    async #fetch(b: number) {
+    async #fetch(b: number, time: number, exact: boolean) {
         try {
-            const bitmap = isIOS ? await this.#fetchJpeg(b) : await this.#fetchPixels(b);
+            const bitmap = isIOS ? await this.#fetchJpeg(time, exact) : await this.#fetchPixels(time, exact);
             if (this.#closed) return bitmap.close();
-            this.#cache.set(b, bitmap);
-            if (this.#cache.size > MAX_FRAMES) {
-                const oldest = this.#cache.keys().next().value!;
-                this.#cache.get(oldest)?.close();
-                this.#cache.delete(oldest);
+            const old = this.#cache.get(b);
+            if (old) {
+                this.#bytes -= old.bytes;
+                old.bitmap.close();
+                this.#cache.delete(b);
+            }
+            const frame = { bitmap, bytes: bitmap.width * bitmap.height * 4, exact };
+            this.#cache.set(b, frame);
+            this.#bytes += frame.bytes;
+            // Least recently used out, down to 16 MiB (always keeping this one).
+            for (const [key, f] of this.#cache) {
+                if (this.#bytes <= CACHE_BYTES || key === b) break;
+                f.bitmap.close();
+                this.#bytes -= f.bytes;
+                this.#cache.delete(key);
             }
             this.#listeners.forEach((fn) => fn());
         } catch (e) {
@@ -136,19 +138,29 @@ export class Thumbnails {
     }
 
     /** Desktop: [width u32 LE][height u32 LE][RGBA pixels]. */
-    async #fetchPixels(time: number) {
-        const buf = await invoke<ArrayBuffer>('thumb_frame', { url: this.#url, time, width: WIDTH });
+    async #fetchPixels(time: number, exact: boolean) {
+        const buf = await invoke<ArrayBuffer>('thumb_frame', { url: this.#url, time, width: WIDTH, exact });
         const view = new DataView(buf);
         const w = view.getUint32(0, true);
         const h = view.getUint32(4, true);
         return createImageBitmap(new ImageData(new Uint8ClampedArray(buf, 8, w * h * 4), w, h));
     }
 
-    /** iOS: a base64 JPEG (plugin responses are JSON). */
-    async #fetchJpeg(time: number) {
-        const { data } = await invoke<{ data: string }>('plugin:mpv|thumb_frame', { url: this.#url, time, width: WIDTH * 2 });
+    /** iOS: a base64 JPEG (plugin responses are JSON); sharper for the Retina screen. */
+    async #fetchJpeg(time: number, exact: boolean) {
+        const { data } = await invoke<{ data: string }>('plugin:mpv|thumb_frame', {
+            url: this.#url,
+            time,
+            width: Math.round(WIDTH * 1.5),
+            exact,
+        });
         const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
         return createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+    }
+
+    #touch(b: number, frame: Frame) {
+        this.#cache.delete(b);
+        this.#cache.set(b, frame);
     }
 
     #bucket(time: number) {
@@ -157,10 +169,11 @@ export class Thumbnails {
 
     close() {
         this.#closed = true;
-        this.#hover = null;
-        this.#background = [];
-        this.#cache.forEach((b) => b.close());
+        clearTimeout(this.#exactTimer);
+        this.#fast = this.#exact = null;
+        this.#cache.forEach((f) => f.bitmap.close());
         this.#cache.clear();
+        this.#bytes = 0;
         invoke(isIOS ? 'plugin:mpv|thumb_close' : 'thumb_close').catch(() => {});
     }
 }

@@ -273,10 +273,6 @@ class Mpv implements PlayerBackend {
         }
     }
 
-    async bufferedAhead() {
-        return Number(await this.get('demuxer-cache-duration').catch(() => 0)) || 0;
-    }
-
     async setHdrPassthrough(on: boolean) {
         await this.set('target-colorspace-hint', on);
     }

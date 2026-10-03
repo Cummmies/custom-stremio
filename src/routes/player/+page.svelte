@@ -234,8 +234,8 @@
         if (!canPlay) return (startError = 'Playback runs in the desktop app.');
 
         thumbs?.close();
-        // Background thumbnail work steps aside whenever the main video is buffering.
-        thumbs = player.features.thumbnails ? new Thumbnails(url, () => player.buffering || !player.loaded) : null;
+        // Frames are fetched only for where you hover the seek bar (thumbnails.ts).
+        thumbs = player.features.thumbnails ? new Thumbnails(url) : null;
 
         // Easy Mode: if this source never shows a picture, move on to the next best.
         firstFrame = false;
@@ -347,7 +347,6 @@
         }
         if (e.kind === 'file-loaded') {
             player.setUpscaler?.(playerPrefs.upscaler);
-            scheduleThumbnails();
         }
         if (e.kind === 'end-file' && e.reason === 'eof') {
             // An addon's error clip ending isn't the episode ending.
@@ -368,19 +367,6 @@
     $effect(() => {
         if (firstFrameSeen && model?.metaItem?.type === 'Ready') addToLibraryIfNeeded();
     });
-
-    // Seek-bar thumbnails open a second connection and decode frames, so they wait
-    // until playback has settled: 30s in, with a healthy buffer ahead.
-    function scheduleThumbnails() {
-        const t = thumbs;
-        const check = async () => {
-            if (t !== thumbs || !t) return;
-            const ahead = await player.bufferedAhead().catch(() => 0);
-            if (player.duration && firstFrame && player.time > 30 && ahead >= 45 && !player.buffering) t.warmUp(player.duration);
-            else setTimeout(check, 5000);
-        };
-        setTimeout(check, 30000);
-    }
 
     // --- addon subtitles: listed in the menu, downloaded only when needed ------
     // Loading dozens of subtitle files at start stalls playback (mpv fetches each

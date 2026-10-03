@@ -58,6 +58,8 @@ private struct ThumbArgs: Decodable {
     let url: String
     let time: Double
     let width: Int
+    /// The frame at `time`, not just the nearest keyframe.
+    let exact: Bool?
 }
 
 private struct ThumbResult: Encodable {
@@ -280,7 +282,7 @@ class MpvPlugin: Plugin {
                     thumbnailer = nil
                     thumbnailer = try Thumbnailer(url: args.url)
                 }
-                let jpeg = try thumbnailer!.frame(time: args.time, width: args.width)
+                let jpeg = try thumbnailer!.frame(time: args.time, width: args.width, exact: args.exact ?? false)
                 invoke.resolve(ThumbResult(data: jpeg.base64EncodedString()))
             } catch {
                 invoke.reject(error.localizedDescription)

@@ -508,9 +508,12 @@ impl Thumb {
         Ok(thumb)
     }
 
-    /// Seeks to `time` and returns [width u32 LE][height u32 LE][RGBA pixels].
-    fn frame(&self, time: f64, width: u32) -> Result<Vec<u8>, String> {
-        self.mpv.command(&["seek".into(), format!("{time:.2}"), "absolute+keyframes".into()])?;
+    /// Seeks to `time` and returns [width u32 LE][height u32 LE][RGBA pixels]:
+    /// the nearest keyframe (quick, while the pointer moves) or, with `exact`,
+    /// the frame at that time (once it stops; see thumbnails.ts).
+    fn frame(&self, time: f64, width: u32, exact: bool) -> Result<Vec<u8>, String> {
+        let mode = if exact { "absolute+exact" } else { "absolute+keyframes" };
+        self.mpv.command(&["seek".into(), format!("{time:.2}"), mode.into()])?;
 
         // mpv won't report the seek as finished until its output has taken the
         // new frame, so keep draining frames while we wait for that event.
@@ -581,13 +584,14 @@ pub fn thumb_frame(
     url: String,
     time: f64,
     width: u32,
+    exact: Option<bool>,
 ) -> Result<tauri::ipc::Response, String> {
     let mut slot = thumbs.inner.lock().unwrap();
     if slot.as_ref().map(|t| t.url != url).unwrap_or(true) {
         *slot = None;
         *slot = Some(Thumb::open(api(&app)?, &url)?);
     }
-    let bytes = slot.as_ref().unwrap().frame(time, width)?;
+    let bytes = slot.as_ref().unwrap().frame(time, width, exact.unwrap_or(false))?;
     Ok(tauri::ipc::Response::new(bytes))
 }
 

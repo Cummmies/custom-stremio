@@ -75,9 +75,11 @@ final class Thumbnailer {
         mpv_terminate_destroy(handle)
     }
 
-    /// Seeks to `time` and returns a JPEG of that frame, `width` pixels wide.
-    func frame(time: Double, width: Int) throws -> Data {
-        command(["seek", String(format: "%.2f", time), "absolute+keyframes"])
+    /// Seeks to `time` and returns a JPEG of that frame, `width` pixels wide:
+    /// the nearest keyframe (quick, while the finger moves) or, with `exact`,
+    /// the frame at that time (once it stops; see thumbnails.ts).
+    func frame(time: Double, width: Int, exact: Bool = false) throws -> Data {
+        command(["seek", String(format: "%.2f", time), exact ? "absolute+exact" : "absolute+keyframes"])
         // mpv only reports the seek as done once its output has taken the new
         // frame, so keep drawing (and dropping) frames while waiting for that.
         let deadline = Date().addingTimeInterval(10)
