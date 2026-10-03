@@ -50,7 +50,7 @@ server; see `src-tauri/server/README.md`. Debrid links don't.
 
 1. Bump `version` in `src-tauri/tauri.conf.json` and `package.json`.
 2. Commit, then push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The tag builds all three apps into one GitHub Release, **Custom Stremio
+3. The tag builds all three apps into one GitHub Release, **Stremio
    v0.2.0**, marked as the latest (`.github/actions/release`; each adds its
    file as it finishes):
    - `release.yml`: the signed Windows installer and `latest.json`; installed

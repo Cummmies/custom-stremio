@@ -3,7 +3,7 @@
      this file; see docs/samsung-tv.md. -->
 <widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="https://github.com/Cummmies/custom-stremio" version="0.1.0" viewmodes="maximized">
     <tizen:application id="CStremioTV.CustomStremio" package="CStremioTV" required_version="3.0"/>
-    <name>Custom Stremio</name>
+    <name>Stremio</name>
     <content src="index.html"/>
     <icon src="icon.png"/>
     <access origin="*" subdomains="true"/>

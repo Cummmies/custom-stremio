@@ -304,9 +304,9 @@ class CloudSync {
                     manifest: {
                         id: SYNC_ADDON_ID,
                         version: '1.0.0',
-                        name: 'Custom Stremio Sync',
+                        name: 'Stremio Sync',
                         description:
-                            'Added by the Custom Stremio app to keep your profile picture, Home rows and app settings the same on every device you log in to. It stores those settings in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
+                            'Added by this app to keep your profile picture, Home rows and app settings the same on every device you log in to. It stores those settings in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
                         contactEmail: encode(payload),
                         types: [],
                         resources: [],

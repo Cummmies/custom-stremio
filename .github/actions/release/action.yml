@@ -28,7 +28,7 @@ runs:
         for i in 1 2 3; do
           gh release view "$TAG" >/dev/null 2>&1 && exit 0
           # Another build may make it at the same moment: look again.
-          gh release create "$TAG" --verify-tag --latest --title "Custom Stremio $TAG" \
+          gh release create "$TAG" --verify-tag --latest --title "Stremio $TAG" \
             --notes-file "$RUNNER_TEMP/release-notes.md" && exit 0
           sleep $((i * 5))
         done

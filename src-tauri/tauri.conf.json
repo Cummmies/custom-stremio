@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Custom Stremio",
+  "productName": "Stremio",
   "version": "0.3.0",
   "identifier": "com.sdola.customstremio",
   "build": {
