@@ -1,10 +1,12 @@
 // Checks GitHub Releases for a signed update, downloads it quietly, and lets
 // the person restart when it suits them (never mid-movie).
 //
-// Desktop: the whole app (Tauri's updater). iOS: the web side only, over the
-// air (src-tauri/src/web_update.rs); a Reload switches to it. Native changes
-// on iOS still come as a new .ipa. Samsung TV: the same idea
-// (src/lib/tv/webUpdate.ts); installed-app changes need a reinstall.
+// Every device gets the web side (screens, Easy Mode, the player's controls…)
+// over the air, from each build of main: Windows and iOS through
+// src-tauri/src/web_update.rs, the Samsung TV through src/lib/tv/webUpdate.ts.
+// A Reload switches to it. Native changes still need a new app: on Windows the
+// installer update from a release (Tauri's updater, checked first), on iOS a
+// new .ipa, on the TV a reinstall.
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { inTauri, isDesktop, isIOS, isTV } from '$lib/platform';
@@ -22,8 +24,8 @@ class Updates {
 
     #update: { downloadAndInstall: Function; download: Function; install: () => Promise<void> } | null = null;
 
-    /** Whether this update installs with a page reload (iOS) rather than a restart. */
-    readonly reloads = isIOS || isTV;
+    /** The update waiting installs with a page reload (web side) rather than a restart (Windows installer). */
+    reloads = $state(isIOS || isTV);
 
     get supported() {
         return isDesktop || isIOS || (isTV && tvUpdate.canUpdate());
@@ -33,6 +35,7 @@ class Updates {
         if (!this.supported || this.phase === 'checking' || this.phase === 'downloading') return;
         if (isIOS) return this.#checkWeb(quiet);
         if (isTV) return this.#checkTV(quiet);
+        this.reloads = false;
         this.current ??= await getVersion().catch(() => null);
         this.phase = 'checking';
         this.error = null;
@@ -40,7 +43,13 @@ class Updates {
             const { check } = await import('@tauri-apps/plugin-updater');
             const update = await check();
             if (!update) {
-                this.phase = 'up-to-date';
+                // No new app: the web side may still have changed (not in a dev build,
+                // whose screens come from the dev server).
+                if (import.meta.env.DEV) this.phase = 'up-to-date';
+                else {
+                    this.reloads = true;
+                    await this.#checkWeb(quiet);
+                }
                 return;
             }
             this.version = update.version;
@@ -112,10 +121,10 @@ class Updates {
 export const updates = new Updates();
 
 /**
- * Call once the app has started: tells the iOS web updater this bundle loads
- * fine, so it isn't rolled back on the next launch.
+ * Call once the app has started: tells the web updater this bundle loads fine,
+ * so it isn't rolled back on the next launch.
  */
 export function confirmWebBundle() {
-    if (isIOS && inTauri) invoke('web_update_confirm').catch(() => {});
+    if (inTauri) invoke('web_update_confirm').catch(() => {});
     if (isTV) tvUpdate.confirmStarted();
 }

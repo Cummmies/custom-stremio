@@ -66,8 +66,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view web >/dev/null 2>&1 || gh release create web --prerelease --latest=false \
-            --title "Web updates (iOS)" \
-            --notes "The iOS app downloads its screens from here. Not an installable release."
+            --title "Web updates (Windows and iOS)" \
+            --notes "The Windows and iOS apps download their screens from here. Not an installable release."
           # web.json last, so an app never sees a version whose files aren't up yet.
           gh release upload web web.zip web.zip.sig --clobber
           gh release upload web web.json --clobber

@@ -13,9 +13,7 @@ mod server;
 mod taskbar;
 mod skips;
 mod storage;
-// Wired up on iOS only (the desktop app has the full updater); compiled
-// everywhere so desktop builds catch mistakes in it.
-#[cfg_attr(desktop, allow(dead_code))]
+// The web side's over-the-air updates, on Windows and iOS.
 mod web_update;
 #[cfg(desktop)]
 mod window_modes;
@@ -87,6 +85,11 @@ fn run_desktop() {
     #[cfg(windows)]
     media_controls::register("com.sdola.customstremio");
 
+    // The web side updates over the air, as on iOS (web_update.rs); the installer
+    // update is only needed when the native side changes.
+    let mut context = tauri::generate_context!();
+    let web = web_update::install(&mut context);
+
     tauri::Builder::default()
         // Must be first: a second launch (e.g. from a stremio:// link) hands its
         // arguments to the running app instead of opening another window.
@@ -107,6 +110,7 @@ fn run_desktop() {
         .manage(player::Thumbnailer::default())
         .manage(WindowModes::default())
         .manage(discord::Discord::default())
+        .manage(web)
         .invoke_handler(tauri::generate_handler![
             server_status,
             player::mpv_start,
@@ -128,6 +132,9 @@ fn run_desktop() {
             media_controls::media_timeline,
             discord::discord_set,
             discord::discord_clear,
+            web_update::web_update_check,
+            web_update::web_update_apply,
+            web_update::web_update_confirm,
         ])
         .setup(|app| {
             server::start(app.handle().clone());
@@ -141,7 +148,7 @@ fn run_desktop() {
             }
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             if let RunEvent::Exit = event {

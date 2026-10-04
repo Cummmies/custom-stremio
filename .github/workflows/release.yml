@@ -53,6 +53,12 @@ jobs:
       - uses: ./.github/actions/release
         if: startsWith(github.ref, 'refs/tags/')
 
+      # Which web build is inside the app, so an older over-the-air bundle is
+      # never used over it (src-tauri/src/web_update.rs).
+      - name: Stamp the built-in web build
+        shell: bash
+        run: echo "WEB_BUILD_VERSION=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
