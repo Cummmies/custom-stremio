@@ -11,7 +11,8 @@
     import { langKey } from '$lib/player/lang';
     import { app } from '$lib/app.svelte';
     import { titleTracks } from '$lib/player/titleTracks.svelte';
-    import { loadSort, saveSort, sortSources, SORTS, type SourceEntry, type SourceSort } from '$lib/player/sourceSort';
+    import { HIDDEN_LABELS, hideSources, loadSort, saveSort, sortSources, SORTS, type SourceEntry, type SourceSort } from '$lib/player/sourceSort';
+    import { hidesHdr } from '$lib/player/hdr.svelte';
     import Icon from '../Icon.svelte';
 
     let {
@@ -67,10 +68,14 @@
             g.items.map((stream, i): SourceEntry => ({ stream, addon: g.addon, addonIndex, key: `${g.addon}-${i}` }))
         )
     );
+    // Sources Easy Mode would never pick: out of the list, behind "Show hidden".
+    const split = $derived(hideSources(entries, { anime, videoId, hideHdr: hidesHdr() }));
+    const shownKeys = $derived(new Set(split.shown.map((e) => e.key)));
+    let showHidden = $state(false);
     const sorted = $derived(
         sort === 'addon'
-            ? entries
-            : sortSources(entries, sort, {
+            ? split.shown
+            : sortSources(split.shown, sort, {
                   anime,
                   language: titleTracks.get(titleId)?.audio ?? ((app.ctx?.profile.settings.audioLanguage as string | null | undefined) ?? null),
                   videoId,
@@ -161,7 +166,7 @@
             {/if}
             {#if sort === 'addon'}
                 {#each groups as group (group.addon)}
-                    {#if group.loading || group.items.length}
+                    {#if group.loading || group.items.some((_, i) => shownKeys.has(`${group.addon}-${i}`))}
                         <section>
                             <h3>{group.addon}</h3>
                             {#if group.loading}
@@ -169,7 +174,9 @@
                             {:else}
                                 <ul>
                                     {#each group.items as stream, i (i)}
-                                        {@render row({ stream, addon: group.addon, addonIndex: 0, key: `${group.addon}-${i}` }, false)}
+                                        {#if shownKeys.has(`${group.addon}-${i}`)}
+                                            {@render row({ stream, addon: group.addon, addonIndex: 0, key: `${group.addon}-${i}` }, false)}
+                                        {/if}
                                     {/each}
                                 </ul>
                             {/if}
@@ -189,7 +196,23 @@
                 </section>
             {/if}
 
-            {#snippet row({ stream, addon, key }: SourceEntry, showAddon: boolean)}
+            {#if split.hidden.length}
+                <button class="show-hidden" aria-expanded={showHidden} onclick={() => (showHidden = !showHidden)}>
+                    <Icon name="eye" size={14} />
+                    {showHidden ? 'Hide' : 'Show'} {split.hidden.length} hidden {split.hidden.length === 1 ? 'source' : 'sources'}
+                </button>
+                {#if showHidden}
+                    <section class="hidden-list">
+                        <ul>
+                            {#each split.hidden as { entry, reason } (entry.key)}
+                                {@render row(entry, true, HIDDEN_LABELS[reason])}
+                            {/each}
+                        </ul>
+                    </section>
+                {/if}
+            {/if}
+
+            {#snippet row({ stream, addon, key }: SourceEntry, showAddon: boolean, why: string | null = null)}
                                     {@const [quality, ...rest] = label(stream)}
                                     {@const badge = audioBadge(stream)}
                                     <!-- Phones: the whole row plays, a touch shortcut for its Play button (which keyboards use). -->
@@ -207,7 +230,7 @@
                                             {#if rest.length}<span class="sub">{rest.join(' ')}</span>{/if}
                                             {#if badge}<span class="badge">{badge}</span>{/if}
                                         </div>
-                                        <p class="details" title={details(stream)}>{details(stream)}</p>
+                                        <p class="details" title={details(stream)}>{#if why}<span class="why">{why}</span>{/if}{details(stream)}</p>
                                         {#if stream.externalUrl}
                                             <button class="action" onclick={() => openExternal(stream.externalUrl!)}>
                                                 <Icon name="external" size={15} />
@@ -469,6 +492,38 @@
     .sort:focus-visible {
         outline: 2px solid var(--accent-hover);
         outline-offset: 2px;
+    }
+    .show-hidden {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 20px auto 0;
+        height: 30px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--fill);
+        color: var(--label-2);
+        font-size: var(--text-caption);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .show-hidden:hover {
+        background: var(--fill-hover);
+        color: var(--label);
+    }
+    .show-hidden:focus-visible {
+        outline: 2px solid var(--accent-hover);
+        outline-offset: 2px;
+    }
+    .hidden-list li {
+        opacity: 0.75;
+    }
+    .why {
+        display: block;
+        margin-bottom: 2px;
+        font-weight: 600;
+        color: var(--label);
     }
     .quality .addon {
         font-weight: 600;

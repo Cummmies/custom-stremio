@@ -16,6 +16,7 @@
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { titleTracks } from '$lib/player/titleTracks.svelte';
+    import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
@@ -230,6 +231,20 @@
                         <div class="sub">Turned on automatically in this language when available.</div>
                     </div>
                     <PopupButton label="Subtitle language" value={settings.subtitlesLanguage} options={subtitleOptions} onchange={(v) => update({ subtitlesLanguage: v })} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Hide HDR sources when the screen isn’t in HDR</div>
+                        <div class="sub">
+                            HDR on a screen that isn’t showing it looks flat and dim. They stay under “Show hidden” in the source list.
+                            {!displayHdr.supported
+                                ? 'This screen isn’t showing HDR now, so they’re hidden.'
+                                : isDesktop && !playerPrefs.hdrPassthrough
+                                  ? 'HDR passthrough is off, so they’re hidden.'
+                                  : 'This screen is showing HDR now, so they’re listed.'}
+                        </div>
+                    </div>
+                    <Toggle label="Hide HDR sources when the screen isn’t in HDR" checked={playerPrefs.hideHdrOnSdr} onchange={(v) => (playerPrefs.hideHdrOnSdr = v)} />
                 </div>
                 <div class="row">
                     <div>

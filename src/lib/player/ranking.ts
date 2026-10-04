@@ -25,6 +25,8 @@ export type Parsed = {
     tier: number; // release quality: remux 5 … hdtv 1
     junk: boolean; // cam/ts/screener/sample/3D/hardcoded subs
     dolbyVisionOnly: boolean; // DV without an HDR10 fallback layer
+    /** HDR10, HDR10+, Dolby Vision or HLG. */
+    hdr: boolean;
     /** DTS or TrueHD audio, which the Samsung TV's player can't play (silent or refused). */
     tvUnfriendlyAudio: boolean;
 };
@@ -42,6 +44,8 @@ export type EasyPrefs = {
     episode?: Episode | null;
     /** On the TV: DTS / TrueHD audio last, since its player can't play it. */
     tv?: boolean;
+    /** The screen isn't showing HDR: leave HDR sources out (when there are others). */
+    hideHdr?: boolean;
 };
 
 const FLAGS: Record<string, string> = {
@@ -237,6 +241,7 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
             /\b3d\b/i.test(text) ||
             /\b(hc|hardsub|hardcoded)\b/i.test(text),
         dolbyVisionOnly: /\b(dv|dovi|dolby[ .]?vision)\b/i.test(text) && !/\bhdr(10)?\+?\b/i.test(text),
+        hdr: /\bhdr(?:10)?\+?(?!\w)|\b(?:dv|dovi|dolby[ .]?vision|hlg)\b/i.test(text),
         tvUnfriendlyAudio: /\b(?:dts(?:-?(?:hd|x|ma))?|true-?hd)\b/i.test(text) && !/\b(?:aac|e-?ac-?3|ddp|dd\+?|ac-?3)\b/i.test(text),
     };
 }
@@ -400,8 +405,11 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
     // Sources that name another episode are left out, as long as some name this one.
     // (When none do, the addons and the catalog number episodes differently: keep them, last.)
     const anyMatch = usable.some((c) => c.fit === 'match');
+    // HDR on a screen that isn't showing it: left out too, unless every source is HDR.
+    const anySdr = usable.some((c) => !c.parsed.hdr);
     return usable
         .filter((c) => !(anyMatch && c.fit === 'wrong'))
+        .filter((c) => !(prefs.hideHdr && anySdr && c.parsed.hdr))
         .sort((a, b) => {
             const pa = a.parsed;
             const pb = b.parsed;

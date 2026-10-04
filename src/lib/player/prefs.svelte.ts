@@ -27,6 +27,8 @@ export type Prefs = {
     askStillWatching: boolean;
     /** Show what's playing on your Discord profile. */
     discordPresence: boolean;
+    /** Hide HDR sources while the screen isn't showing HDR (hdr.svelte.ts). */
+    hideHdrOnSdr: boolean;
 };
 
 const KEY = 'playerPrefs';
@@ -44,6 +46,7 @@ const defaults: Prefs = {
     pauseOnLostFocus: false,
     askStillWatching: true,
     discordPresence: false,
+    hideHdrOnSdr: true,
 };
 
 function read(key: string): Partial<Prefs> | null {
@@ -142,6 +145,12 @@ class PlayerPrefs {
     set autoSkip(v: boolean) {
         this.#save({ autoSkip: v });
     }
+    get hideHdrOnSdr() {
+        return this.#p.hideHdrOnSdr;
+    }
+    set hideHdrOnSdr(v: boolean) {
+        this.#save({ hideHdrOnSdr: v });
+    }
     get pauseOnMinimize() {
         return this.#p.pauseOnMinimize;
     }
@@ -210,7 +219,7 @@ export const playerPrefs = new PlayerPrefs();
  */
 export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence'] as const;
 export type SyncedPrefs = Pick<Prefs, (typeof SYNCED_PREFS)[number]>;
-export const DEVICE_PREFS = ['upscaler', 'hdrPassthrough', 'audioPassthrough', 'volume', 'pauseOnMinimize', 'pauseOnLostFocus'] as const;
+export const DEVICE_PREFS = ['upscaler', 'hdrPassthrough', 'audioPassthrough', 'volume', 'pauseOnMinimize', 'pauseOnLostFocus', 'hideHdrOnSdr'] as const;
 export type DevicePrefs = Pick<Prefs, (typeof DEVICE_PREFS)[number]>;
 
 export const upscalerLabels: Record<Upscaler, string> = {

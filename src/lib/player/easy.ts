@@ -5,6 +5,7 @@ import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
 import { titleTracks } from './titleTracks.svelte';
 import { audioLanguage } from './language';
+import { hidesHdr } from './hdr.svelte';
 import { isDesktop, isTV } from '$lib/platform';
 import { audioMatch, episodeOf, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
@@ -64,6 +65,7 @@ export function rankedPicks(
         anime,
         episode: episodeOf(videoId),
         tv: isTV,
+        hideHdr: hidesHdr(),
     });
     if (like?.addonUrl) {
         // Same addon at the same quality first, then the same addon, then everything else (each still in rank order).

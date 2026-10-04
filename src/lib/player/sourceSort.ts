@@ -2,7 +2,7 @@
 // Smart): by addon, as the addons answer (the default); Smart, Easy Mode's own
 // ranking; or by one thing read from each source's name.
 import type { Stream } from '$lib/core/types';
-import { episodeOf, parseStream, rankStreams, type Candidate } from './ranking';
+import { episodeFit, episodeOf, parseStream, rankStreams, releaseText, type Candidate } from './ranking';
 
 export type SourceSort = 'addon' | 'smart' | 'seeders' | 'quality' | 'smallest';
 
@@ -63,6 +63,55 @@ export function sortSources(entries: SourceEntry[], sort: SourceSort, ctx: SortC
         .map((c, i) => [c, i] as const)
         .sort(([a, i], [b, j]) => compare(a, b) || i - j)
         .map(([c]) => c.entry);
+}
+
+// --- hidden sources ---------------------------------------------------------
+// What Easy Mode would never pick stays out of the list too, behind "Show hidden".
+
+export type HiddenReason = 'hdr' | 'junk' | 'episode' | 'not-video';
+
+export const HIDDEN_LABELS: Record<HiddenReason, string> = {
+    hdr: 'HDR, and this screen isn’t showing HDR',
+    junk: 'Cam, sample, 3D or burned-in subtitles',
+    episode: 'Named for another episode',
+    'not-video': 'Not a video',
+};
+
+/**
+ * Splits the list into what's shown and what's hidden (with why). HDR is only
+ * hidden when there's something else to watch, and another episode only when
+ * some source names this one (otherwise the numbering just differs).
+ */
+export function hideSources(
+    entries: SourceEntry[],
+    ctx: { anime: boolean; videoId: string | null; hideHdr: boolean }
+): { shown: SourceEntry[]; hidden: { entry: SourceEntry; reason: HiddenReason }[] } {
+    const want = episodeOf(ctx.videoId);
+    const info = entries.map((entry) => {
+        const p = parseStream(entry.stream, { anime: ctx.anime });
+        const s = entry.stream;
+        const notVideo = p.kind === 'skip' && !s.externalUrl && !s.ytId && !!(s.url || s.infoHash);
+        return { entry, p, notVideo, fit: episodeFit(releaseText(s), want) };
+    });
+    const videos = info.filter((i) => !i.notVideo && !i.p.junk && i.p.kind !== 'skip');
+    const anyMatch = videos.some((i) => i.fit === 'match');
+    const anySdr = videos.some((i) => !i.p.hdr && !(anyMatch && i.fit === 'wrong'));
+    const shown: SourceEntry[] = [];
+    const hidden: { entry: SourceEntry; reason: HiddenReason }[] = [];
+    for (const i of info) {
+        const reason: HiddenReason | null = i.notVideo
+            ? 'not-video'
+            : i.p.junk
+              ? 'junk'
+              : anyMatch && i.fit === 'wrong'
+                ? 'episode'
+                : ctx.hideHdr && anySdr && i.p.hdr
+                  ? 'hdr'
+                  : null;
+        if (reason) hidden.push({ entry: i.entry, reason });
+        else shown.push(i.entry);
+    }
+    return { shown, hidden };
 }
 
 const KEY = 'sources-sort';

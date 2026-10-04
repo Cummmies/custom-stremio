@@ -18,7 +18,7 @@ type AVPlay = any;
 
 /** Loads Samsung's webapis.js once (it defines webapis.avplay). */
 let webapisLoad: Promise<void> | null = null;
-function loadWebapis(): Promise<void> {
+export function loadWebapis(): Promise<void> {
     if ((window as any).webapis?.avplay) return Promise.resolve();
     webapisLoad ??= new Promise((resolve, reject) => {
         const s = document.createElement('script');
