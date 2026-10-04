@@ -5,6 +5,7 @@ import type { Ctx, Library, MetaItemPreview, ServerStatus } from '$lib/core/type
 import { profiles } from '$lib/profiles.svelte';
 import { anime } from '$lib/anime.svelte';
 import { cloudSync } from '$lib/cloudSync.svelte';
+import { playerPrefs } from '$lib/player/prefs.svelte';
 
 class AppState {
     ctx = $state<Ctx | null>(null);
@@ -26,6 +27,7 @@ class AppState {
             this.ctx = s;
             // Every account you sign in to becomes a saved profile on this PC.
             if (s.profile.auth) profiles.remember(s.profile.auth);
+            this.#mergeAudioLanguage(s);
         });
         // "Ask who's watching" on launch, when there's more than one profile.
         if (profiles.askOnLaunch && profiles.list.length > 1) profiles.pickerOpen = true;
@@ -52,6 +54,23 @@ class AppState {
         this.#listenForAddonLinks();
         // Which titles are anime (for Easy Mode's dub handling); refreshed weekly.
         anime.start();
+    }
+
+    /**
+     * Easy Mode used to have its own audio language; now it uses the Playback one
+     * (Stremio's). Once per account: when that's unset, it takes Easy Mode's.
+     */
+    #mergeAudioLanguage(s: Ctx) {
+        const key = `audio-language-merged:${s.profile.auth?.user._id ?? 'guest'}`;
+        try {
+            if (localStorage.getItem(key)) return;
+            localStorage.setItem(key, '1');
+        } catch {
+            return;
+        }
+        const easy = playerPrefs.easyLanguage;
+        if (s.profile.settings.audioLanguage || !easy) return;
+        core.dispatch({ action: 'Ctx', args: { action: 'UpdateSettings', args: { ...s.profile.settings, audioLanguage: easy } } });
     }
 
     /** A stremio://…/manifest.json link was opened: offer to install that addon. */

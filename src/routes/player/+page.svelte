@@ -26,6 +26,7 @@
     import { episodeFit, episodeOf, parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
+    import { audioLanguage } from '$lib/player/language';
     import { isForcedTrack, subChoiceOf, titleTracks, type SubChoice } from '$lib/player/titleTracks.svelte';
     import { fromChapters, introOutroMarks, lookupSegments, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
@@ -256,7 +257,7 @@
             // Easy Mode picked this anime's source: the audio in its language (a dual-audio file's
             // default track is often the original, whatever the settings say).
             const chosen = titleTracks.get(id);
-            const easyAudio = easyQueue.activeFor(videoId) && easyQueue.anime && !chosen?.audio ? playerPrefs.easyLanguage : null;
+            const easyAudio = easyQueue.activeFor(videoId) && easyQueue.anime && !chosen?.audio ? audioLanguage() : null;
             await player.load(url, start, chosen || easyAudio ? { ...chosen, ...(easyAudio && { audio: easyAudio }) } : undefined);
         } catch (e) {
             startError = String(e);
@@ -573,8 +574,7 @@
         if (!fileReady || !player.duration || errorClip || audioChecked === key || !player.audioTracks.length) return;
         audioChecked = key;
         const auto = easyCanAct();
-        const pref =
-            titleTracks.get(id)?.audio ?? (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
+        const pref = titleTracks.get(id)?.audio ?? audioLanguage();
         if (!pref) return;
         const name = langName(langKey(pref) ?? pref);
         const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
@@ -1341,13 +1341,14 @@
             }
             case 'toggle-subtitles': {
                 if (player.sid !== 'no') {
+                    // A quick toggle: not remembered for the show (the menu is for that).
                     lastSubtitle = Number(player.sid);
-                    pickSubtitle(null);
+                    player.selectSubtitle('no');
                     return note('Subtitles off', 1200);
                 }
                 const track = player.subTracks.find((t) => t.id === lastSubtitle) ?? player.subTracks[0];
                 if (!track) return note('No subtitles', 1200);
-                pickSubtitle(track);
+                player.selectSubtitle(track.id);
                 return note(`Subtitles: ${track.title || track.lang || 'on'}`, 1200);
             }
             case 'subtitle-delay-down':

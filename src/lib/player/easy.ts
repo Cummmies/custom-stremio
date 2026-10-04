@@ -4,6 +4,7 @@ import type { MetaDetails, Stream } from '$lib/core/types';
 import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
 import { titleTracks } from './titleTracks.svelte';
+import { audioLanguage } from './language';
 import { isDesktop, isTV } from '$lib/platform';
 import { audioMatch, episodeOf, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
@@ -15,7 +16,7 @@ export type Pick = {
     torrent: boolean;
     /** Plays instantly (cached on a debrid service, or a direct link). */
     cached: boolean;
-    /** How likely it is to have audio in the Easy Mode language, from its name. */
+    /** How likely it is to have audio in your language, from its name. */
     audio: AudioMatch;
 };
 
@@ -40,7 +41,7 @@ export function rankedPicks(
     const anime = isAnime ?? looksLikeAnime(ready);
     // Your own choice for this show (picked in the player's audio menu) wins over the
     // setting: Japanese for this anime means Japanese releases first, not dubs.
-    const language = titleTracks.get(titleId)?.audio ?? playerPrefs.easyLanguage;
+    const language = titleTracks.get(titleId)?.audio ?? audioLanguage();
     const candidates: Candidate[] = [];
     streams.forEach((group, addonIndex) => {
         if (group.content.type !== 'Ready') return;

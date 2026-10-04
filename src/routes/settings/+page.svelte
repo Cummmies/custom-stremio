@@ -217,7 +217,7 @@
                 <div class="row">
                     <div>
                         <div class="title">Audio language</div>
-                        <div class="sub">Preferred when a stream has several audio tracks.</div>
+                        <div class="sub">Played when a stream has several audio tracks. Easy Mode also picks sources in it first.</div>
                     </div>
                     <PopupButton label="Audio language" value={settings.audioLanguage} options={audioOptions} onchange={(v) => update({ audioLanguage: v })} />
                 </div>
@@ -344,18 +344,6 @@
                     <Toggle label="Pick sources automatically" checked={playerPrefs.easyMode} onchange={(v) => (playerPrefs.easyMode = v)} />
                 </div>
                 {#if playerPrefs.easyMode}
-                    <div class="row">
-                        <div>
-                            <div class="title">Audio language</div>
-                            <div class="sub">Sources in this language come first. Many releases don’t say, so others are still used.</div>
-                        </div>
-                        <PopupButton
-                            label="Easy Mode audio language"
-                            value={playerPrefs.easyLanguage}
-                            options={[{ value: null as string | null, label: 'No Preference' }, ...languages]}
-                            onchange={(v) => (playerPrefs.easyLanguage = v)}
-                        />
-                    </div>
                     <div class="row">
                         <div>
                             <div class="title">Maximum quality</div>

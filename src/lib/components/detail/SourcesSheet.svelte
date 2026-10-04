@@ -9,7 +9,6 @@
     import { easyQueue } from '$lib/player/easy';
     import { parseStream } from '$lib/player/ranking';
     import { langKey } from '$lib/player/lang';
-    import { playerPrefs } from '$lib/player/prefs.svelte';
     import { app } from '$lib/app.svelte';
     import Icon from '../Icon.svelte';
 
@@ -56,7 +55,7 @@
     const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
 
     // Which anime sources are in your audio language (dubs, dual audio), read from the release name.
-    const audioPref = $derived((app.ctx?.profile.settings.audioLanguage as string | null | undefined) ?? playerPrefs.easyLanguage);
+    const audioPref = $derived((app.ctx?.profile.settings.audioLanguage as string | null | undefined) ?? null);
     const audioPrefName = $derived.by(() => {
         const code = langKey(audioPref);
         if (!code) return null;
