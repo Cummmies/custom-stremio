@@ -464,11 +464,18 @@
         background: var(--fill-hover);
         color: var(--label);
     }
+    /* Stays at the top while the list scrolls under it. */
     .sorts {
+        position: sticky;
+        top: -8px; /* the list's own top padding */
+        z-index: 1;
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
-        margin: 16px 0 0;
+        margin: 8px -16px 0;
+        padding: 12px 16px 10px;
+        background: var(--elevated);
+        border-bottom: 1px solid var(--separator);
     }
     .sort {
         height: 28px;
@@ -608,6 +615,11 @@
                 'details details';
             gap: 6px 12px;
             padding: 12px 12px 12px 14px;
+        }
+        .sorts {
+            top: -4px;
+            margin: 4px -12px 0;
+            padding: 10px 12px 8px;
         }
         li.tappable:active {
             background: var(--fill-hover);
