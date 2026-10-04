@@ -302,10 +302,27 @@
         return true;
     }
 
+    /**
+     * The source being left: several checks can give up on the same one at once (a
+     * wrong episode with no audio in your language, an error and the watchdog), and
+     * each moving on would skip a source. Only the first does.
+     */
+    let leaving: string | null = null;
+    const leave = () => {
+        const key = `${videoId}|${params.get('stream')}`;
+        if (leaving === key) return false;
+        leaving = key;
+        return true;
+    };
+
     async function tryNextSource() {
+        if (!leave()) return;
         clearTimeout(watchdog);
         clearTimeout(stallTimer);
-        if (!(await adoptQueue())) return;
+        if (!(await adoptQueue())) {
+            leaving = null; // staying on this source: later checks may still move on
+            return;
+        }
         const next = easyQueue.next();
         if (next) {
             switching = 'That source didn’t work. Trying the next best one…';
@@ -503,9 +520,20 @@
         if (titleTracks.get(id)?.subs) return;
         // After mpv's own choice and the addon subtitles (above) have settled.
         setTimeout(() => {
-            if (key !== `${videoId}|${params.get('stream')}` || player.sid !== 'no') return;
+            if (key !== `${videoId}|${params.get('stream')}`) return;
             const audio = player.audioTracks.find((t) => t.selected);
             if (!audio?.lang) return;
+            // The other way round: listening in another language (Japanese), and mpv's
+            // pick for your subtitle language was the signs-only track, which leaves the
+            // dialogue untranslated. The full track in that language instead.
+            const on = player.subTracks.find((t) => String(t.id) === player.sid);
+            if (on) {
+                if (!on.external && isForcedTrack(on) && !sameLanguage(on.lang, audio.lang)) {
+                    const full = player.subTracks.find((t) => !isForcedTrack(t) && (on.lang ? sameLanguage(t.lang, on.lang) : !t.lang));
+                    if (full) player.selectSubtitle(full.id);
+                }
+                return;
+            }
             const track = player.subTracks.find(
                 (t) => !t.external && isForcedTrack(t) && (!t.lang || sameLanguage(t.lang, audio.lang))
             );
@@ -575,6 +603,7 @@
     }
 
     async function switchForLanguage(href: string, returning: boolean, name: string) {
+        if (!leave()) return;
         clearTimeout(watchdog);
         switching = returning
             ? `Couldn’t find ${name} audio for this one. Going back to the first source…`

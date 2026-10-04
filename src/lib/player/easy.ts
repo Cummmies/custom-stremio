@@ -66,9 +66,18 @@ export function rankedPicks(
     });
     if (like?.addonUrl) {
         // Same addon at the same quality first, then the same addon, then everything else (each still in rank order).
+        // The language still comes first: the last episode's addon doesn't make a dub
+        // worth playing when you wanted Japanese (or the other way round).
+        const lang = (c: Candidate) => {
+            const m = audioMatch(c.parsed, language, anime);
+            return m === 'other' || (anime && m !== 'match') ? 1 : 0;
+        };
         const score = (c: Candidate) =>
             c.addonUrl !== like.addonUrl ? 2 : like.resolution && c.parsed.resolution !== like.resolution ? 1 : 0;
-        ranked = ranked.map((c, i) => [c, i] as const).sort((a, b) => score(a[0]) - score(b[0]) || a[1] - b[1]).map(([c]) => c);
+        ranked = ranked
+            .map((c, i) => [c, i] as const)
+            .sort((a, b) => lang(a[0]) - lang(b[0]) || score(a[0]) - score(b[0]) || a[1] - b[1])
+            .map(([c]) => c);
     }
     const picks: Pick[] = [];
     for (const c of ranked) {
