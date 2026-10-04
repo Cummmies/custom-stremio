@@ -390,7 +390,16 @@
 {/if}
 
 {#if sheetOpen && meta && details}
-    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} anime={isAnime} notice={easyNotice} onclose={closeSources} />
+    <SourcesSheet
+        title={meta.name}
+        subtitle={sheetSubtitle}
+        streams={details.streams}
+        anime={isAnime}
+        notice={easyNotice}
+        {videoId}
+        titleId={id}
+        onclose={closeSources}
+    />
 {/if}
 
 {#if auto && meta}

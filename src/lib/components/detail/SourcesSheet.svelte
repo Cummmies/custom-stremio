@@ -10,6 +10,8 @@
     import { parseStream } from '$lib/player/ranking';
     import { langKey } from '$lib/player/lang';
     import { app } from '$lib/app.svelte';
+    import { titleTracks } from '$lib/player/titleTracks.svelte';
+    import { loadSort, saveSort, sortSources, SORTS, type SourceEntry, type SourceSort } from '$lib/player/sourceSort';
     import Icon from '../Icon.svelte';
 
     let {
@@ -18,6 +20,8 @@
         streams,
         notice = null,
         anime = false,
+        videoId = null,
+        titleId = null,
         onclose,
     }: {
         title: string;
@@ -27,6 +31,9 @@
         notice?: string | null;
         /** Anime reads "Dubbed" / "Dual Audio" as an English dub. */
         anime?: boolean;
+        /** The episode (for Smart: sources for another one go last) and the show (its audio choice). */
+        videoId?: string | null;
+        titleId?: string | null;
         onclose: () => void;
     } = $props();
 
@@ -48,6 +55,29 @@
     );
     const loading = $derived(groups.some((g) => g.loading));
     const total = $derived(groups.reduce((n, g) => n + g.items.length, 0));
+
+    // --- order: by addon (grouped), or one list sorted (sourceSort.ts) ---
+    let sort = $state<SourceSort>(loadSort());
+    function setSort(value: SourceSort) {
+        sort = value;
+        saveSort(value);
+    }
+    const entries = $derived(
+        groups.flatMap((g, addonIndex) =>
+            g.items.map((stream, i): SourceEntry => ({ stream, addon: g.addon, addonIndex, key: `${g.addon}-${i}` }))
+        )
+    );
+    const sorted = $derived(
+        sort === 'addon'
+            ? entries
+            : sortSources(entries, sort, {
+                  anime,
+                  language: titleTracks.get(titleId)?.audio ?? ((app.ctx?.profile.settings.audioLanguage as string | null | undefined) ?? null),
+                  videoId,
+                  tv: isTV,
+              })
+    );
+    const stillLoading = $derived(groups.filter((g) => g.loading).length);
 
     // Addons put quality in `name` ("Torrentio\n4k") and file details in `title`/`description`.
     const label = (s: Stream) => (s.name ?? '').split('\n').filter(Boolean);
@@ -116,16 +146,50 @@
 
         <div class="body">
             {#if notice}<p class="notice" role="status">{notice}</p>{/if}
-            {#each groups as group (group.addon)}
-                {#if group.loading || group.items.length}
-                    <section>
-                        <h3>{group.addon}</h3>
-                        {#if group.loading}
-                            {#each Array(3) as _}<div class="skeleton"></div>{/each}
-                        {:else}
-                            <ul>
-                                {#each group.items as stream, i (i)}
-                                    {@const key = `${group.addon}-${i}`}
+            {#if total > 1}
+                <div class="sorts" role="radiogroup" aria-label="Sort sources">
+                    {#each SORTS as s (s.value)}
+                        <button
+                            class="sort"
+                            class:on={sort === s.value}
+                            role="radio"
+                            aria-checked={sort === s.value}
+                            onclick={() => setSort(s.value)}>{s.label}</button
+                        >
+                    {/each}
+                </div>
+            {/if}
+            {#if sort === 'addon'}
+                {#each groups as group (group.addon)}
+                    {#if group.loading || group.items.length}
+                        <section>
+                            <h3>{group.addon}</h3>
+                            {#if group.loading}
+                                {#each Array(3) as _}<div class="skeleton"></div>{/each}
+                            {:else}
+                                <ul>
+                                    {#each group.items as stream, i (i)}
+                                        {@render row({ stream, addon: group.addon, addonIndex: 0, key: `${group.addon}-${i}` }, false)}
+                                    {/each}
+                                </ul>
+                            {/if}
+                        </section>
+                    {/if}
+                {/each}
+            {:else}
+                <section>
+                    <ul>
+                        {#each sorted as entry (entry.key)}
+                            {@render row(entry, true)}
+                        {/each}
+                    </ul>
+                    {#if stillLoading}
+                        <div class="skeleton" aria-label={`${stillLoading} more ${stillLoading === 1 ? 'addon' : 'addons'} loading`}></div>
+                    {/if}
+                </section>
+            {/if}
+
+            {#snippet row({ stream, addon, key }: SourceEntry, showAddon: boolean)}
                                     {@const [quality, ...rest] = label(stream)}
                                     {@const badge = audioBadge(stream)}
                                     <!-- Phones: the whole row plays, a touch shortcut for its Play button (which keyboards use). -->
@@ -138,7 +202,8 @@
                                         }}
                                     >
                                         <div class="quality">
-                                            <span>{quality ?? group.addon}</span>
+                                            {#if showAddon}<span class="addon">{addon}</span>{/if}
+                                            <span>{quality ?? addon}</span>
                                             {#if rest.length}<span class="sub">{rest.join(' ')}</span>{/if}
                                             {#if badge}<span class="badge">{badge}</span>{/if}
                                         </div>
@@ -171,12 +236,7 @@
                                             </div>
                                         {/if}
                                     </li>
-                                {/each}
-                            </ul>
-                        {/if}
-                    </section>
-                {/if}
-            {/each}
+            {/snippet}
 
             {#if !loading && total === 0}
                 <div class="empty">
@@ -380,6 +440,42 @@
     .icon-action:hover {
         background: var(--fill-hover);
         color: var(--label);
+    }
+    .sorts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 16px 0 0;
+    }
+    .sort {
+        height: 28px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--fill);
+        color: var(--label-2);
+        font-size: var(--text-caption);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .sort:hover {
+        background: var(--fill-hover);
+        color: var(--label);
+    }
+    .sort.on {
+        background: var(--label);
+        color: var(--bg);
+    }
+    .sort:focus-visible {
+        outline: 2px solid var(--accent-hover);
+        outline-offset: 2px;
+    }
+    .quality .addon {
+        font-weight: 600;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--label-3, var(--label-2));
     }
     .skeleton {
         height: 64px;
