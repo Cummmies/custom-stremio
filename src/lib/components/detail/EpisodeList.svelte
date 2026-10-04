@@ -69,7 +69,7 @@
     {#each episodes as ep (ep.id)}
         {@const progress = ep.progress && ep.progress > 0 ? Math.min(ep.progress, 100) : 0}
         <li class:selected={ep.id === selectedId} class:current={ep.id === currentId} data-id={ep.id}>
-            <button class="main" onclick={() => onselect(ep)} disabled={ep.upcoming} aria-label={`Episode ${ep.episode}: ${ep.title}${ep.watched ? ', watched' : ''}`}>
+            <button class="main" onclick={() => onselect(ep)} class:upcoming-ep={ep.upcoming} aria-label={`Episode ${ep.episode}: ${ep.title}${ep.watched ? ', watched' : ''}${ep.upcoming ? ', upcoming: see if sources are out early' : ''}`}>
                 <div class="thumb">
                     {#if ep.thumbnail}
                         <img
@@ -193,9 +193,16 @@
     .main:focus-visible {
         outline: 2px solid var(--accent-hover);
     }
-    .main:disabled {
-        cursor: default;
+    /* Not aired yet: dimmed, but it still opens the sources (some come out early). */
+    .main.upcoming-ep .thumb,
+    .main.upcoming-ep .text {
         opacity: 0.6;
+    }
+    .main.upcoming-ep:hover .thumb,
+    .main.upcoming-ep:hover .text,
+    .main.upcoming-ep:focus-visible .thumb,
+    .main.upcoming-ep:focus-visible .text {
+        opacity: 0.85;
     }
     .thumb {
         position: relative;

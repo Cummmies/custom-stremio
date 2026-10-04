@@ -228,6 +228,13 @@
     }
 
     const selectedVideo = $derived(meta && videoId ? meta.videos.find((v) => v.id === videoId) ?? null : null);
+    // An episode that hasn't aired: its sources are listed anyway, as some come out early.
+    // (Easy Mode doesn't pick for it: the source list is the point.)
+    const upcomingNotice = $derived(
+        selectedVideo?.upcoming
+            ? `This episode hasn’t aired yet${selectedVideo.released ? ` (${new Date(selectedVideo.released).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})` : ''}. Any sources below came out early.`
+            : null
+    );
     const sheetOpen = $derived(!!meta && !!videoId && !auto && (videoId === meta.id || !!selectedVideo));
     const sheetSubtitle = $derived(
         selectedVideo
@@ -358,7 +365,7 @@
                                 bind:season
                                 selectedId={videoId}
                                 currentId={resuming ? (resumeVideo?.id ?? null) : null}
-                                onselect={(v) => playVideo(v.id)}
+                                onselect={(v) => (v.upcoming ? openSources(v.id) : playVideo(v.id))}
                                 ontogglewatched={toggleEpisodeWatched}
                             />
                         {:else}
@@ -390,7 +397,7 @@
 {/if}
 
 {#if sheetOpen && meta && details}
-    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} anime={isAnime} notice={easyNotice} onclose={closeSources} />
+    <SourcesSheet title={meta.name} subtitle={sheetSubtitle} streams={details.streams} anime={isAnime} notice={easyNotice ?? upcomingNotice} onclose={closeSources} />
 {/if}
 
 {#if auto && meta}
