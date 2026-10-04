@@ -15,6 +15,7 @@
     import Avatar from '$lib/components/Avatar.svelte';
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
+    import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
     const myProfile = $derived(profiles.get(app.user?._id));
@@ -87,22 +88,6 @@
             ],
         },
         {
-            title: 'While Watching',
-            items: [
-                ['Play / Pause', ['Space', 'K']],
-                [`Back / Forward ${seekStep} seconds`, ['← →']],
-                [`Back / Forward ${fineStep} seconds`, ['Shift ← →']],
-                ['Volume up / down', ['↑ ↓']],
-                ['Mute', ['M']],
-                ['Skip intro, recap or credits (or find where the intro ends)', ['S']],
-                ['Skip, while the Skip button shows', ['Tab']],
-                ['Next episode', ['N']],
-                ['Full screen', ['F']],
-                ['Picture in picture', ['P']],
-                ['Exit full screen or picture in picture, then leave', ['Esc']],
-            ],
-        },
-        {
             title: 'Seek Bar (After Clicking or Tabbing to It)',
             items: [
                 ['Back / Forward 5 seconds', ['← →']],
@@ -111,6 +96,41 @@
             ],
         },
     ]);
+
+    // --- the player's shortcuts, remappable ($lib/hotkeys.svelte.ts) ---
+    /** The action waiting for its new key, and why the last one was refused. */
+    let capturing = $state<HotkeyAction | null>(null);
+    let hotkeyError = $state<{ action: HotkeyAction | null; text: string } | null>(null);
+
+    function captureKey(action: HotkeyAction) {
+        hotkeyError = null;
+        capturing = capturing === action ? null : action;
+    }
+
+    // While waiting: the next key press (with its modifiers) is the new key;
+    // Esc on its own cancels. Caught before the app's own shortcuts see it.
+    $effect(() => {
+        const action = capturing;
+        if (!action) return;
+        const onkey = (e: KeyboardEvent) => {
+            const chord = chordOf(e);
+            if (!chord) return; // a lone modifier: wait for the key
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            capturing = null;
+            if (chord.key === 'escape' && !chord.ctrl && !chord.alt && !chord.shift && !chord.meta) return;
+            const problem = hotkeys.rebind(action, chord);
+            hotkeyError = problem ? { action, text: problem } : null;
+        };
+        window.addEventListener('keydown', onkey, true);
+        return () => window.removeEventListener('keydown', onkey, true);
+    });
+
+    function resetHotkey(action?: HotkeyAction) {
+        capturing = null;
+        const problem = hotkeys.reset(action);
+        hotkeyError = problem ? { action: action ?? null, text: problem } : null;
+    }
 </script>
 
 <svelte:head><title>Settings · Stremio</title></svelte:head>
@@ -447,6 +467,36 @@
         {#if !isIOS && !isTV}<!-- no keyboard on a phone or TV -->
     <section>
         <h2>Keyboard Shortcuts</h2>
+        <h3 class="subhead">While Watching</h3>
+        <div class="group">
+            {#each ACTIONS as { action } (action)}
+                {@const chord = hotkeys.chordFor(action)}
+                <div class="row compact hotkey">
+                    <span>
+                        {labelOf(action, seekStep, fineStep)}
+                        {#if hotkeyError?.action === action}<span class="hotkey-error" role="alert">{hotkeyError.text}</span>{/if}
+                    </span>
+                    <span class="keys">
+                        {#if !hotkeys.isDefault(action)}
+                            <button class="link" onclick={() => resetHotkey(action)} title="Back to the original key">Reset</button>
+                        {/if}
+                        <button
+                            class="key-button"
+                            class:capturing={capturing === action}
+                            onclick={() => captureKey(action)}
+                            aria-label={`${labelOf(action, seekStep, fineStep)}: ${chord ? formatChord(chord) : 'no key'}. Change`}
+                        >
+                            {#if capturing === action}Press a key…{:else if chord}<kbd>{formatChord(chord)}</kbd>{/if}
+                        </button>
+                    </span>
+                </div>
+            {/each}
+            <div class="row compact">
+                <span class="sub">Click a key, then press the new one (Esc cancels). Tab still skips while the Skip button shows.</span>
+                <button class="btn" onclick={() => resetHotkey()}>Reset All</button>
+            </div>
+        </div>
+        {#if hotkeyError && !hotkeyError.action}<p class="hotkey-error" role="alert">{hotkeyError.text}</p>{/if}
         {#each shortcutGroups as g (g.title)}
             <h3 class="subhead">{g.title}</h3>
             <div class="group">
@@ -664,6 +714,48 @@
     .or {
         font-size: 12px;
         color: var(--label-3);
+    }
+    .key-button {
+        all: unset;
+        box-sizing: border-box;
+        min-width: 64px;
+        padding: 2px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--label-2);
+        cursor: pointer;
+    }
+    .key-button:hover kbd,
+    .key-button:focus-visible kbd {
+        border-color: var(--label-3);
+        color: var(--label);
+    }
+    .key-button:focus-visible {
+        outline: 2px solid var(--accent);
+    }
+    .key-button.capturing {
+        padding: 3px 10px;
+        border: 1px dashed var(--accent);
+        color: var(--label);
+    }
+    .link {
+        all: unset;
+        font-size: 12px;
+        color: var(--label-3);
+        cursor: pointer;
+    }
+    .link:hover {
+        color: var(--label);
+    }
+    .hotkey-error {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--bad);
+    }
+    p.hotkey-error {
+        margin: 8px 4px 0;
     }
     kbd {
         font-family: var(--font);

@@ -23,7 +23,7 @@
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
     import { prefetchPicks } from '$lib/player/prefetch';
     import { anime } from '$lib/anime.svelte';
-    import { parseStream } from '$lib/player/ranking';
+    import { episodeFit, episodeOf, parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
     import { fromChapters, introOutroMarks, lookupSegments, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
@@ -36,6 +36,7 @@
     import SeekPreview from '$lib/player/SeekPreview.svelte';
     import { Thumbnails } from '$lib/player/thumbnails';
     import Icon from '$lib/components/Icon.svelte';
+    import { hotkeys, type HotkeyAction } from '$lib/hotkeys.svelte';
 
     type PlayerModel = {
         title: string | null;
@@ -423,6 +424,27 @@
         } else {
             note('This looks like an error message from the addon, not the video. Try another source.', 8000);
         }
+    });
+
+    // The file that actually opened is another episode: a season pack where the addon
+    // or debrid service handed over the wrong file, or a mislabelled source. The file's
+    // own name says so ("Show.S01E05.mkv" for S01E03): with Easy Mode on, try the next.
+    let episodeChecked: string | null = null;
+    $effect(() => {
+        const key = `${videoId}|${params.get('stream')}`;
+        const want = episodeOf(videoId);
+        if (!fileReady || !want || errorClip || episodeChecked === key || !player.fileNames) return;
+        episodeChecked = key;
+        player.fileNames().then((names) => {
+            if (key !== `${videoId}|${params.get('stream')}` || episodeFit(names, want) !== 'wrong') return;
+            if (easyCanAct()) {
+                player.setPaused(true);
+                note('That source was a different episode. Trying the next one…', 4000);
+                tryNextSource();
+            } else {
+                note('This file looks like a different episode. Try another source.', 8000);
+            }
+        });
     });
 
     // No audio in your language in this file (e.g. an anime episode with no dub yet).
@@ -1112,33 +1134,134 @@
         }
         // Tab skips while the Skip button is up; otherwise it moves between controls as usual.
         if (k === 'tab' && !e.shiftKey && skipVisible) tabSkip();
-        else if (k === 's') tabSkip();
-        else if (k === ' ' || k === 'k') player.togglePause();
-        else if (k === 'arrowright') player.seekBy(e.shiftKey ? seekStep / 3 : seekStep);
-        else if (k === 'arrowleft') player.seekBy(e.shiftKey ? -seekStep / 3 : -seekStep);
-        // TV: up or down brings up the controls on the timeline, as on tvOS
-        // (left/right there skip; down again reaches the buttons).
-        else if ((k === 'arrowup' || k === 'arrowdown') && isTV) {
-            poke();
-            document.querySelector<HTMLElement>('.player footer .seek')?.focus();
+        else if (isTV) {
+            // The remote's own keys (its media keys reach here as these too).
+            if (k === 's') tabSkip();
+            else if (k === ' ' || k === 'k' || k === 'enter') player.togglePause();
+            else if (k === 'arrowright') player.seekBy(seekStep);
+            else if (k === 'arrowleft') player.seekBy(-seekStep);
+            // Up or down brings up the controls on the timeline, as on tvOS
+            // (left/right there skip; down again reaches the buttons).
+            else if (k === 'arrowup' || k === 'arrowdown') {
+                poke();
+                document.querySelector<HTMLElement>('.player footer .seek')?.focus();
+            } else if (k === 'n' && model?.nextVideo) playNext();
+            else if (k === 'escape') exit();
+            else handled = false;
+        } else {
+            const action = hotkeys.match(e);
+            // A held key's repeats: nothing to do, but not for the page either.
+            if (!action && e.repeat && hotkeys.isBound(e)) {
+                e.preventDefault();
+                return;
+            }
+            if (action) runHotkey(action);
+            else handled = false;
         }
-        else if (k === 'enter' && isTV) player.togglePause();
-        else if (k === 'arrowup') player.setVolume(player.volume + 5);
-        else if (k === 'arrowdown') player.setVolume(player.volume - 5);
-        else if (k === 'm') player.setMuted(!player.muted);
-        else if (k === 'f') toggleFullscreen();
-        else if (k === 'p') togglePip();
-        else if (k === 'n' && model?.nextVideo) playNext();
-        else if (k === 'escape') {
-            if (pip) togglePip();
-            else if (fullscreen) toggleFullscreen();
-            else exit();
-        } else handled = false;
         if (handled) {
             e.preventDefault();
             poke();
             markActive();
         }
+    }
+
+    // --- keyboard shortcuts ($lib/hotkeys.svelte.ts; remappable in Settings) ---
+    /** Holding the double-speed key: the speed to go back to, once it's held. */
+    let holdSpeed: { timer: ReturnType<typeof setTimeout>; restore: number | null } | null = null;
+    /** The subtitles turned off by the shortcut, to turn back on. */
+    let lastSubtitle: number | null = null;
+
+    function runHotkey(action: HotkeyAction) {
+        switch (action) {
+            case 'toggle-pause':
+                return void player.togglePause();
+            case 'hold-double-speed': {
+                // Decided on release (onkeyup): a tap plays/pauses; held 400 ms, double speed.
+                if (holdSpeed) return;
+                const hold = { restore: null as number | null, timer: setTimeout(() => {}, 0) };
+                hold.timer = setTimeout(() => {
+                    if (player.paused) return;
+                    hold.restore = player.speed;
+                    player.setSpeed(2);
+                    note('2× while held', 1200);
+                }, 400);
+                holdSpeed = hold;
+                return;
+            }
+            case 'seek-forward':
+                return void player.seekBy(seekStep);
+            case 'seek-backward':
+                return void player.seekBy(-seekStep);
+            case 'seek-forward-short':
+                return void player.seekBy(seekStep / 3);
+            case 'seek-backward-short':
+                return void player.seekBy(-seekStep / 3);
+            case 'volume-up':
+                return void player.setVolume(player.volume + 5);
+            case 'volume-down':
+                return void player.setVolume(player.volume - 5);
+            case 'toggle-mute':
+                return void player.setMuted(!player.muted);
+            case 'speed-up':
+            case 'speed-down': {
+                const next = Math.round(Math.min(4, Math.max(0.25, player.speed + (action === 'speed-up' ? 0.25 : -0.25))) * 100) / 100;
+                player.setSpeed(next);
+                return note(`Speed ${next}×`, 1200);
+            }
+            case 'toggle-subtitles': {
+                if (player.sid !== 'no') {
+                    lastSubtitle = Number(player.sid);
+                    player.selectSubtitle('no');
+                    return note('Subtitles off', 1200);
+                }
+                const track = player.subTracks.find((t) => t.id === lastSubtitle) ?? player.subTracks[0];
+                if (!track) return note('No subtitles', 1200);
+                player.selectSubtitle(track.id);
+                return note(`Subtitles: ${track.title || track.lang || 'on'}`, 1200);
+            }
+            case 'subtitle-delay-down':
+            case 'subtitle-delay-up':
+                return void player
+                    .nudgeSubtitles?.({ delay: action === 'subtitle-delay-up' ? 0.1 : -0.1 })
+                    .then(({ delay }) => note(`Subtitle delay ${delay > 0 ? '+' : ''}${delay.toFixed(1)} s`, 1200));
+            case 'subtitle-size-down':
+            case 'subtitle-size-up':
+                return void player
+                    .nudgeSubtitles?.({ scale: action === 'subtitle-size-up' ? 0.1 : -0.1 })
+                    .then(({ scale }) => note(`Subtitle size ${Math.round(scale * 100)}%`, 1200));
+            case 'skip-segment':
+                return tabSkip();
+            case 'next-episode':
+                if (model?.nextVideo) playNext();
+                return;
+            case 'toggle-fullscreen':
+                return void toggleFullscreen();
+            case 'toggle-pip':
+                return void togglePip();
+            case 'close':
+                if (pip) togglePip();
+                else if (fullscreen) toggleFullscreen();
+                else exit();
+                return;
+        }
+    }
+
+    /** Releasing the double-speed key: back to the speed before, or (a tap) play/pause. */
+    function onkeyup(e: KeyboardEvent) {
+        if (isTV) {
+            if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && scrubTo != null) commitScrub();
+            return;
+        }
+        if (!holdSpeed) return;
+        const chord = hotkeys.chordFor('hold-double-speed');
+        if (!chord || e.key.toLowerCase() !== (chord.key === 'space' ? ' ' : chord.key)) return;
+        const hold = holdSpeed;
+        holdSpeed = null;
+        clearTimeout(hold.timer);
+        if (hold.restore != null) player.setSpeed(hold.restore);
+        else player.togglePause();
+        e.preventDefault();
+        markActive();
     }
 
     // Touch screens (no hover): tap shows or hides the controls, double-tap a side
@@ -1219,7 +1342,7 @@
 <svelte:head><title>{heading} · Stremio</title></svelte:head>
 <svelte:window
     {onkeydown}
-    onkeyup={(e) => isTV && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && scrubTo != null && commitScrub()}
+    {onkeyup}
     onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
 
 <div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI}>

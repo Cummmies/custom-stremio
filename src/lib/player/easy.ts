@@ -3,8 +3,8 @@
 import type { MetaDetails, Stream } from '$lib/core/types';
 import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
-import { isDesktop } from '$lib/platform';
-import { audioMatch, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
+import { isDesktop, isTV } from '$lib/platform';
+import { audioMatch, episodeOf, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
 const linkOf = (s: Stream) => s.deepLinks?.externalPlayer?.streaming ?? s.url ?? null;
 
@@ -24,12 +24,14 @@ export type Like = { addonUrl: string | null; resolution: number | null };
 /**
  * Ranked, playable choices from whatever the addons have returned so far.
  * `isAnime` comes from the anime list; when that can't tell (null), the
- * sources themselves decide.
+ * sources themselves decide. `videoId` is the episode they're for: sources
+ * that name a different one are left out.
  */
 export function rankedPicks(
     streams: MetaDetails['streams'],
     like?: Like | null,
-    isAnime: boolean | null = null
+    isAnime: boolean | null = null,
+    videoId: string | null = null
 ): { picks: Pick[]; top: Candidate | null; anime: boolean } {
     const ready = streams.flatMap((g) => (g.content.type === 'Ready' ? g.content.content : []));
     const anime = isAnime ?? looksLikeAnime(ready);
@@ -53,6 +55,8 @@ export function rankedPicks(
         // Torrents need the streaming server, which only the desktop app has.
         allowTorrents: playerPrefs.allowTorrents && isDesktop,
         anime,
+        episode: episodeOf(videoId),
+        tv: isTV,
     });
     if (like?.addonUrl) {
         // Same addon at the same quality first, then the same addon, then everything else (each still in rank order).

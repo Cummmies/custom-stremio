@@ -273,6 +273,19 @@ class Mpv implements PlayerBackend {
         }
     }
 
+    async fileNames() {
+        const names = await Promise.all(['filename', 'media-title'].map((n) => this.get(n).catch(() => null)));
+        return names.filter(Boolean).join('\n');
+    }
+
+    async nudgeSubtitles(change: { delay?: number; scale?: number }) {
+        if (change.delay) await this.command('add', 'sub-delay', String(change.delay)).catch(() => {});
+        if (change.scale) await this.command('add', 'sub-scale', String(change.scale)).catch(() => {});
+        const delay = Number(await this.get('sub-delay').catch(() => 0)) || 0;
+        const scale = Number(await this.get('sub-scale').catch(() => 1)) || 1;
+        return { delay, scale };
+    }
+
     async setHdrPassthrough(on: boolean) {
         await this.set('target-colorspace-hint', on);
     }

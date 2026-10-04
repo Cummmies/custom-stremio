@@ -24,9 +24,12 @@ export type Parsed = {
     tier: number; // release quality: remux 5 … hdtv 1
     junk: boolean; // cam/ts/screener/sample/3D/hardcoded subs
     dolbyVisionOnly: boolean; // DV without an HDR10 fallback layer
+    /** DTS or TrueHD audio, which the Samsung TV's player can't play (silent or refused). */
+    tvUnfriendlyAudio: boolean;
 };
 
 export type Candidate = { stream: Stream; addon: string; addonUrl?: string | null; addonIndex: number; parsed: Parsed };
+type Scored = Candidate & { fit: EpisodeFit };
 
 export type EasyPrefs = {
     maxResolution: number;
@@ -34,6 +37,10 @@ export type EasyPrefs = {
     allowTorrents: boolean;
     /** Anime: sources that don't name a language are Japanese, and your language comes first. */
     anime: boolean;
+    /** The episode wanted, to leave out sources for a different one. */
+    episode?: Episode | null;
+    /** On the TV: DTS / TrueHD audio last, since its player can't play it. */
+    tv?: boolean;
 };
 
 const FLAGS: Record<string, string> = {
@@ -57,7 +64,24 @@ const WORDS: [RegExp, string][] = [
     [/\b(hin|hindi)\b/i, 'hin'],
 ];
 
-const SUBS = /\b(?:eng(?:lish)?|multi(?:ple)?|softs?)[ ._-]*(?:sub(?:s|bed|titles?)?|srt)\b|\bsub(?:s|bed|titles?)?[ ._-]*(?:eng(?:lish)?)\b|\be?subs?\b|\bm[ ._-]?subs\b/gi;
+// Language names and codes, for subtitle lists ("Spa, Eng Subs").
+const LANG_WORD =
+    '(?:eng(?:lish)?|spa(?:nish)?|esp|fre(?:nch)?|fra|ger(?:man)?|deu|ita(?:lian)?|por(?:tuguese)?|pt-?br|rus(?:sian)?|jpn|jap(?:anese)?|kor(?:ean)?|hin(?:di)?|ara(?:bic)?|chi(?:nese)?|multi(?:ple)?)';
+const SUBS = new RegExp(
+    [
+        // "Eng Subs", "English Softsubs", "Spa, Eng Subs", "Multi-Subs", "Eng SRT"
+        String.raw`(?:\b${LANG_WORD}\b[ ,/+&|._-]*)+(?:soft|hard)?[ ._-]?(?:sub(?:s|bed|titles?)?|srt)\b`,
+        // "Subs: English, Spanish", "Subtitles - Eng/Spa", "Sub ENG"
+        String.raw`\bsub(?:s|bed|titles?)?\s*(?:[:=-]\s*)?(?:\b${LANG_WORD}\b[ ,/+&|._-]*)+`,
+        // "ESub", "MSubs", "Subbed", "Softsubs" on their own
+        String.raw`\b(?:e|m[ ._-]?|soft|hard)?sub(?:s|bed)?\b`,
+    ].join('|'),
+    'gi'
+);
+// Lines that only list subtitles: AIOStreams' "📝 …", Comet/MediaFusion's "💬 …", "Subtitles: …".
+const SUB_LINE = /^\s*(?:📝|💬|🔤|sub(?:s|titles?)\s*:)/iu;
+// Lines that only list audio: "🔊 English | Japanese", "🗣️ …", "Audio: …".
+const AUDIO_LINE = /^\s*(?:🔊|🗣|🎧|🎙|audio\s*:)/iu;
 const DUAL_AUDIO = /\bdual\b/i; // "Dual Audio", "Dual-Audio", "[DUAL]", ".DUAL."
 const ENGLISH_DUB = /\beng(?:lish)?[ ._-]*dub(?:bed)?\b|\bdub(?:bed)?[ ._-]*eng(?:lish)?\b/i;
 const DUBBED = /\bdub(?:bed|s)?\b/i;
@@ -80,6 +104,9 @@ const SERVICES = 'RD|AD|PM|DL|TB|OC|ED|PK|PKP|DB|EN|TRD|DLS|SR|TD';
 const DEBRID_TAG = new RegExp(`\\[(${SERVICES})(\\+|⚡|⏳| ?download)?\\]`, 'iu');
 // AIOStreams name template "AIOStreams (Instant TB) (1080p)" / "AIOStreams (TB) (1080p)".
 const DEBRID_PAREN = new RegExp(`\\(([Ii]nstant\\s+)?(${SERVICES})\\)`);
+
+// Words some addons use for not cached yet ("Uncached", "Not cached", ⏳).
+const SAYS_UNCACHED = /\b(?:un-?cached|not[ ._-]cached)\b|⏳/iu;
 
 // A video file or stream by its address: "….mkv", "….m3u8?token=…".
 const VIDEO_URL = /\.(?:mkv|mp4|m4v|avi|mov|webm|ts|m2ts|m3u8|mpd|flv|wmv)$/i;
@@ -130,7 +157,7 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
         else if (tag) kind = tag[2] && /[+⚡]/u.test(tag[2]) ? 'debrid' : 'debrid-uncached';
         else if (paren) kind = paren[1] ? 'debrid' : 'debrid-uncached';
         else if (!saysVideo(s, text)) kind = 'skip';
-        else kind = /⏳/.test(text) ? 'debrid-uncached' : 'debrid';
+        else kind = SAYS_UNCACHED.test(text) ? 'debrid-uncached' : 'debrid';
     }
 
     const res = /\b(2160p|4k|uhd)\b/i.test(text)
@@ -151,10 +178,11 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
     // Subtitle languages ("Eng Subs", "English Subtitles", "ESub") aren't audio: an
     // anime release "with English subs" is Japanese audio.
     // AIOStreams lists subtitle languages on their own 📝 line: leave that line out.
-    const noSubLines = text
-        .split('\n')
-        .filter((l) => !/^\s*📝/u.test(l))
-        .join('\n');
+    // Same for Comet's / MediaFusion's 💬 and "Subtitles:" lines. And when a source
+    // has a line just for audio ("🔊 English | Japanese"), that line is the answer.
+    const lines = text.split('\n').filter((l) => !SUB_LINE.test(l));
+    const audioLine = lines.find((l) => AUDIO_LINE.test(l));
+    const noSubLines = audioLine ?? lines.join('\n');
     const audioText = noSubLines.replace(SUBS, ' ');
     // Torrentio's flag line lists every language in the torrent name, subtitles
     // included, so when the name talks about subtitles the flags can't be trusted
@@ -208,7 +236,101 @@ export function parseStream(s: Stream, { anime = false }: { anime?: boolean } = 
             /\b3d\b/i.test(text) ||
             /\b(hc|hardsub|hardcoded)\b/i.test(text),
         dolbyVisionOnly: /\b(dv|dovi|dolby[ .]?vision)\b/i.test(text) && !/\bhdr(10)?\+?\b/i.test(text),
+        tvUnfriendlyAudio: /\b(?:dts(?:-?(?:hd|x|ma))?|true-?hd)\b/i.test(text) && !/\b(?:aac|e-?ac-?3|ddp|dd\+?|ac-?3)\b/i.test(text),
     };
+}
+
+// --- which episode a source is -------------------------------------------
+
+/** The episode a Stremio video id points at. Season is null for ids numbered by episode only (Kitsu). */
+export type Episode = { season: number | null; episode: number };
+
+/** "tt0944947:1:3" / "tmdb:1399:1:3" → S1 E3; "kitsu:11:5" → E5. Null for movies. */
+export function episodeOf(videoId: string | null | undefined): Episode | null {
+    const parts = (videoId ?? '').split(':');
+    const num = (v: string | undefined) => (v != null && /^\d+$/.test(v) ? Number(v) : null);
+    if (parts.length >= 4 || (parts.length === 3 && /^tt\d+$/.test(parts[0]))) {
+        const season = num(parts.at(-2));
+        const episode = num(parts.at(-1));
+        return season != null && episode != null ? { season, episode } : null;
+    }
+    if (parts.length === 3) {
+        const episode = num(parts[2]);
+        return episode != null ? { season: null, episode } : null;
+    }
+    return null;
+}
+
+/**
+ * How well a source fits the episode wanted, from its name and file name:
+ * - match: says this episode ("S01E03", "1x03", "S01E02-E04")
+ * - pack: a whole season or series ("S01", "Season 1", "Complete"): the addon picks the file
+ * - unknown: doesn't say
+ * - likely-wrong: says another episode, but numbered a way that might not line up (anime's "- 27")
+ * - wrong: says another episode or season
+ */
+export type EpisodeFit = 'match' | 'pack' | 'unknown' | 'likely-wrong' | 'wrong';
+
+const SXE = /\bS(\d{1,2})[ ._-]?E(\d{1,4})(?:(?:[ ._-]?E|-E?)(\d{1,4}))?(?!\d)/gi;
+const NXN = /\b(\d{1,2})x(\d{2,3})\b/gi;
+const SEASON_PACK = /\bS(\d{1,2})(?:[ ._-]?-[ ._-]?S?(\d{1,2}))?\b(?![ ._-]?E\d)|\bseasons?[ ._-]?(\d{1,2})(?:[ ._-]?(?:-|to)[ ._-]?(\d{1,2}))?\b/gi;
+const COMPLETE = /\b(?:complete|all[ ._-]seasons|series[ ._-]pack|batch)\b/i;
+const EPISODE_WORD = /\b(?:ep(?:isode)?|E)[ ._-]?(\d{1,4})\b(?!p)/gi;
+// Anime: "[Group] Show - 05 [1080p]", "Show S2 - 05", "Show - 05v2".
+const DASH_EPISODE = /(?:^|\s)-\s(\d{1,4})(?:v\d)?(?=[\s.[(]|$)/gm;
+
+export function episodeFit(text: string, want: Episode | null): EpisodeFit {
+    if (!want) return 'unknown';
+    // The size, seeders and source lines can't say an episode; keep them out.
+    const lines = text.split('\n').filter((l) => !/^\s*(?:💾|👤|👥|⚙|🔎|🌐|🌎|🔗)/u.test(l));
+    let match = false;
+    let wrong = false;
+    let likelyWrong = false;
+    let pack = false;
+    for (const line of lines) {
+        let specific = false;
+        for (const re of [SXE, NXN]) {
+            for (const m of line.matchAll(re)) {
+                specific = true;
+                const first = Number(m[2]);
+                const end = m[3] ? Number(m[3]) : first;
+                const last = end > first && end - first < 50 ? end : first;
+                const hasEpisode = want.episode >= first && want.episode <= last;
+                if (want.season == null) {
+                    // Numbered by episode only: S02E05 might be that list's 5th or its 30th.
+                    if (hasEpisode) match = true;
+                    else likelyWrong = true;
+                } else if (Number(m[1]) === want.season && hasEpisode) match = true;
+                else wrong = true;
+            }
+        }
+        if (specific) continue;
+        for (const m of line.matchAll(SEASON_PACK)) {
+            const from = Number(m[1] ?? m[3]);
+            const to = Math.max(from, Number(m[2] ?? m[4] ?? from));
+            pack = true;
+            if (want.season != null && (want.season < from || want.season > to)) wrong = true;
+        }
+        if (COMPLETE.test(line)) pack = true;
+        for (const re of [EPISODE_WORD, DASH_EPISODE]) {
+            for (const m of line.matchAll(re)) {
+                const n = Number(m[1]);
+                if (n === want.episode) match = true;
+                // With a season wanted, a lone number may count from the first season ("One Piece - 1050").
+                else if (want.season == null) likelyWrong = true;
+            }
+        }
+    }
+    // A file named for this episode inside a pack (Torrentio: pack name, then the file) is a match.
+    if (match) return 'match';
+    if (wrong) return 'wrong';
+    if (likelyWrong) return 'likely-wrong';
+    return pack ? 'pack' : 'unknown';
+}
+
+/** What a source says about its release, for `episodeFit` (not the addon's name: "Torrentio\n1080p"). */
+export function releaseText(s: Stream): string {
+    return [s.behaviorHints?.filename, s.title, s.description].filter(Boolean).join('\n');
 }
 
 /** How likely a source is to have audio in `language`, from its name alone. */
@@ -252,8 +374,10 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
         return 2;
     };
     const kindRank = (p: Parsed) => KIND_RANK[p.kind];
+    // Another episode is worse than anything else.
+    const FIT_RANK: Record<EpisodeFit, number> = { match: 0, unknown: 0, pack: 0, 'likely-wrong': 1, wrong: 2 };
 
-    return candidates
+    const usable: Scored[] = candidates
         .filter((c) => {
             const p = c.parsed;
             if (p.kind === 'skip' || p.junk) return false;
@@ -261,16 +385,28 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
             if (p.resolution != null && p.resolution > prefs.maxResolution) return false;
             return true;
         })
+        .map((c) => ({ ...c, fit: episodeFit(releaseText(c.stream), prefs.episode ?? null) }));
+    // Sources that name another episode are left out, as long as some name this one.
+    // (When none do, the addons and the catalog number episodes differently: keep them, last.)
+    const anyMatch = usable.some((c) => c.fit === 'match');
+    return usable
+        .filter((c) => !(anyMatch && c.fit === 'wrong'))
         .sort((a, b) => {
             const pa = a.parsed;
             const pb = b.parsed;
             return (
+                FIT_RANK[a.fit] - FIT_RANK[b.fit] ||
                 (prefs.anime
                     ? langRank(pa) - langRank(pb) || kindRank(pa) - kindRank(pb)
                     : kindRank(pa) - kindRank(pb) || langRank(pa) - langRank(pb)) ||
+                // A season pack: the addon has to pick the right file out of it, and
+                // sometimes doesn't. A single file of the same kind and language first.
+                Number(a.fit === 'pack') - Number(b.fit === 'pack') ||
                 // DV-only files show wrong colours without a DV display; a clean lower
                 // resolution beats that.
                 Number(pa.dolbyVisionOnly) - Number(pb.dolbyVisionOnly) ||
+                // The TV's player can't play DTS or TrueHD.
+                (prefs.tv ? Number(pa.tvUnfriendlyAudio) - Number(pb.tvUnfriendlyAudio) : 0) ||
                 (pb.resolution ?? 0) - (pa.resolution ?? 0) ||
                 pb.tier - pa.tier ||
                 (pb.seeders ?? 0) - (pa.seeders ?? 0) ||

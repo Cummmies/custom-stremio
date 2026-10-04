@@ -120,6 +120,10 @@ export interface PlayerBackend {
     chapters(): Promise<RawChapter[]>;
 
     // --- optional extras (see `features`) ---
+    /** The file's name and its own title tag, as the player sees them (to check it's the right episode). */
+    fileNames?(): Promise<string>;
+    /** Moves subtitles later (+) / earlier (−) and makes them bigger (+) / smaller (−); returns the new delay (s) and scale. */
+    nudgeSubtitles?(change: { delay?: number; scale?: number }): Promise<{ delay: number; scale: number }>;
     setUpscaler?(kind: Upscaler): Promise<void>;
     setHdrPassthrough?(on: boolean): Promise<void>;
     setAudioPassthrough?(on: boolean): Promise<void>;
