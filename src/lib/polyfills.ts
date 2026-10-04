@@ -45,6 +45,28 @@ define(globalThis, 'structuredClone', function structuredClone(value: unknown) {
     return clone(value);
 });
 
+// Chromium 73 (older TVs run Chromium 69): every match of a /g pattern.
+define(String.prototype, 'matchAll', function* (this: string, re: RegExp) {
+    if (!re.global) throw new TypeError('String.prototype.matchAll called with a non-global RegExp argument');
+    const g = new RegExp(re.source, re.flags);
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(this))) {
+        yield m;
+        if (m[0] === '') g.lastIndex++;
+    }
+});
+
+// Chromium 92: an item counted from the end with a negative index.
+function at(this: ArrayLike<unknown>, index: number) {
+    const i = Math.trunc(index) || 0;
+    return this[i < 0 ? this.length + i : i];
+}
+define(Array.prototype, 'at', at);
+define(String.prototype, 'at', at);
+
+// Chromium 93.
+define(Object, 'hasOwn', (o: object, key: PropertyKey) => Object.prototype.hasOwnProperty.call(o, key));
+
 // Chromium 97.
 define(Array.prototype, 'findLast', function (this: any[], fn: (v: any, i: number, a: any[]) => unknown, self?: unknown) {
     for (let i = this.length - 1; i >= 0; i--) if (fn.call(self, this[i], i, this)) return this[i];
