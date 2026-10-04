@@ -252,8 +252,12 @@
             // player.load clears the old file's state in the same tick, so `fileFor`
             // never pairs this video with the previous file's length or position.
             fileFor = `${id}|${videoId}`;
-            // Your audio and subtitles for this show, from the first frame.
-            await player.load(url, start, titleTracks.get(id) ?? undefined);
+            // Your audio and subtitles for this show, from the first frame. None chosen and
+            // Easy Mode picked this anime's source: the audio in its language (a dual-audio file's
+            // default track is often the original, whatever the settings say).
+            const chosen = titleTracks.get(id);
+            const easyAudio = easyQueue.activeFor(videoId) && easyQueue.anime && !chosen?.audio ? playerPrefs.easyLanguage : null;
+            await player.load(url, start, chosen || easyAudio ? { ...chosen, ...(easyAudio && { audio: easyAudio }) } : undefined);
         } catch (e) {
             startError = String(e);
         }
@@ -546,8 +550,15 @@
         if (!pref) return;
         const name = langName(langKey(pref) ?? pref);
         const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
+        // There, but not the one playing (only its name says the language, e.g. "English"
+        // on an untagged track): Easy Mode chose this source for it, so switch.
+        const there = player.audioTracks.find(inPref);
+        if (there) {
+            if (auto && anime.isAnime(id) !== false && !there.selected) player.selectAudio(there.id);
+            return;
+        }
         // An untagged track could be anything: don't guess.
-        if (player.audioTracks.some((t) => inPref(t) || !t.lang)) return;
+        if (player.audioTracks.some((t) => !t.lang)) return;
         // Only anime: elsewhere the original audio is what you want (a Korean film stays Korean).
         if (auto && anime.isAnime(id) !== false) {
             findLanguage(name);
