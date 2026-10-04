@@ -26,6 +26,7 @@
     import { episodeFit, episodeOf, parseStream } from '$lib/player/ranking';
     import type { Stream } from '$lib/core/types';
     import { langKey, sameLanguage } from '$lib/player/lang';
+    import { isForcedTrack, subChoiceOf, titleTracks, type SubChoice } from '$lib/player/titleTracks.svelte';
     import { fromChapters, introOutroMarks, lookupSegments, parseChapters, skipLabel, type Chapter, type Segment } from '$lib/player/skips';
     import { fade } from 'svelte/transition';
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
@@ -396,6 +397,8 @@
         const pref = settings?.subtitlesLanguage as string | null | undefined;
         if (!pref || !firstFrameSeen || !model?.subtitles.length || subtitlesAdded) return;
         subtitlesAdded = true;
+        // You chose subtitles for this show yourself: that wins (below).
+        if (titleTracks.get(id)?.subs) return;
         const subs = model.subtitles;
         // Decide after a short delay, once mpv has reported the file's own tracks.
         setTimeout(() => {
@@ -426,28 +429,78 @@
         }
     });
 
+    // Your audio and subtitles for this show ($lib/player/titleTracks): what you
+    // picked in an earlier episode, applied once this file's tracks are known.
+    let titleTracksApplied: string | null = null;
+    $effect(() => {
+        const key = `${videoId}|${params.get('stream')}`;
+        const pref = titleTracks.get(id);
+        if (!pref || !fileReady || !firstFrameSeen || errorClip || titleTracksApplied === key || !player.audioTracks.length) return;
+        titleTracksApplied = key;
+        setTimeout(async () => {
+            if (key !== `${videoId}|${params.get('stream')}`) return;
+            const heard = player.audioTracks.find((t) => t.selected)?.lang ?? null;
+            if (pref.audio && !sameLanguage(heard, pref.audio)) {
+                const audio = player.audioTracks.find((t) => sameLanguage(t.lang, pref.audio));
+                if (audio) await player.selectAudio(audio.id);
+            }
+            const subs = pref.subs;
+            if (!subs) return;
+            if (subs.kind === 'off') {
+                if (player.sid !== 'no') await player.selectSubtitle('no');
+                return;
+            }
+            const forced = subs.kind === 'forced';
+            const track = player.subTracks.find(
+                (t) => !t.external && isForcedTrack(t) === forced && (!subs.lang || !t.lang || sameLanguage(t.lang, subs.lang))
+            );
+            if (track) {
+                if (String(track.id) !== player.sid) await player.selectSubtitle(track.id);
+            } else if (forced) {
+                // No signs-only track in this file: at least not full subtitles over the dub.
+                if (player.sid !== 'no') await player.selectSubtitle('no');
+            } else {
+                const addon = model?.subtitles.find((s) => s.url && sameLanguage(s.lang, subs.lang));
+                if (addon) addAddonSubtitle(addon, true);
+            }
+        }, 1000);
+    });
+
+    /** Subtitles you picked: used now, and for the rest of this show. */
+    function pickSubtitle(track: Track | null) {
+        player.selectSubtitle(track ? track.id : 'no');
+        rememberSubs(subChoiceOf(track));
+    }
+
+    function rememberSubs(choice: SubChoice) {
+        titleTracks.remember(id, { subs: choice });
+        if (type === 'series') note('Remembered for this show', 1500);
+    }
+
+    function pickAudio(track: Track) {
+        player.selectAudio(track.id);
+        titleTracks.remember(id, { audio: track.lang ?? null });
+        if (type === 'series' && track.lang) note('Remembered for this show', 1500);
+    }
+
     // Listening in your language (a dub) with no subtitles on: turn on the file's
     // forced track, the one that only translates on-screen text and songs ("Signs &
     // Songs"). Many anime releases name it rather than flag it. Once per file, and
-    // never over subtitles you (or the settings) already turned on.
+    // never over subtitles you (or the settings) already turned on, or what you
+    // chose for this show.
     let forcedChecked: string | null = null;
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
         if (!fileReady || !firstFrameSeen || errorClip || forcedChecked === key || !player.audioTracks.length) return;
         forcedChecked = key;
+        if (titleTracks.get(id)?.subs) return;
         // After mpv's own choice and the addon subtitles (above) have settled.
         setTimeout(() => {
             if (key !== `${videoId}|${params.get('stream')}` || player.sid !== 'no') return;
             const audio = player.audioTracks.find((t) => t.selected);
             if (!audio?.lang) return;
-            const SIGNS = /\b(?:signs?|songs?|forced|on-?screen)\b/i;
-            // Not "Full Subtitles"/"Dialogue" tracks that merely mention songs.
-            const FULL = /\b(?:full|dialog(?:ue)?|sdh|cc)\b/i;
             const track = player.subTracks.find(
-                (t) =>
-                    !t.external &&
-                    (t.forced || (SIGNS.test(t.title ?? '') && !FULL.test(t.title ?? ''))) &&
-                    (!t.lang || sameLanguage(t.lang, audio.lang))
+                (t) => !t.external && isForcedTrack(t) && (!t.lang || sameLanguage(t.lang, audio.lang))
             );
             if (!track) return;
             player.selectSubtitle(track.id);
@@ -485,7 +538,8 @@
         if (!fileReady || !player.duration || errorClip || audioChecked === key || !player.audioTracks.length) return;
         audioChecked = key;
         const auto = easyCanAct();
-        const pref = (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
+        const pref =
+            titleTracks.get(id)?.audio ?? (auto ? playerPrefs.easyLanguage : null) ?? (settings?.audioLanguage as string | null | undefined);
         if (!pref) return;
         const name = langName(langKey(pref) ?? pref);
         const inPref = (t: Track) => sameLanguage(t.lang, pref) || (!!t.title && t.title.toLowerCase().includes(name.toLowerCase()));
@@ -986,12 +1040,12 @@
 
     function subtitlesMenu(el: HTMLElement) {
         const entries: MenuEntry[] = [
-            { label: 'Off', checked: player.sid === 'no', onselect: () => player.selectSubtitle('no') },
+            { label: 'Off', checked: player.sid === 'no', onselect: () => pickSubtitle(null) },
             ...(player.subTracks.length ? [{ separator: true } as MenuEntry] : []),
             ...player.subTracks.map((t) => ({
                 label: trackLabel(t) + (t.external ? '' : ' (built in)'),
                 checked: String(t.id) === player.sid,
-                onselect: () => player.selectSubtitle(t.id),
+                onselect: () => pickSubtitle(t),
             })),
         ];
 
@@ -1011,12 +1065,12 @@
                     submenu: langs.map((lang) => {
                         const subs = byLang.get(lang)!;
                         return subs.length === 1
-                            ? { label: langName(lang), onselect: () => addAddonSubtitle(subs[0], true) }
+                            ? { label: langName(lang), onselect: () => pickAddonSubtitle(subs[0]) }
                             : {
                                   label: `${langName(lang)} (${subs.length})`,
                                   submenu: subs.map((s, i) => ({
                                       label: s.label || `${langName(lang)} ${i + 1}`,
-                                      onselect: () => addAddonSubtitle(s, true),
+                                      onselect: () => pickAddonSubtitle(s),
                                   })),
                               };
                     }),
@@ -1026,11 +1080,16 @@
         menu.toggleFor(el, entries, 'end');
     }
 
+    function pickAddonSubtitle(s: { url?: string | null; lang: string; label?: string | null }) {
+        addAddonSubtitle(s, true);
+        rememberSubs({ kind: 'full', lang: s.lang });
+    }
+
     function audioMenu(el: HTMLElement) {
         menu.toggleFor(
             el,
             player.audioTracks.length
-                ? player.audioTracks.map((t) => ({ label: trackLabel(t), checked: String(t.id) === player.aid, onselect: () => player.selectAudio(t.id) }))
+                ? player.audioTracks.map((t) => ({ label: trackLabel(t), checked: String(t.id) === player.aid, onselect: () => pickAudio(t) }))
                 : [{ label: 'No audio tracks', disabled: true }],
             'end'
         );
@@ -1240,12 +1299,12 @@
             case 'toggle-subtitles': {
                 if (player.sid !== 'no') {
                     lastSubtitle = Number(player.sid);
-                    player.selectSubtitle('no');
+                    pickSubtitle(null);
                     return note('Subtitles off', 1200);
                 }
                 const track = player.subTracks.find((t) => t.id === lastSubtitle) ?? player.subTracks[0];
                 if (!track) return note('No subtitles', 1200);
-                player.selectSubtitle(track.id);
+                pickSubtitle(track);
                 return note(`Subtitles: ${track.title || track.lang || 'on'}`, 1200);
             }
             case 'subtitle-delay-down':

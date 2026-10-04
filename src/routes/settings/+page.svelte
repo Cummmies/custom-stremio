@@ -15,6 +15,7 @@
     import Avatar from '$lib/components/Avatar.svelte';
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
+    import { titleTracks } from '$lib/player/titleTracks.svelte';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
@@ -226,6 +227,16 @@
                         <div class="sub">Turned on automatically in this language when available.</div>
                     </div>
                     <PopupButton label="Subtitle language" value={settings.subtitlesLanguage} options={subtitleOptions} onchange={(v) => update({ subtitlesLanguage: v })} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Remembered for each show</div>
+                        <div class="sub">
+                            The audio and subtitles you pick while watching are used again for the rest of that show or movie.
+                            {titleTracks.count ? `${titleTracks.count} remembered on this device.` : ''}
+                        </div>
+                    </div>
+                    <button class="btn" disabled={!titleTracks.count} onclick={() => titleTracks.clear()}>Forget All</button>
                 </div>
                 <div class="row">
                     <div>
