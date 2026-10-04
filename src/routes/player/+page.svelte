@@ -426,6 +426,35 @@
         }
     });
 
+    // Listening in your language (a dub) with no subtitles on: turn on the file's
+    // forced track, the one that only translates on-screen text and songs ("Signs &
+    // Songs"). Many anime releases name it rather than flag it. Once per file, and
+    // never over subtitles you (or the settings) already turned on.
+    let forcedChecked: string | null = null;
+    $effect(() => {
+        const key = `${videoId}|${params.get('stream')}`;
+        if (!fileReady || !firstFrameSeen || errorClip || forcedChecked === key || !player.audioTracks.length) return;
+        forcedChecked = key;
+        // After mpv's own choice and the addon subtitles (above) have settled.
+        setTimeout(() => {
+            if (key !== `${videoId}|${params.get('stream')}` || player.sid !== 'no') return;
+            const audio = player.audioTracks.find((t) => t.selected);
+            if (!audio?.lang) return;
+            const SIGNS = /\b(?:signs?|songs?|forced|on-?screen)\b/i;
+            // Not "Full Subtitles"/"Dialogue" tracks that merely mention songs.
+            const FULL = /\b(?:full|dialog(?:ue)?|sdh|cc)\b/i;
+            const track = player.subTracks.find(
+                (t) =>
+                    !t.external &&
+                    (t.forced || (SIGNS.test(t.title ?? '') && !FULL.test(t.title ?? ''))) &&
+                    (!t.lang || sameLanguage(t.lang, audio.lang))
+            );
+            if (!track) return;
+            player.selectSubtitle(track.id);
+            note(`Subtitles: ${track.title || 'Signs & Songs'}`, 2500);
+        }, 3500);
+    });
+
     // The file that actually opened is another episode: a season pack where the addon
     // or debrid service handed over the wrong file, or a mislabelled source. The file's
     // own name says so ("Show.S01E05.mkv" for S01E03): with Easy Mode on, try the next.

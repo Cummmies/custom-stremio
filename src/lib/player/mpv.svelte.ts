@@ -370,8 +370,9 @@ function buildOptions(settings: StartSettings): Record<string, string> {
     // Files tag tracks "en" or "eng" (or "fre"/"fra"): list every spelling.
     if (settings.audioLanguage) o.alang = spellings(settings.audioLanguage);
     if (settings.subtitlesLanguage) o.slang = spellings(settings.subtitlesLanguage);
-    // Don't turn on subtitles in the language you're already hearing (dubs),
-    // apart from forced ones (signs and songs).
+    // Don't turn on subtitles in the language you're already hearing (dubs). The
+    // forced ones (signs and songs) are turned on by the player page instead, which
+    // also knows them by name ("Signs & Songs"), as many anime releases don't flag them.
     o['subs-with-matching-audio'] = 'no';
     if (playerPrefs.audioPassthrough && !isIOS) o['audio-spdif'] = SPDIF;
     if (isIOS) Object.assign(o, iosOptions(settings));

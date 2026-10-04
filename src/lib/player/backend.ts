@@ -17,6 +17,8 @@ export type Track = {
     selected: boolean;
     /** Added from outside the file (an addon's subtitles). */
     external?: boolean;
+    /** Flagged forced in the file: only the on-screen text and foreign lines (mpv). */
+    forced?: boolean;
     'demux-channel-count'?: number;
     'audio-channels'?: number;
 };
