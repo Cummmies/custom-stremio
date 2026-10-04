@@ -91,9 +91,8 @@
         {
             title: 'Seek Bar (After Clicking or Tabbing to It)',
             items: [
-                ['Back / Forward 5 seconds', ['← →']],
-                ['Back / Forward 30 seconds', ['Shift ← →']],
                 ['Back to the start', ['Home']],
+                ['To the end', ['End']],
             ],
         },
     ]);

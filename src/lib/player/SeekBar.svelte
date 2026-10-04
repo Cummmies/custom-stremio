@@ -77,11 +77,11 @@
 
     function onkeydown(e: KeyboardEvent) {
         // TV: the player skips (it holds a target while the button is held).
+        // Elsewhere the arrows are the player's shortcuts (your seek steps, remappable),
+        // focused here or not; the bar only adds its ends.
         if (!d || isTV) return;
-        const step = e.shiftKey ? 30 : 5;
-        if (e.key === 'ArrowRight') onseek(Math.min(d, time + step));
-        else if (e.key === 'ArrowLeft') onseek(Math.max(0, time - step));
-        else if (e.key === 'Home') onseek(0);
+        if (e.key === 'Home') onseek(0);
+        else if (e.key === 'End') onseek(Math.max(0, d - 1));
         else return;
         e.preventDefault();
         e.stopPropagation();
