@@ -148,14 +148,14 @@ jobs:
             echo "::error::No .wgt was made."
             exit 1
           fi
-          mv "$WGT" CustomStremio.wgt
-          ls -lh CustomStremio.wgt
-          unzip -l CustomStremio.wgt | grep -E "signature|config.xml|index.html|\.wasm"
+          mv "$WGT" Stremio.wgt
+          ls -lh Stremio.wgt
+          unzip -l Stremio.wgt | grep -E "signature|config.xml|index.html|\.wasm"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CustomStremio-tv
-          path: CustomStremio.wgt
+          name: Stremio-tv
+          path: Stremio.wgt
 
       # The installed app updates from tv-web.json (files on the tv-web branch).
       - name: Publish the over-the-air update
@@ -179,12 +179,12 @@ jobs:
           jq '{version, native, commit, files: (.files | length)}' tv-web.json
 
           # A pre-release, never the latest: that's the version release (below).
-          notes="The Samsung TV app's newest build ($(git log -1 --format=%h)) and its over-the-air update. To install, use the latest release's CustomStremio.wgt (TizenBrew Installer: Cummmies/custom-stremio). See docs/samsung-tv.md."
+          notes="The Samsung TV app's newest build ($(git log -1 --format=%h)) and its over-the-air update. To install, use the latest release's Stremio.wgt (TizenBrew Installer: Cummmies/custom-stremio). See docs/samsung-tv.md."
           if ! gh release view tv >/dev/null 2>&1; then
             gh release create tv --target "$GITHUB_SHA" --prerelease --latest=false --title "Samsung TV (newest build)" --notes "$notes"
           fi
           gh release edit tv --prerelease --latest=false --title "Samsung TV (newest build)" --notes "$notes"
-          gh release upload tv CustomStremio.wgt tv-web.json --clobber
+          gh release upload tv Stremio.wgt tv-web.json --clobber
 
       # A version tag: the .wgt goes to that version's release.
       - uses: ./.github/actions/release
@@ -194,7 +194,7 @@ jobs:
         if: steps.secrets.outputs.ok == 'true' && github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" CustomStremio.wgt --clobber
+        run: gh release upload "${{ github.ref_name }}" Stremio.wgt --clobber
 
   purge:
     if: github.ref_type == 'branch'

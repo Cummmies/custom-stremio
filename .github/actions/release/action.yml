@@ -18,8 +18,8 @@ runs:
         ## Install
 
         - **Windows**: the `_x64-setup.exe` installer. The app updates itself after that.
-        - **iPhone / iPad**: `CustomStremio.ipa`. Sideload it with SideStore, AltStore, LiveContainer or Sideloadly (see the README).
-        - **Samsung TV**: `CustomStremio.wgt`, installed by TizenBrew Installer (`Cummmies/custom-stremio`).
+        - **iPhone / iPad**: `Stremio.ipa`. Sideload it with SideStore, AltStore, LiveContainer or Sideloadly (see the README).
+        - **Samsung TV**: `Stremio.wgt`, installed by TizenBrew Installer (`Cummmies/custom-stremio`).
 
         The iPhone and TV apps also update their screens over the air between releases. Each file appears here when its build finishes; the iPhone and TV builds take longer than Windows.
 

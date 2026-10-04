@@ -55,8 +55,8 @@ server; see `src-tauri/server/README.md`. Debrid links don't.
    file as it finishes):
    - `release.yml`: the signed Windows installer and `latest.json`; installed
      copies offer the update by themselves.
-   - `ios.yml`: `CustomStremio.ipa` for sideloading.
-   - `tv.yml`: `CustomStremio.wgt`, which TizenBrew Installer installs from the
+   - `ios.yml`: `Stremio.ipa` for sideloading.
+   - `tv.yml`: `Stremio.wgt`, which TizenBrew Installer installs from the
      latest release.
 
 Between releases, the iPhone and TV apps update their screens over the air
@@ -70,9 +70,9 @@ sideloading. It needs iOS 18 or later.
 
 ### Building
 
-Each release (`v*` tag) has `CustomStremio.ipa`. For a build in between:
+Each release (`v*` tag) has `Stremio.ipa`. For a build in between:
 Actions → **iOS** → **Run workflow**; when it finishes, the run's **Artifacts**
-has **CustomStremio-ios** with `CustomStremio.ipa`.
+has **Stremio-ios** with `Stremio.ipa`.
 
 The build is unsigned (`tauri ios build --no-sign`) and then ad-hoc signed, so the
 sideloading app can sign it with your Apple ID. A build only needs redoing when

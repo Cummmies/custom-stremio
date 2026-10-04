@@ -11,7 +11,7 @@ describes what was built.
 - **Same app, TV build.** `npm run build` with `TV_BUILD=1` (hash routing,
   `svelte.config.js`) and `CORE_DIR` (Stremio's core rebuilt without
   WebAssembly reference types, `scripts/build-core-tv.sh`). `tv.yml` packages
-  `build/` with `tv/wgt/config.xml` into `CustomStremio.wgt`, signs it with the
+  `build/` with `tv/wgt/config.xml` into `Stremio.wgt`, signs it with the
   certificate from `tv-cert.yml`. Every push that touches the app rebuilds
   it into the **tv** pre-release (with the over-the-air update, below); a
   version tag (`v*`) also adds it to that version's release, next to the
@@ -355,7 +355,7 @@ Tizen Studio details:
   Certificate Manager with a Samsung account). It's tied to the TV's DUID, so
   it only installs on TVs listed in it.
 - **TV**: Apps → type `12345` on the remote → Developer mode on, with the PC's IP.
-  Then `sdb connect <tv-ip>`, `tizen install -n CustomStremio.wgt`.
+  Then `sdb connect <tv-ip>`, `tizen install -n Stremio.wgt`.
 - **Build**: `npm run build` with the TV target, copy `build/` plus `config.xml`
   and the icon into a folder, `tizen package -t wgt -s <profile>`.
 - **CI** (later): a `tv.yml` workflow that packages and signs the `.wgt`, with

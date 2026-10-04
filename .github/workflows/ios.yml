@@ -90,13 +90,13 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dv "$APP" 2>&1 | grep -E "Identifier|Format|Signature"
 
-          (cd ipa && zip -qry ../CustomStremio.ipa Payload)
-          ls -lh CustomStremio.ipa
+          (cd ipa && zip -qry ../Stremio.ipa Payload)
+          ls -lh Stremio.ipa
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CustomStremio-ios
-          path: CustomStremio.ipa
+          name: Stremio-ios
+          path: Stremio.ipa
 
       - uses: ./.github/actions/release
         if: startsWith(github.ref, 'refs/tags/')
@@ -105,4 +105,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.ref_name }}" CustomStremio.ipa --clobber
+        run: gh release upload "${{ github.ref_name }}" Stremio.ipa --clobber
