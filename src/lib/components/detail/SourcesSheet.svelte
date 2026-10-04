@@ -139,7 +139,8 @@
 
 <dialog bind:this={dialog} class="sheet" aria-labelledby="sources-title" {onclose} onclick={(e) => e.target === dialog && dialog?.close()}>
     <div class="inner">
-        <header>
+        <!-- With the sort buttons, their line is the only one under the title. -->
+        <header class:joined={total > 1}>
             <div>
                 <h2 id="sources-title">{title}</h2>
                 {#if subtitle}<p class="subtitle">{subtitle}</p>{/if}
@@ -313,6 +314,10 @@
         padding: 24px 24px 16px;
         border-bottom: 1px solid var(--separator);
     }
+    header.joined {
+        padding-bottom: 8px;
+        border-bottom: 0;
+    }
     h2 {
         margin: 0;
         font-family: var(--font-display);
@@ -472,8 +477,8 @@
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
-        margin: 8px -16px 0;
-        padding: 12px 16px 10px;
+        margin: 0 -16px;
+        padding: 8px 16px 12px;
         background: var(--elevated);
         border-bottom: 1px solid var(--separator);
     }
@@ -618,8 +623,8 @@
         }
         .sorts {
             top: -4px;
-            margin: 4px -12px 0;
-            padding: 10px 12px 8px;
+            margin: 0 -12px;
+            padding: 6px 12px 10px;
         }
         li.tappable:active {
             background: var(--fill-hover);
