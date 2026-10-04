@@ -161,7 +161,7 @@
 
         const streams = details.streams;
         const pending = streams.some((g) => g.content.type === 'Loading');
-        const ranked = rankedPicks(streams, like, listSaysAnime, videoId);
+        const ranked = rankedPicks(streams, like, listSaysAnime, videoId, id);
         const { picks, anime: pickedAnime } = ranked;
         const elapsed = performance.now() - autoStarted;
 

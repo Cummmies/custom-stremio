@@ -252,7 +252,8 @@
             // player.load clears the old file's state in the same tick, so `fileFor`
             // never pairs this video with the previous file's length or position.
             fileFor = `${id}|${videoId}`;
-            await player.load(url, start);
+            // Your audio and subtitles for this show, from the first frame.
+            await player.load(url, start, titleTracks.get(id) ?? undefined);
         } catch (e) {
             startError = String(e);
         }
@@ -435,9 +436,11 @@
     $effect(() => {
         const key = `${videoId}|${params.get('stream')}`;
         const pref = titleTracks.get(id);
-        if (!pref || !fileReady || !firstFrameSeen || errorClip || titleTracksApplied === key || !player.audioTracks.length) return;
+        if (!pref || !fileReady || errorClip || titleTracksApplied === key || !player.audioTracks.length) return;
         titleTracksApplied = key;
-        setTimeout(async () => {
+        // mpv already opened the file with them (player.load). This catches what its
+        // own matching can't: a signs-only track, untagged tracks, addon subtitles.
+        queueMicrotask(async () => {
             if (key !== `${videoId}|${params.get('stream')}`) return;
             const heard = player.audioTracks.find((t) => t.selected)?.lang ?? null;
             if (pref.audio && !sameLanguage(heard, pref.audio)) {
@@ -463,7 +466,7 @@
                 const addon = model?.subtitles.find((s) => s.url && sameLanguage(s.lang, subs.lang));
                 if (addon) addAddonSubtitle(addon, true);
             }
-        }, 1000);
+        });
     });
 
     /** Subtitles you picked: used now, and for the rest of this show. */

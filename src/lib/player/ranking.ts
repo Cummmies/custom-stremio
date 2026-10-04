@@ -2,6 +2,7 @@
 // "[TB+] Torrentio\n1080p" + "👤 58 💾 254 MB ⚙️ EXT"), so we read what we can
 // from name/title/description/behaviorHints and rank with explicit priorities.
 import type { Stream } from '$lib/core/types';
+import { langKey } from './lang';
 
 export type Kind =
     | 'debrid' // cached on a debrid service (or any direct web link): plays instantly
@@ -333,10 +334,20 @@ export function releaseText(s: Stream): string {
     return [s.behaviorHints?.filename, s.title, s.description].filter(Boolean).join('\n');
 }
 
+/**
+ * The source says it has audio in `language` (any 2- or 3-letter code). In anime,
+ * a source that names no language (and isn't a dub), or says dual audio, is Japanese.
+ */
+function hasLanguage(p: Parsed, language: string, anime: boolean) {
+    const want = langKey(language);
+    if (p.languages.some((l) => langKey(l) === want)) return true;
+    return anime && want === 'ja' && (p.multiAudio || (!p.languages.length && !p.dub));
+}
+
 /** How likely a source is to have audio in `language`, from its name alone. */
 export type AudioMatch = 'match' | 'maybe' | 'unknown' | 'other';
-export function audioMatch(p: Parsed, language: string | null): AudioMatch {
-    if (!language || p.languages.includes(language)) return 'match';
+export function audioMatch(p: Parsed, language: string | null, anime = false): AudioMatch {
+    if (!language || hasLanguage(p, language, anime)) return 'match';
     if (p.multiAudio || p.maybeMultiAudio) return 'maybe';
     return p.languages.length ? 'other' : 'unknown';
 }
@@ -368,7 +379,7 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
     // and speed and quality decide the rest.
     const langRank = (p: Parsed) => {
         if (!prefs.language) return 0;
-        if (p.languages.includes(prefs.language)) return 0;
+        if (hasLanguage(p, prefs.language, prefs.anime)) return 0;
         if (!prefs.anime) return p.languages.length && !p.multiAudio ? 1 : 0;
         if (p.multiAudio || p.maybeMultiAudio) return 1;
         return 2;

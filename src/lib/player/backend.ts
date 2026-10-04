@@ -8,6 +8,13 @@
 // them directly (`player.time`, `player.paused`…).
 import type { Upscaler } from './prefs.svelte';
 
+/** What a file should start with. Languages are any 2- or 3-letter code. */
+export type StartTracks = {
+    audio?: string | null;
+    /** 'off': none. 'forced': none at first (the player page picks the signs track once it's listed). */
+    subs?: { kind: 'off' | 'forced' } | { kind: 'full'; lang: string | null };
+};
+
 export type Track = {
     id: number;
     type: 'video' | 'audio' | 'sub';
@@ -102,7 +109,8 @@ export interface PlayerBackend {
 
     // --- lifecycle ---
     start(settings: StartSettings): Promise<void>;
-    load(url: string, startSeconds?: number): Promise<void>;
+    /** `tracks`: the audio and subtitles to start with, instead of the settings' (a show's remembered choice). */
+    load(url: string, startSeconds?: number, tracks?: StartTracks): Promise<void>;
     stop(): Promise<void>;
 
     // --- controls ---

@@ -3,6 +3,7 @@
 import type { MetaDetails, Stream } from '$lib/core/types';
 import { parsePlayerDeepLink, playerHref } from './deeplink';
 import { playerPrefs } from './prefs.svelte';
+import { titleTracks } from './titleTracks.svelte';
 import { isDesktop, isTV } from '$lib/platform';
 import { audioMatch, episodeOf, looksLikeAnime, parseStream, rankStreams, type AudioMatch, type Candidate } from './ranking';
 
@@ -25,16 +26,21 @@ export type Like = { addonUrl: string | null; resolution: number | null };
  * Ranked, playable choices from whatever the addons have returned so far.
  * `isAnime` comes from the anime list; when that can't tell (null), the
  * sources themselves decide. `videoId` is the episode they're for: sources
- * that name a different one are left out.
+ * that name a different one are left out. `titleId` is the show: the audio you
+ * chose for it in the player comes before Easy Mode's language.
  */
 export function rankedPicks(
     streams: MetaDetails['streams'],
     like?: Like | null,
     isAnime: boolean | null = null,
-    videoId: string | null = null
+    videoId: string | null = null,
+    titleId: string | null = null
 ): { picks: Pick[]; top: Candidate | null; anime: boolean } {
     const ready = streams.flatMap((g) => (g.content.type === 'Ready' ? g.content.content : []));
     const anime = isAnime ?? looksLikeAnime(ready);
+    // Your own choice for this show (picked in the player's audio menu) wins over the
+    // setting: Japanese for this anime means Japanese releases first, not dubs.
+    const language = titleTracks.get(titleId)?.audio ?? playerPrefs.easyLanguage;
     const candidates: Candidate[] = [];
     streams.forEach((group, addonIndex) => {
         if (group.content.type !== 'Ready') return;
@@ -51,7 +57,7 @@ export function rankedPicks(
     let ranked = rankStreams(candidates, {
         // A source you picked yourself above the Easy Mode cap is still fine for the next episode.
         maxResolution: Math.max(playerPrefs.maxResolution, like?.resolution ?? 0),
-        language: playerPrefs.easyLanguage,
+        language,
         // Torrents need the streaming server, which only the desktop app has.
         allowTorrents: playerPrefs.allowTorrents && isDesktop,
         anime,
@@ -75,7 +81,7 @@ export function rankedPicks(
             label: `${c.addon} · ${firstLine}`.slice(0, 120),
             torrent: c.parsed.kind === 'torrent',
             cached: c.parsed.kind === 'debrid',
-            audio: audioMatch(c.parsed, playerPrefs.easyLanguage),
+            audio: audioMatch(c.parsed, language, anime),
         });
     }
     return { picks, top: ranked[0] ?? null, anime };

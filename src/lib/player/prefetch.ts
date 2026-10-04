@@ -36,7 +36,7 @@ export function prefetchPicks(
         const recheck = setTimeout(() => last && check(last), PICK_WAIT_MS + 50);
         let last: MetaDetails | null = null;
         const check = (details: MetaDetails) => {
-            const ranked = rankedPicks(details.streams, like, anime.isAnime(id), videoId);
+            const ranked = rankedPicks(details.streams, like, anime.isAnime(id), videoId, id);
             latest = { picks: ranked.picks, anime: ranked.anime };
             const pending = details.streams.some((g) => g.content.type === 'Loading');
             if (!pending || readyToPick(details.streams, ranked, like, Date.now() - started)) finish();

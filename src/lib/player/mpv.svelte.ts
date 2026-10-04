@@ -10,7 +10,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { inTauri, isIOS } from '$lib/platform';
 import { playerPrefs, type Upscaler } from './prefs.svelte';
 import { langKey } from './lang';
-import type { PlayerBackend, PlayerEvent, PlayerFeatures, RawChapter, StartSettings, Track } from './backend';
+import type { PlayerBackend, PlayerEvent, PlayerFeatures, RawChapter, StartSettings, StartTracks, Track } from './backend';
 
 export type { Track } from './backend';
 
@@ -144,8 +144,12 @@ class Mpv implements PlayerBackend {
         }
     }
 
+    /** The settings' languages, which each file starts with unless it's told otherwise. */
+    #langs = { alang: '', slang: '' };
+
     async start(settings: StartSettings) {
         const options = buildOptions(settings);
+        this.#langs = { alang: options.alang ?? '', slang: options.slang ?? '' };
         this.#rtx = options.hwdec === 'd3d11va';
         if (!inTauri) throw new Error('Playback needs the app.');
         if (!this.#unlisten.length) {
@@ -188,7 +192,7 @@ class Mpv implements PlayerBackend {
         if (this.duration) this.loaded = true;
     }
 
-    async load(url: string, startSeconds = 0) {
+    async load(url: string, startSeconds = 0, tracks?: StartTracks) {
         this.loaded = false;
         this.buffering = true;
         this.ended = false;
@@ -201,6 +205,17 @@ class Mpv implements PlayerBackend {
         // have been paused on the way out, an addon's error clip or a source that
         // didn't work), as AVPlay's does.
         await this.set('pause', false);
+        // The audio and subtitles mpv picks as the file opens, so the first frame already
+        // has them (no switch a moment in). Set for every file: mpv keeps them from the last.
+        const subs = tracks?.subs;
+        await Promise.all([
+            this.set('alang', tracks?.audio ? spellings(tracks.audio) : this.#langs.alang),
+            this.set('slang', subs?.kind === 'full' && subs.lang ? spellings(subs.lang) : this.#langs.slang),
+            this.set('sid', subs && subs.kind !== 'full' ? 'no' : 'auto'),
+            this.set('aid', 'auto'),
+            // Full subtitles you chose come on even in the language you're hearing.
+            this.set('subs-with-matching-audio', subs?.kind === 'full' ? 'yes' : 'no'),
+        ]).catch(() => {});
         await this.command('loadfile', url, 'replace');
     }
 
