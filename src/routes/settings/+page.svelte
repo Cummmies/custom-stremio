@@ -16,6 +16,7 @@
     import PhotoControls from '$lib/components/PhotoControls.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { titleTracks } from '$lib/player/titleTracks.svelte';
+    import { setLinkHandlingWanted } from '$lib/addonLinks';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
@@ -28,6 +29,8 @@
         if (!inTauri) return;
         import('@tauri-apps/plugin-deep-link').then(async ({ isRegistered }) => {
             handlesLinks = await isRegistered('stremio').catch(() => false);
+            // Turned on before it was remembered: remember it, so it follows the app.
+            if (handlesLinks) setLinkHandlingWanted(true);
         });
     });
     async function setLinkHandling(on: boolean) {
@@ -35,6 +38,7 @@
         try {
             await (on ? register('stremio') : unregister('stremio'));
             handlesLinks = on;
+            setLinkHandlingWanted(on);
         } catch {
             handlesLinks = !on;
         }

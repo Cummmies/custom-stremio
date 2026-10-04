@@ -6,6 +6,8 @@ import { profiles } from '$lib/profiles.svelte';
 import { anime } from '$lib/anime.svelte';
 import { cloudSync } from '$lib/cloudSync.svelte';
 import { playerPrefs } from '$lib/player/prefs.svelte';
+import { addonLinkUrl, linkHandlingWanted } from '$lib/addonLinks';
+import { isDesktop } from '$lib/platform';
 
 class AppState {
     ctx = $state<Ctx | null>(null);
@@ -51,6 +53,9 @@ class AppState {
         };
         sync();
         window.addEventListener('focus', sync);
+        // Coming back to the app (the iPhone has no window focus): addons installed
+        // meanwhile from a browser or another Stremio app show up.
+        document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && sync());
         this.#listenForAddonLinks();
         // Which titles are anime (for Easy Mode's dub handling); refreshed weekly.
         anime.start();
@@ -81,10 +86,16 @@ class AppState {
         const { getCurrent, onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
         const handle = (urls: string[] | null) => {
             const link = urls?.find((u) => /^stremio:\/\/.+manifest\.json/i.test(u));
-            if (link) this.pendingAddonUrl = link.replace(/^stremio:\/\//i, 'https://');
+            if (link) this.pendingAddonUrl = addonLinkUrl(link);
         };
         handle(await getCurrent().catch(() => null));
         await onOpenUrl(handle);
+        // Windows: the link handler names this app's .exe. After an update or a move it
+        // can point at an old copy, which then gets the links instead: point it here again.
+        if (isDesktop && linkHandlingWanted()) {
+            const { isRegistered, register } = await import('@tauri-apps/plugin-deep-link');
+            if (!(await isRegistered('stremio').catch(() => true))) await register('stremio').catch(() => {});
+        }
     }
 
     inLibrary(id: string) {

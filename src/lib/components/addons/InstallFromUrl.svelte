@@ -1,6 +1,7 @@
 <script lang="ts">
     // Install an addon by pasting its manifest URL (how most configured addons are shared).
     import { core } from '$lib/core';
+    import { addonLinkUrl } from '$lib/addonLinks';
     import Icon from '../Icon.svelte';
     import type { AddonDescriptor } from './AddonCard.svelte';
 
@@ -23,8 +24,7 @@
     });
 
     function normalize(raw: string) {
-        // stremio:// links are just https manifest URLs with another scheme.
-        let u = raw.trim().replace(/^stremio:\/\//, 'https://');
+        let u = addonLinkUrl(raw.trim());
         if (!/manifest\.json(\?.*)?$/.test(u)) u = u.replace(/\/?$/, '/manifest.json');
         return u;
     }
