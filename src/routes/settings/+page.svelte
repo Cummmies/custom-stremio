@@ -562,7 +562,7 @@
         </section>
     {/if}
 
-    <p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web 0.63.2</p>
+    <p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>
 </div>
 
 <style>

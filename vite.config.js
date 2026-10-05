@@ -1,8 +1,11 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import process from "node:process";
+import { readFileSync } from "node:fs";
 import tvLegacyCss from "./scripts/tv-legacy-css.mjs";
 const host = process.env.TAURI_DEV_HOST;
+// The Stremio core this build carries, for Settings' About line.
+const coreVersion = JSON.parse(readFileSync(new URL("./node_modules/@stremio/stremio-core-web/package.json", import.meta.url), "utf8")).version;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
@@ -30,7 +33,10 @@ export default defineConfig(() => ({
   // The TV build's worker is a classic script: the TV's built-in engine
   // (Chromium 69) has no module workers.
   worker: { format: process.env.TV_BUILD ? /** @type {const} */ ("iife") : /** @type {const} */ ("es") },
-  define: { "import.meta.env.TV_BUILD": JSON.stringify(!!process.env.TV_BUILD) },
+  define: {
+    "import.meta.env.TV_BUILD": JSON.stringify(!!process.env.TV_BUILD),
+    "import.meta.env.CORE_VERSION": JSON.stringify(coreVersion),
+  },
 
   // Samsung TVs from 2020 sometimes run apps on their built-in Chromium 69 and
   // sometimes on the newer, upgradeable one, so the TV build targets 69
