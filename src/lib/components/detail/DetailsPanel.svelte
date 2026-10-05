@@ -185,7 +185,6 @@
     @media (min-width: 701px) {
         :global(html:not(.tv)) .cast {
             display: flex;
-            gap: 6px;
             overflow-x: auto;
             overscroll-behavior-x: contain;
             scrollbar-width: thin;
@@ -194,6 +193,11 @@
         :global(html:not(.tv)) .cast li {
             flex: none;
             width: 76px;
+        }
+        /* Spaced with margins, not gap: the TV build rewrites gap for old TVs,
+           which a :global() selector breaks (scripts/tv-legacy-css.mjs). */
+        :global(html:not(.tv)) .cast li + li {
+            margin-left: 6px;
         }
         :global(html:not(.tv)) .avatar {
             width: 46px;
