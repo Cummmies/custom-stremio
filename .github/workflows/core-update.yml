@@ -1,0 +1,170 @@
+# Keeps Stremio's core (@stremio/stremio-core-web: accounts, library, addons,
+# Continue Watching) close to the official apps'. Every Monday it looks for a
+# newer version. When there is one it:
+#   1. updates it on a branch (core-update/<version>) and builds the app,
+#   2. runs the preview checks there (every screen, the TV remote, both of the
+#      TV's engines, and the TV's own build of the core),
+#   3. passed: moves main to it and starts the over-the-air builds (web, TV),
+#      so every device gets it; failed: leaves main alone and opens an issue.
+# Run it by hand from the Actions tab too ("Run workflow").
+#
+# (Pushes made with the workflow's own token don't start other workflows, so
+# the preview, web and TV builds are started explicitly.)
+name: Core update
+
+on:
+  schedule:
+    - cron: '0 15 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+concurrency:
+  group: core-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    outputs:
+      new: ${{ steps.version.outputs.new }}
+      version: ${{ steps.version.outputs.latest }}
+      current: ${{ steps.version.outputs.current }}
+      branch: ${{ steps.version.outputs.branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Newer version?
+        id: version
+        run: |
+          current=$(node -p "require('./package-lock.json').packages['node_modules/@stremio/stremio-core-web'].version")
+          latest=$(npm view @stremio/stremio-core-web version)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "branch=core-update/$latest" >> "$GITHUB_OUTPUT"
+          newest=$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)
+          if [ "$latest" != "$current" ] && [ "$newest" = "$latest" ]; then
+            echo "new=true" >> "$GITHUB_OUTPUT"
+            echo "### Stremio core $current → $latest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "### Stremio core $current is the newest" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Update and build
+        if: steps.version.outputs.new == 'true'
+        run: |
+          npm ci
+          npm install "@stremio/stremio-core-web@^${{ steps.version.outputs.latest }}"
+          npx svelte-check --threshold error
+          npm run build
+
+      - name: Push the branch
+        if: steps.version.outputs.new == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ steps.version.outputs.branch }}"
+          git add package.json package-lock.json
+          git commit -m "Stremio core ${{ steps.version.outputs.latest }} (from ${{ steps.version.outputs.current }})"
+          git push -f origin "${{ steps.version.outputs.branch }}"
+
+      - name: Start the preview checks
+        if: steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run preview.yml --ref "${{ steps.version.outputs.branch }}"
+
+      - name: Didn't build - open an issue
+        if: failure() && steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.latest }}
+          CURRENT: ${{ steps.version.outputs.current }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Stremio core $VERSION: the app doesn't build with it"
+          if gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number' | grep -q .; then exit 0; fi
+          gh issue create --title "$title" --body "The weekly check found Stremio core **$VERSION** (we're on $CURRENT), but the app didn't type-check or build with it, so main wasn't changed. Details: $URL"
+
+  verify:
+    needs: update
+    if: needs.update.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Wait for the preview checks
+        id: checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.update.outputs.branch }}
+        run: |
+          sleep 30
+          for i in $(seq 1 110); do
+            run=$(gh run list --workflow preview.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 \
+              --json databaseId,status,conclusion,url --jq '.[0]')
+            status=$(echo "$run" | jq -r '.status // empty')
+            if [ "$status" = completed ]; then
+              echo "conclusion=$(echo "$run" | jq -r .conclusion)" >> "$GITHUB_OUTPUT"
+              echo "url=$(echo "$run" | jq -r .url)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "conclusion=timed_out" >> "$GITHUB_OUTPUT"
+
+      - name: Passed - move main to it and start the over-the-air builds
+        if: steps.checks.outputs.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.update.outputs.branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BRANCH" main
+          # Main may have moved while the checks ran: put the update on top of it
+          # (it only touches package.json and package-lock.json).
+          git checkout -B update "origin/$BRANCH"
+          git rebase origin/main
+          git push origin update:main
+          git push origin --delete "$BRANCH"
+          gh workflow run web.yml --ref main
+          gh workflow run tv.yml --ref main
+          echo "### Stremio core ${{ needs.update.outputs.version }} is on main; the web and TV builds are running" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failed - leave main alone and open an issue
+        if: steps.checks.outputs.conclusion != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.update.outputs.version }}
+          CURRENT: ${{ needs.update.outputs.current }}
+          BRANCH: ${{ needs.update.outputs.branch }}
+          URL: ${{ steps.checks.outputs.url }}
+          RESULT: ${{ steps.checks.outputs.conclusion }}
+        run: |
+          title="Stremio core $VERSION: the checks didn't pass"
+          if gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number' | grep -q .; then
+            echo "An issue is already open."
+            exit 0
+          fi
+          gh issue create --title "$title" --body "$(printf '%s\n\n%s\n\n%s\n' \
+            "The weekly check found Stremio core **$VERSION** (we're on $CURRENT). It's on the branch \`$BRANCH\`, but the preview checks ended with **$RESULT**, so main wasn't changed." \
+            "Checks: ${URL:-not found}" \
+            "Preview: https://cummmies.github.io/custom-stremio/$(echo "$BRANCH" | tr '/' '-')/")"
+          echo "::warning::Stremio core $VERSION didn't pass the checks; issue opened."

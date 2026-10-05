@@ -59,9 +59,15 @@ server; see `src-tauri/server/README.md`. Debrid links don't.
    - `tv.yml`: `Stremio.wgt`, which TizenBrew Installer installs from the
      latest release.
 
-Between releases, the iPhone and TV apps update their screens over the air
-(the **web** and **tv** pre-releases), so a new release is only needed for
-native changes or a fresh install.
+Between releases, the Windows, iPhone and TV apps update their screens over
+the air (the **web** and **tv** pre-releases), so a new release is only needed
+for native changes or a fresh install.
+
+Stremio's core (`@stremio/stremio-core-web`) is kept up to date by
+`core-update.yml`: every Monday it looks for a newer version, runs the preview
+checks with it, and moves main to it when they pass (the over-the-air builds
+follow), or opens an issue when they don't. Run it from the Actions tab to
+check now.
 
 ## iPhone
 
