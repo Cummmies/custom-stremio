@@ -96,18 +96,16 @@
                     </span>
                 </div>
             </button>
-            {#if !ep.upcoming}
-                <button
-                    class="watched"
-                    class:on={ep.watched}
-                    onclick={() => ontogglewatched(ep)}
-                    aria-pressed={ep.watched}
-                    aria-label={ep.watched ? `Mark episode ${ep.episode} as unwatched` : `Mark episode ${ep.episode} as watched`}
-                    title={ep.watched ? 'Watched' : 'Mark as Watched'}
-                >
-                    <Icon name="check" size={16} />
-                </button>
-            {/if}
+            <button
+                class="watched"
+                class:on={ep.watched}
+                onclick={() => ontogglewatched(ep)}
+                aria-pressed={ep.watched}
+                aria-label={ep.watched ? `Mark episode ${ep.episode} as unwatched` : `Mark episode ${ep.episode} as watched`}
+                title={ep.watched ? 'Watched' : 'Mark as Watched'}
+            >
+                <Icon name="check" size={16} />
+            </button>
         </li>
     {/each}
 </ol>
