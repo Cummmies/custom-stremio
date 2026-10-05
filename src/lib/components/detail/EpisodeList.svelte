@@ -115,7 +115,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 14px;
+        margin-bottom: 10px;
     }
     h3 {
         margin: 0;
@@ -178,13 +178,21 @@
     li.selected {
         box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
     }
+    /* Taller rows (bigger pictures) have room for a second line of the summary. */
+    @media (min-height: 950px) {
+        .overview {
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+        }
+    }
     .main {
         all: unset;
         flex: 1;
         min-width: 0;
         display: flex;
+        align-items: center;
         gap: 16px;
-        padding: 10px;
+        padding: 8px;
         border-radius: var(--radius);
         cursor: pointer;
     }
@@ -205,7 +213,8 @@
     .thumb {
         position: relative;
         flex: none;
-        width: 176px;
+        /* Rows grow with the window's height: 3 episodes in a short window, 6 in a tall one. */
+        width: clamp(120px, 15vh, 220px);
         aspect-ratio: 16 / 9;
         border-radius: var(--radius-s);
         overflow: hidden;
@@ -258,8 +267,8 @@
         line-height: 1.45;
         color: var(--label-2);
         display: -webkit-box;
-        -webkit-line-clamp: 2;
-        line-clamp: 2;
+        -webkit-line-clamp: 1;
+        line-clamp: 1;
         -webkit-box-orient: vertical;
         overflow: hidden;
     }

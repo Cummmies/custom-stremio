@@ -87,16 +87,16 @@
     .panel {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
     }
     .card {
-        padding: 18px 20px;
+        padding: 12px 16px;
         border-radius: var(--radius-l);
         background: var(--elevated);
         border: 1px solid var(--separator);
     }
     h3 {
-        margin: 0 0 12px;
+        margin: 0 0 8px;
         font-size: var(--text-caption);
         font-weight: 600;
         letter-spacing: 0.06em;
@@ -107,7 +107,7 @@
         margin: 0;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 6px;
     }
     dl div {
         display: grid;
@@ -178,5 +178,33 @@
     .name {
         font-size: var(--text-caption);
         line-height: 1.3;
+    }
+    /* Desktop: the cast is one row that scrolls sideways, so Details and Cast both
+       fit beside the episodes without the column scrolling. (Phones scroll the
+       page; the TV's remote moves through a grid.) */
+    @media (min-width: 701px) {
+        :global(html:not(.tv)) .cast {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            overscroll-behavior-x: contain;
+            scrollbar-width: thin;
+            padding-bottom: 4px;
+        }
+        :global(html:not(.tv)) .cast li {
+            flex: none;
+            width: 76px;
+        }
+        :global(html:not(.tv)) .avatar {
+            width: 46px;
+            height: 46px;
+        }
+        :global(html:not(.tv)) .name {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
     }
 </style>

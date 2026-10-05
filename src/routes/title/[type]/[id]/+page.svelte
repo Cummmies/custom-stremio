@@ -29,6 +29,18 @@
     let tab = $state<'episodes' | 'extras' | 'details'>('episodes');
     let trailer = $state<string | null>(null);
     let expanded = $state(false);
+    // "More" shows when the summary is cut off (it's one to three lines, by the window's height).
+    let descEl = $state<HTMLElement>();
+    let clamped = $state(false);
+    $effect(() => {
+        const el = descEl;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const check = () => (clamped = el.scrollHeight > el.clientHeight + 1);
+        const ro = new ResizeObserver(check);
+        ro.observe(el);
+        check();
+        return () => ro.disconnect();
+    });
     let artReady = $state(false);
     let logoFailed = $state(false);
 
@@ -279,10 +291,13 @@
                 {/if}
 
                 {#if meta.description}
-                    <p class="description" class:expanded>{meta.description}</p>
-                    {#if meta.description.length > 220}
-                        <button class="more" onclick={() => (expanded = !expanded)}>{expanded ? 'Less' : 'More'}</button>
-                    {/if}
+                    <!-- More sits at the end of the summary's line, not on a line of its own. -->
+                    <div class="desc-row">
+                        <p class="description" class:expanded bind:this={descEl}>{meta.description}</p>
+                        {#if expanded || clamped}
+                            <button class="more" onclick={() => (expanded = !expanded)}>{expanded ? 'Less' : 'More'}</button>
+                        {/if}
+                    </div>
                 {/if}
 
                 <div class="actions">
@@ -528,11 +543,14 @@
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
-        padding: calc(var(--nav-h) + clamp(48px, 7vh, 96px)) var(--gutter) clamp(16px, 3vh, 28px);
+        /* Proportions (as Home's): the header is only as tall as it must be, so
+           the episodes (3 to 6, by the window's height) and the whole Details
+           column (details and cast) fit below it without scrolling. */
+        padding: calc(var(--nav-h) + 56px) var(--gutter) clamp(12px, 2.2vh, 24px);
     }
     .back {
         position: absolute;
-        top: calc(var(--nav-h) + 12px);
+        top: calc(var(--nav-h) + 8px);
         left: var(--gutter);
         display: grid;
         place-items: center;
@@ -564,16 +582,16 @@
         display: block;
         max-width: min(440px, 80%);
         /* Shrinks on shorter windows so the episode list keeps its room. */
-        max-height: clamp(64px, 14vh, 150px);
+        max-height: clamp(52px, 10vh, 130px);
         object-fit: contain;
         object-position: left bottom;
-        margin-bottom: clamp(10px, 2vh, 18px);
+        margin-bottom: clamp(8px, 1.6vh, 16px);
         filter: drop-shadow(0 4px 20px rgb(0 0 0 / 0.55));
     }
     h1 {
         margin: 0 0 14px;
         font-family: var(--font-display);
-        font-size: clamp(34px, 4.4vw, 56px);
+        font-size: clamp(30px, min(4.4vw, 6vh), 56px);
         font-weight: 700;
         letter-spacing: -0.025em;
         line-height: 1.05;
@@ -583,7 +601,7 @@
         flex-wrap: wrap;
         gap: 6px;
         list-style: none;
-        margin: 0 0 14px;
+        margin: 0 0 10px;
         padding: 0;
     }
     /* Outlined, nearly square tags (same as the Home banner). */
@@ -603,17 +621,62 @@
         line-height: 1.55;
         color: rgb(244 244 246 / 0.85);
         display: -webkit-box;
-        -webkit-line-clamp: 3;
-        line-clamp: 3;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+    }
+    /* Tall windows have room for a third line. */
+    @media (min-height: 1000px) {
+        .description {
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+        }
+    }
+    /* Short windows (a laptop's 768 px less the taskbar): a smaller logo and one
+       line of the summary (More shows the rest), so 3 episodes and the Details
+       column still fit. */
+    @media (max-height: 760px) and (min-width: 701px) {
+        :global(html:not(.tv)) .logo {
+            max-height: 50px;
+            margin-bottom: 8px;
+        }
+        :global(html:not(.tv)) .chips {
+            margin-bottom: 8px;
+        }
+        :global(html:not(.tv)) .description:not(.expanded) {
+            -webkit-line-clamp: 1;
+            line-clamp: 1;
+        }
+        :global(html:not(.tv)) .actions {
+            margin-top: 10px;
+        }
+        /* Back sits beside the title instead of above it. */
+        :global(html:not(.tv)) .hero {
+            padding-top: calc(var(--nav-h) + 16px);
+        }
+        :global(html:not(.tv)) .hero .copy {
+            margin-left: 56px;
+        }
+        :global(html:not(.tv)) .back {
+            top: calc(var(--nav-h) + 16px);
+        }
     }
     .description.expanded {
         -webkit-line-clamp: unset;
         line-clamp: unset;
     }
+    .desc-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+    }
+    .desc-row .description {
+        flex: 1;
+        min-width: 0;
+    }
     .more {
-        margin-top: 4px;
+        flex: none;
         padding: 0;
         border: 0;
         background: none;
@@ -626,13 +689,13 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-top: 22px;
+        margin-top: clamp(12px, 2vh, 20px);
     }
     .play {
         display: flex;
         align-items: center;
         gap: 8px;
-        height: 46px;
+        height: 44px;
         padding: 0 26px 0 22px;
         border: 0;
         border-radius: 999px;
@@ -652,8 +715,8 @@
     .round {
         display: grid;
         place-items: center;
-        width: 46px;
-        height: 46px;
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
         border: 1px solid rgb(255 255 255 / 0.25);
         background: rgb(255 255 255 / 0.12);
@@ -709,7 +772,7 @@
         grid-template-columns: minmax(0, 1fr) 340px;
         grid-template-rows: minmax(0, 1fr);
         gap: 40px;
-        padding: 20px var(--gutter) 0;
+        padding: 16px var(--gutter) 0;
     }
     .columns.single {
         grid-template-columns: minmax(0, 720px);
@@ -724,14 +787,14 @@
         min-height: 0;
         overflow-y: auto;
         overscroll-behavior: contain;
-        padding-bottom: 24px;
+        padding-bottom: 12px;
     }
     /* Same height as the season picker beside it, so the two columns line up. */
     .side-title {
         display: flex;
         align-items: center;
         min-height: 36px;
-        margin: 0 0 14px;
+        margin: 0 0 10px;
         font-size: var(--text-title3);
         font-weight: 600;
     }
@@ -897,6 +960,11 @@
         }
         .description {
             font-size: 15px;
+        }
+        .desc-row {
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
         }
         .actions {
             width: 100%;
