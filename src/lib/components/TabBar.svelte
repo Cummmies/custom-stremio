@@ -4,15 +4,13 @@
     import { page } from '$app/state';
     import { appUrl } from '$lib/nav';
     import Icon, { type IconName } from './Icon.svelte';
-    import { lightboxd } from '$lib/lightboxd.svelte';
 
-    // Calendar comes from Lightboxd: only while it's connected and reachable.
-    const tabs = $derived<{ href: string; label: string; icon: IconName }[]>([
+    const tabs: { href: string; label: string; icon: IconName }[] = [
         { href: '/', label: 'Home', icon: 'home' },
         { href: '/library', label: 'Library', icon: 'library' },
-        ...(lightboxd.ready ? [{ href: '/calendar', label: 'Calendar', icon: 'calendar' as IconName }] : []),
+        { href: '/calendar', label: 'Calendar', icon: 'calendar' },
         { href: '/search', label: 'Search', icon: 'search' },
-    ]);
+    ];
     const path = $derived(appUrl(page.url).pathname);
     const isActive = (href: string) => (href === '/' ? path === '/' || path === '/customize' : path.startsWith(href));
 

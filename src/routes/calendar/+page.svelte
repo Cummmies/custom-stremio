@@ -1,234 +1,666 @@
 <script lang="ts">
-    // Calendar: what's coming up, from your Lightboxd (docs/lightboxd.md). New
-    // episodes of what you're watching and premieres of what's on your
-    // watchlist, in your sub/dub preference, as a list by day: easy to read on
-    // a phone and to move through with a TV remote. The tab only shows while
-    // Lightboxd is connected and reachable.
-    import { untrack } from 'svelte';
+    // Calendar: a month at a time, with the selected day's releases beside it.
+    // From Lightboxd while it's connected and reachable (new episodes of what
+    // you're watching, premieres from your watchlist, in your sub/dub
+    // preference, with air times); otherwise Stremio's own calendar (new
+    // episodes of the shows in your library, by date). Same view either way.
+    import { onMount, untrack } from 'svelte';
+    import { core } from '$lib/core';
+    import { app } from '$lib/app.svelte';
     import { lightboxd } from '$lib/lightboxd.svelte';
     import { titleHref } from '$lib/links';
-    import EmptyState from '$lib/components/EmptyState.svelte';
+    import Icon from '$lib/components/Icon.svelte';
 
-    type CalendarEvent = {
-        /** The release's calendar day, as Lightboxd has it. */
+    /** One release, whichever source it came from. */
+    type CalEvent = {
+        key: string;
+        /** Local calendar day, YYYY-MM-DD. */
+        day: string;
+        /** When it airs (ms), only when the source knows a time of day. */
+        at: number | null;
+        name: string;
+        poster: string | null;
+        /** "S2 E5" or "Movie". */
+        label: string | null;
+        episodeName: string | null;
+        tags: string[];
+        href: string | null;
+    };
+
+    // --- the month and day on show ---------------------------------------------
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const todayKey = dayKey(new Date());
+
+    let year = $state(new Date().getFullYear());
+    let month = $state(new Date().getMonth() + 1); // 1-12
+    let selected = $state(todayKey);
+    /** Beside the grid: the selected day, or every release this month. */
+    let view = $state<'day' | 'month'>('day');
+
+    const monthTitle = $derived(new Date(year, month - 1, 1).toLocaleDateString([], { month: 'long', year: 'numeric' }));
+    const isThisMonth = $derived(todayKey.startsWith(`${year}-${pad(month)}`));
+
+    function goMonth(delta: number) {
+        const d = new Date(year, month - 1 + delta, 1);
+        year = d.getFullYear();
+        month = d.getMonth() + 1;
+        selected = isThisMonth ? todayKey : `${year}-${pad(month)}-01`;
+    }
+
+    function goToday() {
+        const d = new Date();
+        year = d.getFullYear();
+        month = d.getMonth() + 1;
+        selected = todayKey;
+        view = 'day';
+    }
+
+    // Weeks start on Sunday; days outside the month are blank.
+    const cells = $derived.by(() => {
+        const lead = new Date(year, month - 1, 1).getDay();
+        const days = new Date(year, month, 0).getDate();
+        const out: (string | null)[] = Array(lead).fill(null);
+        for (let d = 1; d <= days; d++) out.push(`${year}-${pad(month)}-${pad(d)}`);
+        while (out.length % 7) out.push(null);
+        return out;
+    });
+    const weekdays = Array.from({ length: 7 }, (_, i) =>
+        new Date(2026, 0, 4 + i).toLocaleDateString([], { weekday: 'short' })
+    ); // Jan 4 2026 is a Sunday
+
+    // --- where the releases come from ---------------------------------------------
+
+    // 'pending': Lightboxd is set up and being checked, so neither source shows yet
+    // (no flash of Stremio's calendar on the way to Lightboxd's).
+    const source = $derived<'lightboxd' | 'stremio' | 'pending'>(
+        lightboxd.ready ? 'lightboxd' : lightboxd.saved?.token && lightboxd.status === 'checking' ? 'pending' : 'stremio'
+    );
+    /** Lightboxd is set up for this profile but can't be reached right now. */
+    const lightboxdDown = $derived(!!lightboxd.saved?.token && !lightboxd.ready && lightboxd.status !== 'checking');
+
+    // Lightboxd: a day either side of the month, since a release with a time
+    // can land on another day in this time zone.
+    type LbEvent = {
         date: string;
-        /** The moment (UTC) when the release has a time of day; null for a date-only release. */
         datetime: string | null;
         name: string;
-        /** tt… or kitsu:…, null when Stremio can't find the title. */
         id: string | null;
         type: 'movie' | 'series';
         poster: string | null;
         season: number | null;
         episode: number | null;
         episode_name: string | null;
-        kind: 'episode_release' | 'series_premiere' | 'season_premiere' | 'movie_premiere' | string | null;
+        kind: string | null;
         track: 'sub' | 'dub' | null;
     };
+    let lbEvents = $state<LbEvent[] | null>(null);
+    let lbFailed = $state(false);
+    let lbLoadedFor = '';
 
-    const DAYS = 14;
-    let events = $state<CalendarEvent[] | null>(null);
-    let failed = $state(false);
-    let loading = false;
-
-    async function load() {
-        if (loading) return;
-        loading = true;
-        failed = false;
-        const res = await lightboxd.request<{ events: CalendarEvent[] }>(`/calendar?days=${DAYS}`);
-        loading = false;
-        if (res) events = res.events;
-        else failed = true;
+    async function loadLightboxd(force = false) {
+        const key = `${year}-${month}`;
+        if (!force && lbLoadedFor === key) return;
+        lbLoadedFor = key;
+        lbFailed = false;
+        const first = new Date(year, month - 1, 0);
+        const last = new Date(year, month, 1);
+        const res = await lightboxd.request<{ events: LbEvent[] }>(`/calendar?start=${dayKey(first)}&end=${dayKey(last)}`);
+        if (lbLoadedFor !== key) return;
+        if (res) lbEvents = res.events;
+        else lbFailed = true;
     }
 
-    // On opening, and again if Lightboxd comes back while this is open.
-    // Otherwise a failure waits for Try Again (no retrying in a loop).
     $effect(() => {
-        if (lightboxd.ready) untrack(() => events === null && load());
+        if (source !== 'lightboxd') return;
+        void year;
+        void month;
+        untrack(() => loadLightboxd());
     });
 
-    async function retry() {
-        await lightboxd.check();
-        if (lightboxd.ready) await load();
+    // Stremio: core's Calendar model, a month at a time.
+    type StremioItem = {
+        id: string;
+        name: string;
+        poster?: string | null;
+        title?: string | null;
+        season?: number | null;
+        episode?: number | null;
+        deepLinks?: { metaDetailsStreams?: string | null };
+    };
+    type StremioCalendar = {
+        selected: { year: number; month: number } | null;
+        items: { date: { day: number; month: number; year: number }; items: StremioItem[] }[];
+    };
+    let stremio = $state<StremioCalendar | null>(null);
+
+    // Watch, then load, as Home does: the month's state can't arrive unseen.
+    $effect(() => {
+        if (source !== 'stremio') return;
+        const args = { year, month };
+        return untrack(() => {
+            const off = core.watch<StremioCalendar>('calendar', (s) => (stremio = s));
+            core.dispatch({ action: 'Load', args: { model: 'Calendar', args } }, 'calendar');
+            return off;
+        });
+    });
+    onMount(() => () => core.dispatch({ action: 'Unload' }, 'calendar'));
+
+    function refresh() {
+        if (source === 'pending') return;
+        if (source === 'lightboxd') loadLightboxd(true);
+        else core.dispatch({ action: 'Load', args: { model: 'Calendar', args: { year, month } } }, 'calendar');
     }
 
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    // --- one list of releases by day -------------------------------------------------
 
-    /** The day in this device's time zone: a release with a time is converted; a plain date stays as it is. */
-    function localDay(e: CalendarEvent) {
-        const d = e.datetime ? new Date(e.datetime) : null;
-        return d && !isNaN(d.getTime()) ? dayKey(d) : e.date;
+    /** A series episode's video id, for opening the title page on that episode. */
+    function episodeVideo(id: string, season: number | null, episode: number | null) {
+        if (episode == null) return null;
+        return id.startsWith('kitsu:') ? `${id}:${episode}` : season != null ? `${id}:${season}:${episode}` : null;
     }
 
-    function localTime(e: CalendarEvent) {
-        const d = e.datetime ? new Date(e.datetime) : null;
-        return d && !isNaN(d.getTime()) ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+    function fromLightboxd(e: LbEvent, i: number): CalEvent {
+        const moment = e.datetime ? new Date(e.datetime) : null;
+        const timed = moment && !isNaN(moment.getTime()) ? moment : null;
+        const tags: string[] = [];
+        if (e.kind === 'series_premiere') tags.push('Series Premiere');
+        else if (e.kind === 'season_premiere') tags.push('Season Premiere');
+        else if (e.kind === 'movie_premiere') tags.push('Premiere');
+        if (e.track) tags.push(e.track === 'dub' ? 'Dub' : 'Sub');
+        const video = e.id && e.type === 'series' ? episodeVideo(e.id, e.season, e.episode) : null;
+        return {
+            key: `lb:${i}`,
+            day: timed ? dayKey(timed) : e.date,
+            at: timed ? timed.getTime() : null,
+            name: e.name,
+            poster: e.poster,
+            label: e.kind === 'movie_premiere' ? 'Movie' : e.season != null && e.episode != null ? `S${e.season} E${e.episode}` : null,
+            episodeName: e.episode_name,
+            tags,
+            href: e.id ? titleHref(e.type, e.id, video ? { video } : undefined) : null,
+        };
     }
 
-    function dayLabel(key: string, today: string, tomorrow: string) {
-        if (key === today) return 'Today';
-        if (key === tomorrow) return 'Tomorrow';
-        return new Date(`${key}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+    function fromStremio(day: { day: number; month: number; year: number }, item: StremioItem, i: number): CalEvent {
+        // The episode's id is the last part of its streams link (…/tt123:1:2).
+        const link = item.deepLinks?.metaDetailsStreams ?? '';
+        const last = decodeURIComponent(link.split('/').pop() ?? '');
+        const video = last.includes(':') ? last : episodeVideo(item.id, item.season ?? null, item.episode ?? null);
+        return {
+            key: `st:${day.day}:${i}:${item.id}`,
+            day: `${day.year}-${pad(day.month)}-${pad(day.day)}`,
+            at: null,
+            name: item.name,
+            poster: item.poster ?? null,
+            label: item.season != null && item.episode != null ? `S${item.season} E${item.episode}` : null,
+            episodeName: item.title && item.title !== item.name ? item.title : null,
+            tags: [],
+            href: titleHref('series', item.id, video ? { video } : undefined),
+        };
     }
 
-    const days = $derived.by(() => {
-        if (!events) return [];
-        const now = new Date();
-        const today = dayKey(now);
-        const tomorrow = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
-        const last = dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + DAYS - 1));
-        const groups = new Map<string, CalendarEvent[]>();
-        for (const e of events) {
-            const key = localDay(e);
-            if (key < today || key > last) continue;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(e);
+    const byDay = $derived.by(() => {
+        const map = new Map<string, CalEvent[]>();
+        let list: CalEvent[] = [];
+        if (source === 'lightboxd') list = (lbEvents ?? []).map(fromLightboxd);
+        else if (stremio?.selected?.year === year && stremio.selected.month === month)
+            list = stremio.items.flatMap((d) => d.items.map((it, i) => fromStremio(d.date, it, i)));
+        for (const e of list) {
+            if (!e.day.startsWith(`${year}-${pad(month)}`)) continue;
+            if (!map.has(e.day)) map.set(e.day, []);
+            map.get(e.day)!.push(e);
         }
-        return [...groups.entries()]
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, list]) => ({
-                key,
-                label: dayLabel(key, today, tomorrow),
-                // Date-only releases first (they're out all day), then by time.
-                list: list.sort((a, b) => (a.datetime ?? '').localeCompare(b.datetime ?? '')),
-            }));
+        // Date-only releases first (out all day), then by time.
+        for (const events of map.values()) events.sort((a, b) => (a.at ?? 0) - (b.at ?? 0) || a.name.localeCompare(b.name));
+        return map;
     });
 
-    function detail(e: CalendarEvent) {
-        if (e.kind === 'movie_premiere') return 'Movie';
-        const ep = e.season != null && e.episode != null ? `S${e.season} E${e.episode}` : null;
-        return [ep, e.episode_name].filter(Boolean).join(' · ');
-    }
+    const loading = $derived(
+        source === 'pending'
+            ? true
+            : source === 'lightboxd'
+              ? lbEvents === null && !lbFailed
+              : !(stremio?.selected?.year === year && stremio.selected.month === month)
+    );
+    const monthCount = $derived([...byDay.values()].reduce((n, l) => n + l.length, 0));
+    const selectedEvents = $derived(byDay.get(selected) ?? []);
+    const monthDays = $derived([...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)));
 
-    function tags(e: CalendarEvent) {
-        const out: string[] = [];
-        if (e.kind === 'series_premiere') out.push('Series Premiere');
-        else if (e.kind === 'season_premiere') out.push('Season Premiere');
-        else if (e.kind === 'movie_premiere') out.push('Premiere');
-        if (e.track) out.push(e.track === 'dub' ? 'Dub' : 'Sub');
-        return out;
+    // --- labels ---------------------------------------------------------------------
+
+    const timeOf = (e: CalEvent) => (e.at != null ? new Date(e.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null);
+    const dateOf = (key: string, opts: Intl.DateTimeFormatOptions) => new Date(`${key}T12:00:00`).toLocaleDateString([], opts);
+    function dayHeading(key: string) {
+        if (key === todayKey) return `Today, ${dateOf(key, { month: 'short', day: 'numeric' })}`;
+        return dateOf(key, { weekday: 'short', month: 'short', day: 'numeric' });
     }
+    const countLabel = (n: number) => (n === 1 ? '1 release' : `${n} releases`);
+    const sourceNote = $derived(
+        source === 'pending'
+            ? 'Checking Lightboxd…'
+            : source === 'lightboxd'
+            ? 'From Lightboxd: new episodes of what you’re watching and premieres from your watchlist.'
+            : lightboxdDown
+              ? 'Lightboxd can’t be reached, so this is Stremio’s calendar: new episodes of the shows in your library.'
+              : 'New episodes of the shows in your library.'
+    );
+    const MAX_CHIPS = 3;
 </script>
 
 <svelte:head><title>Calendar · Stremio</title></svelte:head>
 
 <div class="page">
-    <header>
-        <h1>Calendar</h1>
-        <p class="lede">From Lightboxd: new episodes of what you’re watching and premieres from your watchlist, for the next two weeks.</p>
-    </header>
+    <div class="board">
+        <header class="toolbar">
+            <button class="pill" onclick={goToday} disabled={isThisMonth && selected === todayKey}>Today</button>
+            <div class="month-nav">
+                <button class="icon-btn" onclick={() => goMonth(-1)} aria-label="Previous month" title="Previous month">
+                    <Icon name="chevronLeft" size={18} />
+                </button>
+                <h1 aria-live="polite">{monthTitle}</h1>
+                <button class="icon-btn" onclick={() => goMonth(1)} aria-label="Next month" title="Next month">
+                    <Icon name="chevronRight" size={18} />
+                </button>
+            </div>
+            <button class="icon-btn" onclick={refresh} aria-label="Refresh" title="Refresh">
+                <Icon name="replay" size={17} />
+            </button>
+        </header>
+        <p class="note" class:warn={lightboxdDown && source === 'stremio'}>{sourceNote}</p>
 
-    {#if !lightboxd.saved?.token}
-        <EmptyState icon="calendar" title="Connect Lightboxd">
-            <p>Your calendar comes from Lightboxd. Connect it in Settings.</p>
-            <a class="action" href="/settings">Open Settings</a>
-        </EmptyState>
-    {:else if failed || (lightboxd.status !== 'ok' && lightboxd.status !== 'checking')}
-        <EmptyState icon="calendar" title="Can’t reach Lightboxd">
-            <p>Check that it’s running. The calendar shows up again once it’s back.</p>
-            <button onclick={retry}>Try Again</button>
-        </EmptyState>
-    {:else if events === null}
-        <p class="loading" role="status">Loading…</p>
-    {:else if days.length === 0}
-        <EmptyState icon="calendar" title="Nothing coming up">
-            <p>Nothing you’re watching or have on your watchlist airs in the next two weeks.</p>
-        </EmptyState>
-    {:else}
-        {#each days as day (day.key)}
-            <section>
-                <h2>{day.label}</h2>
-                <ul class="group">
-                    {#each day.list as e, i (`${e.id ?? e.name}:${e.season}:${e.episode}:${i}`)}
-                        {@const time = localTime(e)}
-                        <li>
-                            <svelte:element this={e.id ? 'a' : 'div'} class="item" href={e.id ? titleHref(e.type, e.id) : undefined}>
-                                <div class="poster">
-                                    {#if e.poster}<img src={e.poster} alt="" loading="lazy" />{/if}
-                                </div>
-                                <div class="text">
-                                    <span class="name">{e.name}</span>
-                                    {#if detail(e)}<span class="detail">{detail(e)}</span>{/if}
-                                </div>
-                                <div class="meta">
-                                    {#if time}<span class="time">{time}</span>{/if}
-                                    {#each tags(e) as tag (tag)}<span class="tag">{tag}</span>{/each}
-                                </div>
-                            </svelte:element>
-                        </li>
+        <div class="layout">
+            <div class="month" role="grid" aria-label={monthTitle} aria-busy={loading}>
+                <div class="weekdays" role="row">
+                    {#each weekdays as w (w)}<div role="columnheader">{w}</div>{/each}
+                </div>
+                <div class="cells">
+                    {#each cells as key, i (key ?? `blank-${i}`)}
+                        {#if key}
+                            {@const events = byDay.get(key) ?? []}
+                            <button
+                                class="cell"
+                                class:selected={key === selected}
+                                class:today={key === todayKey}
+                                class:past={key < todayKey}
+                                role="gridcell"
+                                aria-selected={key === selected}
+                                aria-label={`${dateOf(key, { weekday: 'long', month: 'long', day: 'numeric' })}${events.length ? `, ${countLabel(events.length)}` : ''}`}
+                                onclick={() => {
+                                    selected = key;
+                                    view = 'day';
+                                }}
+                            >
+                                <span class="num">{Number(key.slice(8))}</span>
+                                {#if events.length}
+                                    <span class="chips" aria-hidden="true">
+                                        {#each events.slice(0, events.length > MAX_CHIPS ? MAX_CHIPS - 1 : MAX_CHIPS) as e (e.key)}
+                                            <span class="chip">
+                                                <span class="chip-name">{e.name}</span>
+                                                {#if timeOf(e)}<span class="chip-time">{timeOf(e)}</span>{/if}
+                                            </span>
+                                        {/each}
+                                        {#if events.length > MAX_CHIPS}<span class="more">+{events.length - (MAX_CHIPS - 1)} more</span>{/if}
+                                    </span>
+                                    <!-- Phones: dots, as in iOS Calendar's month view. -->
+                                    <span class="dots" aria-hidden="true">
+                                        {#each events.slice(0, 3) as e (e.key)}<span class="dot"></span>{/each}
+                                    </span>
+                                {/if}
+                            </button>
+                        {:else}
+                            <div class="cell blank" aria-hidden="true"></div>
+                        {/if}
                     {/each}
-                </ul>
-            </section>
-        {/each}
-    {/if}
+                </div>
+            </div>
+
+            <aside class="side" aria-label="Releases">
+                <div class="side-head">
+                    <div>
+                        <h2>{view === 'day' ? dayHeading(selected) : monthTitle}</h2>
+                        <p class="count">{loading ? 'Loading…' : countLabel(view === 'day' ? selectedEvents.length : monthCount)}</p>
+                    </div>
+                    <div class="segmented" role="radiogroup" aria-label="Show">
+                        <button role="radio" aria-checked={view === 'day'} class:on={view === 'day'} onclick={() => (view = 'day')}>Day</button>
+                        <button role="radio" aria-checked={view === 'month'} class:on={view === 'month'} onclick={() => (view = 'month')}>Month</button>
+                    </div>
+                </div>
+
+                {#if source === 'stremio' && !app.user}
+                    <p class="empty">Log in to see new episodes of the shows in your library.</p>
+                {:else if source === 'lightboxd' && lbFailed}
+                    <p class="empty">Couldn’t load Lightboxd’s calendar. <button class="link" onclick={refresh}>Try again</button></p>
+                {:else if !loading && view === 'day' && !selectedEvents.length}
+                    <p class="empty">Nothing comes out on this day.</p>
+                {:else if !loading && view === 'month' && !monthCount}
+                    <p class="empty">Nothing comes out this month.</p>
+                {:else if view === 'day'}
+                    <ul class="list">
+                        {#each selectedEvents as e (e.key)}{@render release(e)}{/each}
+                    </ul>
+                {:else}
+                    {#each monthDays as [key, events] (key)}
+                        <h3 class="list-day" class:today={key === todayKey}>{dayHeading(key)}</h3>
+                        <ul class="list">
+                            {#each events as e (e.key)}{@render release(e)}{/each}
+                        </ul>
+                    {/each}
+                {/if}
+            </aside>
+        </div>
+    </div>
 </div>
+
+{#snippet release(e: CalEvent)}
+    {@const time = timeOf(e)}
+    <li>
+        <svelte:element this={e.href ? 'a' : 'div'} class="release" href={e.href ?? undefined}>
+            <span class="poster">{#if e.poster}<img src={e.poster} alt="" loading="lazy" />{/if}</span>
+            <span class="release-text">
+                <span class="release-name">{e.name}</span>
+                {#if e.episodeName}<span class="release-sub">{e.episodeName}</span>{/if}
+                <span class="badges">
+                    {#if e.label}<span class="badge">{e.label}</span>{/if}
+                    {#if time}<span class="badge">{time}</span>{/if}
+                    {#each e.tags as tag (tag)}<span class="badge tag">{tag}</span>{/each}
+                </span>
+            </span>
+        </svelte:element>
+    </li>
+{/snippet}
 
 <style>
     .page {
-        max-width: 880px;
-        margin: 0 auto;
-        padding: calc(var(--nav-h) + 24px) var(--gutter) 56px;
+        padding: calc(var(--nav-h) + 16px) var(--gutter) 40px;
     }
-    header {
-        margin-bottom: 24px;
+    .board {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 16px 20px 20px;
+        border-radius: var(--radius-l);
+        background: var(--elevated);
+        border: 1px solid var(--separator);
+    }
+
+    /* --- toolbar --- */
+    .toolbar {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+    }
+    .toolbar > :last-child {
+        justify-self: end;
+    }
+    .month-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     h1 {
+        min-width: 200px;
         margin: 0;
+        text-align: center;
         font-family: var(--font-display);
         font-size: var(--text-title2);
         font-weight: 600;
     }
-    .lede {
-        margin: 6px 0 0;
+    .pill {
+        justify-self: start;
+        height: 30px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--fill);
+        color: var(--label);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .pill:hover:not(:disabled) {
+        background: var(--fill-hover);
+    }
+    .pill:disabled {
+        color: var(--label-3);
+        cursor: default;
+    }
+    .icon-btn {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--label-2);
+        cursor: pointer;
+    }
+    .icon-btn:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
+    .note {
+        margin: 6px 0 14px;
+        text-align: center;
+        font-size: 13px;
         color: var(--label-2);
     }
-    section + section {
-        margin-top: 24px;
+    .note.warn {
+        color: var(--warn);
+    }
+
+    /* --- month grid and the side panel --- */
+    .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 20px;
+        align-items: start;
+    }
+    .weekdays,
+    .cells {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .weekdays {
+        margin-bottom: 6px;
+    }
+    .weekdays div {
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--label-2);
+    }
+    .cell {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        min-width: 0;
+        min-height: 112px;
+        padding: 8px;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        background: var(--fill);
+        color: var(--label);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: background var(--fast);
+    }
+    .cell:hover {
+        background: var(--fill-hover);
+    }
+    .cell.blank {
+        background: transparent;
+        cursor: default;
+    }
+    .cell.selected {
+        background: var(--elevated-2);
+        border-color: rgb(255 255 255 / 0.18);
+    }
+    .num {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        margin: -3px 0 4px -3px;
+        border-radius: 50%;
+        font-size: 13px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    .past .num {
+        color: var(--label-2);
+    }
+    .today .num {
+        background: var(--accent);
+        color: white;
+    }
+    .chips {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+    }
+    .chip {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px;
+        min-width: 0;
+        padding: 3px 6px;
+        border-radius: var(--radius-s);
+        background: rgb(255 255 255 / 0.07);
+        font-size: 11px;
+    }
+    .selected .chip {
+        background: rgb(255 255 255 / 0.1);
+    }
+    .chip-name {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-weight: 600;
+    }
+    .chip-time {
+        flex: none;
+        color: var(--label-2);
+        font-variant-numeric: tabular-nums;
+    }
+    .more {
+        padding: 0 6px;
+        font-size: 11px;
+        color: var(--label-2);
+    }
+    .dots {
+        display: none;
+    }
+
+    /* --- side panel --- */
+    .side {
+        position: sticky;
+        top: calc(var(--nav-h) + 12px);
+        max-height: calc(100vh - var(--nav-h) - 40px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    .side-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
     }
     h2 {
-        margin: 0 0 10px 4px;
+        margin: 0;
+        font-size: var(--text-title3);
+        font-weight: 600;
+    }
+    .count {
+        margin: 2px 0 0;
+        font-size: 12px;
+        color: var(--label-2);
+    }
+    .segmented {
+        flex: none;
+        display: flex;
+        padding: 3px;
+        border-radius: var(--radius);
+        background: var(--fill);
+    }
+    .segmented button {
+        height: 26px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--label-2);
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .segmented button.on {
+        background: var(--elevated-2);
+        color: var(--label);
+        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+    }
+    .empty {
+        margin: 24px 0;
+        text-align: center;
         font-size: 13px;
+        color: var(--label-2);
+    }
+    .link {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--accent-text);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .list-day {
+        margin: 14px 0 6px 2px;
+        font-size: 12px;
         font-weight: 600;
         color: var(--label-2);
     }
-    .group {
+    .list-day.today {
+        color: var(--accent-text);
+    }
+    .list {
         margin: 0;
         padding: 0;
         list-style: none;
-        border-radius: var(--radius-l);
-        background: var(--elevated);
-        border: 1px solid var(--separator);
-        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
     }
-    li + li {
-        border-top: 1px solid var(--separator);
-    }
-    .item {
+    .release {
         display: flex;
         align-items: center;
         gap: 14px;
-        padding: 10px 16px;
+        padding: 10px;
+        border-radius: var(--radius);
+        background: var(--fill);
         color: inherit;
         text-decoration: none;
     }
-    a.item {
+    a.release {
         transition: background var(--fast);
     }
-    a.item:hover {
-        background: var(--fill);
-    }
-    a.item:focus-visible {
-        outline: 2px solid var(--accent-hover);
-        outline-offset: -2px;
+    a.release:hover {
+        background: var(--fill-hover);
     }
     .poster {
         flex: none;
-        width: 40px;
+        width: 56px;
         aspect-ratio: 2 / 3;
-        border-radius: 6px;
+        border-radius: var(--radius-s);
         overflow: hidden;
-        background: var(--fill);
+        background: var(--elevated-2);
     }
     .poster img {
         display: block;
@@ -236,60 +668,111 @@
         height: 100%;
         object-fit: cover;
     }
-    .text {
-        flex: 1;
-        min-width: 0;
+    .release-text {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 4px;
+        min-width: 0;
     }
-    .name {
+    .release-name {
         font-weight: 600;
         overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
     }
-    .detail {
+    .release-sub {
         font-size: 13px;
         color: var(--label-2);
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
     }
-    .meta {
-        flex: none;
+    .badges {
         display: flex;
-        align-items: center;
-        gap: 6px;
+        flex-wrap: wrap;
+        gap: 4px;
     }
-    .time {
-        font-size: 13px;
-        color: var(--label-2);
-        font-variant-numeric: tabular-nums;
-    }
-    .tag {
-        padding: 2px 8px;
-        border-radius: 999px;
-        background: var(--fill);
+    .badge {
+        padding: 2px 7px;
+        border-radius: var(--radius-s);
+        background: rgb(255 255 255 / 0.08);
         font-size: 11px;
         font-weight: 600;
-        color: var(--label-2);
+        font-variant-numeric: tabular-nums;
     }
-    .loading {
-        color: var(--label-2);
+    .badge.tag {
+        color: var(--accent-text);
     }
-    .action {
-        display: inline-block;
-        margin-top: 4px;
-        color: var(--accent-hover);
-        font-weight: 600;
-        text-decoration: none;
+
+    /* Narrower windows: the list goes under the month. */
+    @media (max-width: 1100px) {
+        .layout {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .side {
+            position: static;
+            max-height: none;
+            overflow: visible;
+        }
+        .cell {
+            min-height: 92px;
+        }
     }
-    @media (max-width: 560px) {
-        .meta {
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 4px;
+
+    /* Phones: iOS Calendar's month view. Day numbers with dots under them;
+       the selected day's releases below. */
+    @media (max-width: 700px) {
+        .page {
+            padding-top: calc(var(--nav-h) + 8px);
+            padding-bottom: calc(var(--tabbar-h) + 24px);
+        }
+        .board {
+            padding: 12px;
+        }
+        h1 {
+            min-width: 0;
+            font-size: var(--text-title3);
+        }
+        .icon-btn,
+        .pill {
+            min-width: 44px;
+            height: 44px;
+        }
+        .weekdays,
+        .cells {
+            gap: 2px;
+        }
+        .cell {
+            align-items: center;
+            min-height: 48px;
+            padding: 4px 0;
+            background: transparent;
+        }
+        .cell.selected {
+            border-color: transparent;
+            background: var(--fill);
+        }
+        .num {
+            margin: 0;
+        }
+        .chips {
+            display: none;
+        }
+        .dots {
+            display: flex;
+            gap: 3px;
+            margin-top: 3px;
+        }
+        .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--label-2);
+        }
+        .today .dot {
+            background: var(--accent-text);
         }
     }
 </style>

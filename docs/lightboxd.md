@@ -192,25 +192,33 @@ doesn't suit an app, and Google sign-in can't work on a TV.
    Tailscale) for other devices. The token is in the URL, so it can show up in server
    access logs; it's read-only.
 
-## Phase 6 — Calendar tab — built
+## Phase 6 — Calendar tab — built (then redesigned)
 
-- **Lightboxd:** `GET /app-api/v1/calendar?days=14` (`addon.calendar_events`). It returns
-  every release of the calendar feed (in the preferred sub/dub track), each with its Stremio
-  ID, poster, season and episode, `kind` (series, season or movie premiere, or an episode)
-  and `track`. `datetime` is a UTC moment only when the release has a time of day; a
-  date-only release keeps its plain date. It starts a day early so the app's time zone can't
-  lose an evening release.
-- **App:** `src/routes/calendar/+page.svelte`, an agenda list grouped by day (Today,
-  Tomorrow, then "Wednesday, October 7") for the next two weeks:
-  - Releases with a time are converted to local time and placed on the local day, the same
-    rule as Lightboxd's own calendar. Date-only releases come first in their day.
-  - Each row has the poster, title, "S1 E5 · Chapter 5", the time, and tags (Series or
-    Season Premiere, Premiere, Sub/Dub).
-  - A row opens the title page when Stremio knows the title.
-  - Not connected: "Connect Lightboxd" with a link to Settings. Unreachable: "Can't reach
-    Lightboxd" with Try Again. Nothing coming up: an empty state.
-- **Nav:** **Calendar** is in the top bar and the phone tab bar (new `calendar` icon) only
-  while `lightboxd.ready`. The tab bar's grid now fits any number of tabs (it was fixed at five).
+- **Lightboxd:** `GET /app-api/v1/calendar` (`addon.calendar_events`). It takes
+  `?start=&end=` (dates, at most 62 days apart: the month view asks for a day either side
+  of a month) or `?days=` (from yesterday). It returns every release of the calendar feed
+  in the preferred sub/dub track, each with its Stremio ID, poster, season and episode,
+  `kind` and `track`. `datetime` is a UTC moment only when the release has a time of day.
+- **App** (`src/routes/calendar/+page.svelte`): a month grid in the style of Lightboxd's
+  own calendar, with the selected day's releases beside it.
+  - **Toolbar:** Today, ‹ month ›, Refresh. A note under it says where the releases come from.
+  - **Day cells:** today in an accent circle, up to three chips (name and time), and
+    "+N more". Selecting a day lists it on the right. **Day / Month** switches that list to
+    the whole month.
+  - **Each release:** poster, episode name, "S1 E5", time, and tags (Series or Season
+    Premiere, Premiere, Sub/Dub). It opens the title page on that episode (`?video=`).
+  - **Narrower windows:** the list goes under the grid.
+  - **Phones:** iOS Calendar's month view, with day numbers and dots and the selected day
+    below. Controls are 44 pt.
+- **Two sources, one view.** Lightboxd's calendar while it's connected and reachable
+  (with air times). Otherwise **Stremio's own calendar**, core's `Calendar` model: new
+  episodes of the shows in your library, by date, and "Log in…" for a guest.
+  - While Lightboxd is being checked, the page waits ("Checking Lightboxd…") instead of
+    flashing Stremio's calendar.
+  - If Lightboxd is set up but unreachable, the note says so in amber and Stremio's
+    calendar shows.
+- **Nav:** **Calendar** is always there now (top bar, TV and phone tab bar), since there's
+  always a calendar to show. The tab bar's grid fits any number of tabs.
 
 ## Phase 7 — Lightboxd on the title page — built
 
