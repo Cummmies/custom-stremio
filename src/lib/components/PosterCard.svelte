@@ -17,7 +17,8 @@
     import { previewInHero } from '$lib/heroPreview.svelte';
     import type { MetaItemPreview } from '$lib/core/types';
 
-    let { item }: { item: PosterItem } = $props();
+    /** `wide`: a 16:9 tile (a landscape catalog) instead of a 2:3 poster. */
+    let { item, wide = false }: { item: PosterItem; wide?: boolean } = $props();
 
     let loaded = $state(false);
     let failed = $state(false);
@@ -48,15 +49,15 @@
     onkeydown={arrowNav}
     aria-label={[item.name, item.releaseInfo].filter(Boolean).join(', ')}
 >
-    <div class="poster" class:loaded>
+    <div class="poster" class:loaded class:wide>
         {#if item.poster && !failed}
             <img
                 src={item.poster}
                 alt=""
                 loading="lazy"
                 decoding="async"
-                width="168"
-                height="252"
+                width={wide ? 320 : 168}
+                height={wide ? 180 : 252}
                 onload={() => (loaded = true)}
                 onerror={() => (failed = true)}
             />
@@ -89,6 +90,11 @@
     .poster {
         position: relative;
         aspect-ratio: 2 / 3;
+    }
+    .poster.wide {
+        aspect-ratio: 16 / 9;
+    }
+    .poster {
         border-radius: var(--radius);
         overflow: hidden;
         background: var(--elevated-2);

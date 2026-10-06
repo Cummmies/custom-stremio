@@ -8,6 +8,7 @@
     import Hero from './Hero.svelte';
     import Shelf from './Shelf.svelte';
     import WideCard from './WideCard.svelte';
+    import { WIDE_ITEM_WIDTH } from '$lib/shelf';
     import CategoryTiles from './CategoryTiles.svelte';
     import CatalogList, { catalogTitle, isEmptyCatalog, rowAnchor, type ListRow } from './CatalogList.svelte';
     import { catalogKey, homeLayout, type BoardCatalog } from '$lib/homeLayout.svelte';
@@ -16,7 +17,7 @@
 
     // TV: fixed (an inline clamp() is lost on the TV's Chromium 69, and vw is
     // off under the TV's zoom); about as tall as a poster, like tvOS's Up Next.
-    const cwWidth = isTV ? '300px' : 'clamp(240px, 21vw, 320px)';
+    const cwWidth = WIDE_ITEM_WIDTH;
 
     let { type = null }: { type?: 'movie' | 'series' | null } = $props();
 

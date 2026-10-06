@@ -1,5 +1,6 @@
 // Replaces the browser's right-click menu with app menus that fit what was clicked:
-// a title, a text field, selected text, a link, or empty space.
+// an item with a ⋯ menu (the same menu, at the pointer), a title, a text field,
+// selected text, a link, or empty space.
 import { goto } from '$lib/nav';
 import { app } from '$lib/app.svelte';
 import { titleHref } from '$lib/links';
@@ -14,6 +15,20 @@ export type TitleRef = {
 };
 
 const titles = new WeakMap<Element, TitleRef>();
+const items = new WeakMap<Element, () => MenuEntry[]>();
+
+/**
+ * Svelte action: `use:itemMenu={entries}` makes an item's ⋯ menu its
+ * right-click menu too, opened at the pointer (as on the Mac, where a
+ * "more" button and the context menu show the same commands).
+ */
+export function itemMenu(node: HTMLElement, entries: () => MenuEntry[]) {
+    items.set(node, entries);
+    return {
+        update: (next: () => MenuEntry[]) => items.set(node, next),
+        destroy: () => items.delete(node),
+    };
+}
 
 /** Svelte action: `use:titleContext={item}` gives an element the title right-click menu. */
 export function titleContext(node: HTMLElement, ref: TitleRef) {
@@ -123,6 +138,8 @@ function entriesFor(target: Element): MenuEntry[] | null {
     if (text) return selectionEntries(text);
 
     for (let el: Element | null = target; el; el = el.parentElement) {
+        const own = items.get(el);
+        if (own) return own();
         const ref = titles.get(el);
         if (ref) return titleEntries(ref);
     }

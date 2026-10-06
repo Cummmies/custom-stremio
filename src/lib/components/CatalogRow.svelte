@@ -1,6 +1,7 @@
 <script lang="ts">
     import Shelf from './Shelf.svelte';
     import PosterCard, { type PosterItem } from './PosterCard.svelte';
+    import { WIDE_ITEM_WIDTH } from '$lib/shelf';
 
     let {
         title,
@@ -8,12 +9,18 @@
         items,
         loading = false,
     }: { title: string; id?: string; items: PosterItem[] | null; loading?: boolean } = $props();
+
+    // An addon can ask for wide tiles (posterShape "landscape", as Stremio's own
+    // apps honor): a row whose items all do gets 16:9 cards, Continue Watching's size.
+    const wide = $derived(
+        !!items?.length && items.every((i) => (i as { posterShape?: string }).posterShape === 'landscape')
+    );
 </script>
 
-<Shelf {title} {id} busy={loading}>
+<Shelf {title} {id} busy={loading} itemWidth={wide ? WIDE_ITEM_WIDTH : undefined}>
     {#if items && items.length > 0}
         {#each items as item (item.id)}
-            <PosterCard {item} />
+            <PosterCard {item} {wide} />
         {/each}
     {:else if loading}
         {#each Array(9) as _}

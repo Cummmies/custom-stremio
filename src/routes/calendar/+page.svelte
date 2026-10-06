@@ -252,23 +252,28 @@
 <svelte:head><title>Calendar · Stremio</title></svelte:head>
 
 <div class="page">
-    <div class="board">
+        <!-- As in Calendar on the Mac and iPhone: the month's name leads; going
+             back, to today and forward sit together at the end. -->
         <header class="toolbar">
-            <button class="pill" onclick={goToday} disabled={isThisMonth && selected === todayKey}>Today</button>
-            <div class="month-nav">
-                <button class="icon-btn" onclick={() => goMonth(-1)} aria-label="Previous month" title="Previous month">
-                    <Icon name="chevronLeft" size={18} />
-                </button>
+            <div class="heading">
                 <h1 aria-live="polite">{monthTitle}</h1>
-                <button class="icon-btn" onclick={() => goMonth(1)} aria-label="Next month" title="Next month">
-                    <Icon name="chevronRight" size={18} />
+                <p class="note" class:warn={lightboxdDown && source === 'stremio'}>{sourceNote}</p>
+            </div>
+            <div class="controls">
+                <div class="stepper" role="group" aria-label="Month">
+                    <button class="icon-btn" onclick={() => goMonth(-1)} aria-label="Previous month" title="Previous month">
+                        <Icon name="chevronLeft" size={18} />
+                    </button>
+                    <button class="today-btn" onclick={goToday} disabled={isThisMonth && selected === todayKey}>Today</button>
+                    <button class="icon-btn" onclick={() => goMonth(1)} aria-label="Next month" title="Next month">
+                        <Icon name="chevronRight" size={18} />
+                    </button>
+                </div>
+                <button class="icon-btn" onclick={refresh} aria-label="Refresh" title="Refresh">
+                    <Icon name="replay" size={17} />
                 </button>
             </div>
-            <button class="icon-btn" onclick={refresh} aria-label="Refresh" title="Refresh">
-                <Icon name="replay" size={17} />
-            </button>
         </header>
-        <p class="note" class:warn={lightboxdDown && source === 'stremio'}>{sourceNote}</p>
 
         <div class="layout">
             <div class="month" role="grid" aria-label={monthTitle} aria-busy={loading}>
@@ -350,7 +355,6 @@
                 {/if}
             </aside>
         </div>
-    </div>
 </div>
 
 {#snippet release(e: CalEvent)}
@@ -369,56 +373,66 @@
 {/snippet}
 
 <style>
+    /* The whole window below the nav: the month fills it, the day's list
+       beside it scrolls on its own (PC and TV; vh is TV-safe, vite.config.js). */
     .page {
-        padding: calc(var(--nav-h) + 16px) var(--gutter) 40px;
-    }
-    .board {
-        max-width: 1500px;
-        margin: 0 auto;
-        padding: 16px 20px 20px;
-        border-radius: var(--radius-l);
-        background: var(--elevated);
-        border: 1px solid var(--separator);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        padding: calc(var(--nav-h) + 12px) var(--gutter) 24px;
     }
 
     /* --- toolbar --- */
     .toolbar {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: center;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
     }
-    .toolbar > :last-child {
-        justify-self: end;
+    h1 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-large);
+        font-weight: 700;
+        line-height: 1.1;
     }
-    .month-nav {
+    .note {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--label-2);
+    }
+    .note.warn {
+        color: var(--warn);
+    }
+    .controls {
         display: flex;
         align-items: center;
         gap: 8px;
     }
-    h1 {
-        min-width: 200px;
-        margin: 0;
-        text-align: center;
-        font-family: var(--font-display);
-        font-size: var(--text-title2);
-        font-weight: 600;
+    .stepper {
+        display: flex;
+        align-items: center;
+        padding: 2px;
+        border-radius: 999px;
+        background: var(--fill);
     }
-    .pill {
-        justify-self: start;
-        height: 30px;
+    .today-btn {
+        height: 32px;
         padding: 0 14px;
         border: 0;
         border-radius: 999px;
-        background: var(--fill);
+        background: transparent;
         color: var(--label);
         font-weight: 600;
         cursor: pointer;
     }
-    .pill:hover:not(:disabled) {
+    .today-btn:hover:not(:disabled) {
         background: var(--fill-hover);
     }
-    .pill:disabled {
-        color: var(--label-3);
+    .today-btn:disabled {
+        color: var(--label-2);
         cursor: default;
     }
     .icon-btn {
@@ -433,31 +447,32 @@
         cursor: pointer;
     }
     .icon-btn:hover {
-        background: var(--fill);
+        background: var(--fill-hover);
         color: var(--label);
-    }
-    .note {
-        margin: 6px 0 14px;
-        text-align: center;
-        font-size: 13px;
-        color: var(--label-2);
-    }
-    .note.warn {
-        color: var(--warn);
     }
 
     /* --- month grid and the side panel --- */
     .layout {
+        flex: 1;
+        min-height: 0;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 360px;
-        gap: 20px;
-        align-items: start;
+        grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 420px);
+        gap: 24px;
+    }
+    .month {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
     }
     .weekdays,
     .cells {
         display: grid;
         grid-template-columns: repeat(7, minmax(0, 1fr));
         gap: 6px;
+    }
+    .cells {
+        flex: 1;
+        grid-auto-rows: minmax(96px, 1fr);
     }
     .weekdays {
         margin-bottom: 6px;
@@ -475,7 +490,8 @@
         flex-direction: column;
         align-items: stretch;
         min-width: 0;
-        min-height: 112px;
+        min-height: 0;
+        overflow: hidden;
         padding: 8px;
         border: 1px solid transparent;
         border-radius: var(--radius);
@@ -558,9 +574,7 @@
 
     /* --- side panel --- */
     .side {
-        position: sticky;
-        top: calc(var(--nav-h) + 12px);
-        max-height: calc(100vh - var(--nav-h) - 40px);
+        min-height: 0;
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -707,27 +721,21 @@
         padding-left: 60px;
         padding-right: 60px;
     }
-    :global(html.tv) .side {
-        position: static;
-        max-height: none;
-        overflow: visible;
-    }
-    :global(html.tv) .cell {
-        min-height: 120px;
-    }
+
 
     /* Narrower windows: the list goes under the month. */
     @media (max-width: 1100px) {
+        .page {
+            height: auto;
+        }
         .layout {
             grid-template-columns: minmax(0, 1fr);
         }
-        .side {
-            position: static;
-            max-height: none;
-            overflow: visible;
+        .cells {
+            grid-auto-rows: minmax(92px, auto);
         }
-        .cell {
-            min-height: 92px;
+        .side {
+            overflow: visible;
         }
     }
 
@@ -738,17 +746,19 @@
             padding-top: calc(var(--nav-h) + 8px);
             padding-bottom: calc(var(--tabbar-h) + 24px);
         }
-        .board {
-            padding: 12px;
+        .toolbar {
+            align-items: center;
         }
         h1 {
-            min-width: 0;
-            font-size: var(--text-title3);
+            font-size: var(--text-title2);
         }
         .icon-btn,
-        .pill {
+        .today-btn {
             min-width: 44px;
             height: 44px;
+        }
+        .cells {
+            grid-auto-rows: auto;
         }
         .weekdays,
         .cells {

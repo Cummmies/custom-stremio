@@ -10,6 +10,7 @@
     import { core } from '$lib/core';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
+    import { itemMenu } from '$lib/contextmenu';
     import { catalogKey, homeLayout, interleave, type BoardCatalog, type ResolvedRow } from '$lib/homeLayout.svelte';
     import { catalogTitle } from '$lib/components/CatalogList.svelte';
     import Icon from '$lib/components/Icon.svelte';
@@ -91,7 +92,6 @@
     let renaming = $state<string | null>(null);
     let draftName = $state('');
     function startRename(r: ResolvedRow) {
-        if (r.kind === 'special') return;
         renaming = r.key;
         draftName = r.name;
     }
@@ -104,12 +104,12 @@
         node.select();
     }
 
-    // --- Row menu (everything also reachable without dragging) -------------------------
-    function rowMenu(e: MouseEvent, r: ResolvedRow) {
+    // --- Row menu (everything also reachable without dragging); the ⋯ button and a
+    // right-click on the row both open it -------------------------------------------
+    function rowEntries(r: ResolvedRow): MenuEntry[] {
         const i = rows.indexOf(r);
         const others = onHome.filter((o) => o !== r && canCombine(o));
-        const entries: MenuEntry[] = [];
-        if (r.kind !== 'special') entries.push({ label: 'Rename…', icon: 'pencil', onselect: () => startRename(r) });
+        const entries: MenuEntry[] = [{ label: 'Rename…', icon: 'pencil', onselect: () => startRename(r) }];
         entries.push(
             { label: 'Move Up', disabled: i <= 0, onselect: () => homeLayout.move(rows, i, i - 1) },
             { label: 'Move Down', disabled: i >= rows.length - 1, onselect: () => homeLayout.move(rows, i, i + 1) }
@@ -123,7 +123,10 @@
             });
         }
         if (r.kind === 'merge') entries.push({ label: 'Separate Rows', onselect: () => homeLayout.unmerge(rows, r.key) });
-        menu.toggleFor(e.currentTarget as HTMLElement, entries, 'end');
+        return entries;
+    }
+    function rowMenu(e: MouseEvent, r: ResolvedRow) {
+        menu.toggleFor(e.currentTarget as HTMLElement, rowEntries(r), 'end');
     }
 
     // --- Combine sheet ---------------------------------------------------------------
@@ -283,6 +286,7 @@
         class:dragging={dragKey === r.key}
         class:target={combineTarget === r.key}
         data-row={r.key}
+        use:itemMenu={() => rowEntries(r)}
         onpointerdown={(e) => dragStart(e, r)}
     >
         <span class="handle" aria-hidden="true" title="Drag to reorder, or onto another row to combine">
@@ -312,8 +316,6 @@
                     }}
                     onblur={() => finishRename(true)}
                 />
-            {:else if r.kind === 'special'}
-                <span class="name">{r.name}</span>
             {:else}
                 <button class="name editable" onclick={() => startRename(r)} title="Rename">{r.name}<Icon name="pencil" size={13} /></button>
             {/if}

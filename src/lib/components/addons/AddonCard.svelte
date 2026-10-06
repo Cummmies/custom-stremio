@@ -19,6 +19,7 @@
     import { core } from '$lib/core';
     import { openExternal } from '$lib/links';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
+    import { itemMenu } from '$lib/contextmenu';
     import Icon from '../Icon.svelte';
 
     let { addon, installed }: { addon: AddonDescriptor; installed: boolean } = $props();
@@ -40,8 +41,9 @@
         core.dispatch({ action: 'Ctx', args: { action: 'UninstallAddon', args: addon } });
     }
 
-    function more(el: HTMLElement) {
-        const entries: MenuEntry[] = [
+    /** The ⋯ menu, also the card's right-click menu. */
+    function moreEntries(): MenuEntry[] {
+        return [
             { header: m.name, detail: `Version ${m.version}` },
             ...(configurable ? [{ label: 'Configure…', icon: 'gear', onselect: () => openExternal(configureUrl) } as MenuEntry] : []),
             { label: 'Copy Manifest URL', icon: 'link', onselect: () => navigator.clipboard.writeText(addon.transportUrl) },
@@ -54,11 +56,14 @@
                 onselect: uninstall,
             },
         ];
-        menu.toggleFor(el, entries, 'end');
+    }
+
+    function more(el: HTMLElement) {
+        menu.toggleFor(el, moreEntries(), 'end');
     }
 </script>
 
-<article class="card">
+<article class="card" use:itemMenu={moreEntries}>
     <div class="logo" aria-hidden="true">
         {#if m.logo && !logoFailed}
             <img src={m.logo} alt="" loading="lazy" onerror={() => (logoFailed = true)} />
