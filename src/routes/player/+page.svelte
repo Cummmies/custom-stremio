@@ -1704,7 +1704,7 @@
             {:else}
                 <div class="rate-head">
                     <span class="next-eyebrow">Rate in Lightboxd</span>
-                    <button class="rate-close" onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not now. It waits on Lightboxd’s Home.">
+                    <button class="rate-close" {@attach tvPrompt} onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not now. It waits on Lightboxd’s Home.">
                         <Icon name="close" size={14} />
                     </button>
                 </div>
@@ -2453,6 +2453,25 @@
         right: 60px;
         bottom: 144px;
     }
+    /* Rate in Lightboxd: across from Up Next, read from the couch. */
+    :global(html.tv) .rate {
+        left: 60px;
+        bottom: 144px;
+        width: 520px;
+    }
+    :global(html.tv) .rate-scores button {
+        height: 48px;
+        font-size: 18px;
+    }
+    :global(html.tv) .rate-close {
+        width: 40px;
+        height: 40px;
+    }
+    :global(html.tv) .rate-skip {
+        padding: 8px 12px;
+        margin-left: -12px;
+        font-size: 15px;
+    }
     /* Without the controls, Skip sits near the bottom instead of floating
        where the bar would be. */
     .touch .skip {
@@ -2482,6 +2501,34 @@
         }
         .touch.hidden .next {
             bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+        }
+        /* Rate in Lightboxd: 44 pt scores, inside the safe area, down to the
+           corner with the controls hidden, as Up Next. */
+        .touch .rate {
+            left: max(16px, env(safe-area-inset-left));
+            width: min(500px, calc(100% - 32px));
+            padding: 12px 14px 12px;
+            border-radius: 20px;
+            transition:
+                opacity 240ms var(--ease),
+                bottom 240ms var(--ease);
+        }
+        .touch.hidden .rate {
+            bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+        }
+        .touch .rate-scores button {
+            height: 44px;
+            font-size: 16px;
+        }
+        .touch .rate-close {
+            width: 44px;
+            height: 44px;
+            margin: -12px -12px -12px 0;
+        }
+        .touch .rate-skip {
+            min-height: 44px;
+            margin: 0 0 -8px;
+            font-size: 15px;
         }
         .touch .next-thumb {
             flex: none;

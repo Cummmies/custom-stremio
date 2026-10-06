@@ -8,6 +8,11 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <!-- iOS asks before the app reaches devices on your home network: here, a
+         Lightboxd server (lightboxd.local or a LAN address). Asked only when
+         you connect one in Settings (docs/lightboxd.md). -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Stremio connects to the Lightboxd server on your home network to sync what you watch.</string>
     <!-- Keep the sound going when the screen locks or you switch apps. -->
     <key>UIBackgroundModes</key>
     <array>

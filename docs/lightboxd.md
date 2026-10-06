@@ -4,9 +4,8 @@ Connect this app to [Lightboxd](../../movie%20review/README.md), the self-hosted
 so that Lightboxd provides your history, ratings, watchlist and calendar, and the app
 tells Lightboxd what you watch the moment you watch it.
 
-**Status:** All seven phases are built (Windows first). Phase 1 (Lightboxd: `core/devices.py`, migration 031, `/app-api/v1/*`,
-the `/pair` screen and Settings > Devices, `tests/test_devices.py`); Phase 2 (`src/lib/lightboxd.svelte.ts`, Settings → Lightboxd). **Windows first:** phases 2 onward
-target the desktop app; iPhone and TV come later.
+**Status:** All seven phases are built, on Windows, iPhone and TV. Phase 1 (Lightboxd: `core/devices.py`, migration 031, `/app-api/v1/*`,
+the `/pair` screen and Settings > Devices, `tests/test_devices.py`); Phase 2 (`src/lib/lightboxd.svelte.ts`, Settings → Lightboxd). It started Windows-first; iPhone and TV are now built too (see "iPhone and TV").
 
 **Decided:** the Lightboxd connection is **per profile**: each profile pairs its own Lightboxd account.
 
@@ -244,6 +243,47 @@ doesn't suit an app, and Google sign-in can't work on a TV.
 - **Different from the plan:** no Lightboxd average rating. Lightboxd's own figures come from
   TMDb/OMDb lookups that can download data, so the card sticks to your own data and your
   friends'.
+
+## iPhone and TV — built
+
+Lightboxd now runs on every device, held to Apple's guidelines (iOS for the phone, tvOS's
+focus model for the TV, macOS conventions for the PC). Each device pairs on its own; the
+address comes from the profile's other devices (Settings sync).
+
+- **iPhone:**
+  - `Info.ios.plist` gets `NSLocalNetworkUsageDescription`. iOS asks the first time the app
+    reaches the home network, which is when you press Connect (`privacy.md`: ask only when
+    the feature needs it, with a plain purpose string). Plain http was already allowed. It
+    arrives with the next iPhone build, and needs no native-API bump: without it, iOS still
+    asks, just without the sentence.
+  - The address field uses the URL keyboard, no autocapitalize or autocorrect, Go on return,
+    16 px text so iOS doesn't zoom, and stacks under its label.
+  - Every control is at least 44 pt: Connect, pairing, the player's score card (`.touch`) and
+    the title page's scores (`pointer: coarse`, two rows of five).
+  - Only `lightboxd.local` is tried when no address is given, since a phone isn't running
+    Lightboxd itself. The PC tries `localhost` first.
+- **TV:**
+  - Pairing shows a **QR code** of the approval link (drawn on the TV by `src/lib/qr.ts`,
+    `qrcode-generator`, no network), the short address and the code in large type, as
+    Stremio's own TV sign-in does. There's no Open button, since a TV has no browser to hand
+    off to.
+  - Focus: the remote's spatial navigation reaches every control as is. When Connect gives
+    way to the pairing screen, focus goes to Cancel. `focus-and-selection.md` allows moving
+    focus when the focused item disappears. The player's score card takes focus as Up Next
+    does (only when you're not in the controls), on Not now, so no score is pre-chosen.
+  - TV safe area (60 at the sides) for the card and the Calendar. The Calendar's day list
+    scrolls with the page instead of in its own column.
+- **Generic-UI pass:**
+  - The Calendar's pill row (episode, time and tag each in a capsule, tags in the accent
+    color) became a TV-listings line: "S1 E5 · Chapter 5", premiere or Sub/Dub as plain
+    semibold text, and the air time in a right-hand column.
+  - The notes that explained the feature were cut to what's true and short ("From
+    Lightboxd", "Shows in your library").
+  - Button and title text use title case (Get New Code, Code Expired). The copy names the
+    device ("approve this TV").
+- **Not checked on hardware:** the iPhone permission prompt, `lightboxd.local` resolving on
+  the TV, and scanning the QR code with a phone camera. The browser build can't stand in for
+  those.
 
 ## Later, maybe
 

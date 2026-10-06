@@ -18,7 +18,8 @@
     import { titleTracks } from '$lib/player/titleTracks.svelte';
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
-    import { lightboxd, lightboxdSupported } from '$lib/lightboxd.svelte';
+    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { qrSvg } from '$lib/qr';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
@@ -430,35 +431,49 @@
             </section>
         {/if}
 
-        {#if lightboxdSupported && app.user}
+        {#if app.user}
             <section>
                 <h2>Lightboxd</h2>
                 <div class="group">
                     {#if lightboxd.pairing}
                         {@const p = lightboxd.pairing}
-                        <div class="row">
-                            <div>
-                                {#if p.state === 'waiting'}
-                                    <div class="title">Approve this code in Lightboxd</div>
-                                    <div class="sub">Open Lightboxd, sign in if it asks, and approve the code. This continues by itself.</div>
-                                {:else if p.state === 'denied'}
-                                    <div class="title">The code was denied</div>
-                                    <div class="sub">Lightboxd said no to it. Get a new code to try again.</div>
-                                {:else}
-                                    <div class="title">The code expired</div>
-                                    <div class="sub">Codes last 10 minutes. Get a new code to try again.</div>
-                                {/if}
+                        {#if p.state === 'waiting' && isTV}
+                            <!-- A TV can't open the approval page: it shows it, for a phone. -->
+                            <div class="row pair-tv">
+                                <div class="qr" aria-hidden="true">{@html qrSvg(p.pairUrl)}</div>
+                                <div class="pair-steps">
+                                    <div class="title">Approve This TV in Lightboxd</div>
+                                    <p class="sub">Scan the code with your phone, or open <strong>{p.pairUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')}</strong> and enter</p>
+                                    <div class="pair-code" aria-label={`Code ${p.code}`}>{p.code}</div>
+                                    <p class="sub">This screen continues by itself.</p>
+                                </div>
                             </div>
-                            {#if p.state === 'waiting'}<div class="pair-code" aria-label="Pairing code">{p.code}</div>{/if}
-                        </div>
+                        {:else}
+                            <div class="row stack">
+                                <div>
+                                    {#if p.state === 'waiting'}
+                                        <div class="title">Approve in Lightboxd</div>
+                                        <div class="sub">Open Lightboxd, check the code matches, and approve. This page continues by itself.</div>
+                                    {:else if p.state === 'denied'}
+                                        <div class="title">Code Denied</div>
+                                        <div class="sub">Lightboxd turned this code down. Get a new one to try again.</div>
+                                    {:else}
+                                        <div class="title">Code Expired</div>
+                                        <div class="sub">Codes last 10 minutes. Get a new one to try again.</div>
+                                    {/if}
+                                </div>
+                                {#if p.state === 'waiting'}<div class="pair-code" aria-label={`Code ${p.code}`}>{p.code}</div>{/if}
+                            </div>
+                        {/if}
                         <div class="row compact">
                             <span class="sub">{p.server.replace(/^https?:\/\//, '')}</span>
                             <div class="account-actions">
-                                <button class="btn" onclick={() => lightboxd.cancelPairing()}>Cancel</button>
-                                {#if p.state === 'waiting'}
+                                <!-- TV: the Connect button that had focus is gone; focus goes to the way out. -->
+                                <button class="btn" {@attach (el) => void (isTV && setTimeout(() => el.focus()))} onclick={() => lightboxd.cancelPairing()}>Cancel</button>
+                                {#if p.state !== 'waiting'}
+                                    <button class="btn primary" onclick={() => lightboxd.connect(p.server)}>Get New Code</button>
+                                {:else if !isTV}
                                     <button class="btn primary" onclick={() => openExternal(p.pairUrl)}>Open Lightboxd</button>
-                                {:else}
-                                    <button class="btn primary" onclick={() => lightboxd.connect(p.server)}>Get a New Code</button>
                                 {/if}
                             </div>
                         </div>
@@ -468,9 +483,9 @@
                                 <div class="title">{lightboxd.saved.user?.name ?? 'Lightboxd'}</div>
                                 <div class="sub">
                                     {#if lightboxd.status === 'ok'}
-                                        Connected{lightboxd.saved.user?.handle ? ` as ${lightboxd.saved.user.handle}` : ''} · {lightboxdHost}
+                                        {lightboxd.saved.user?.handle ? `${lightboxd.saved.user.handle} · ` : ''}{lightboxdHost}
                                     {:else if lightboxd.status === 'unreachable'}
-                                        Can’t reach {lightboxdHost} right now. Lightboxd features are hidden until it’s back.
+                                        Can’t reach {lightboxdHost}. Lightboxd stays hidden until it’s back.
                                     {:else}
                                         Checking {lightboxdHost}…
                                     {/if}
@@ -482,8 +497,7 @@
                             <div>
                                 <div class="title">Rows on Home</div>
                                 <div class="sub" class:sync-error={!!lightboxdRowsError}>
-                                    {lightboxdRowsError ??
-                                        'Recently Watched and Airing This Week, from Lightboxd. They’re an addon in your Stremio account, so Customize Home can move or rename them.'}
+                                    {lightboxdRowsError ?? 'Recently Watched and Airing This Week.'}
                                 </div>
                             </div>
                             <Toggle
@@ -491,13 +505,13 @@
                                 checked={lightboxd.rowsInstalled}
                                 onchange={async (v) => {
                                     lightboxdRowsError = null;
-                                    if (!(await lightboxd.setRows(v))) lightboxdRowsError = 'Couldn’t reach Lightboxd to add the rows. Try again when it’s running.';
+                                    if (!(await lightboxd.setRows(v))) lightboxdRowsError = 'Couldn’t reach Lightboxd. Try again when it’s running.';
                                 }}
                             />
                         </div>
                     {:else}
                         <form
-                            class="row"
+                            class="row stack"
                             onsubmit={(e) => {
                                 e.preventDefault();
                                 lightboxd.connect(lightboxdAddress);
@@ -505,22 +519,33 @@
                         >
                             <div>
                                 <label class="title" for="lightboxd-url">
-                                    {lightboxd.status === 'removed' ? 'Lightboxd removed this device' : 'Connect Lightboxd'}
+                                    {lightboxd.status === 'removed' ? 'This Device Was Removed' : 'Connect Lightboxd'}
                                 </label>
                                 <div class="sub" class:sync-error={!!lightboxd.error}>
                                     {#if lightboxd.error}
                                         {lightboxd.error}
                                     {:else if lightboxd.status === 'removed'}
-                                        Connect again to keep using it with this profile.
+                                        Lightboxd removed it. Connect again to keep using it with this profile.
                                     {:else if lightboxd.suggestedServer}
-                                        This profile uses Lightboxd on another device. Connect, then approve this one there too.
+                                        This profile already uses Lightboxd. Connect, then approve this {isTV ? 'TV' : isIOS ? 'iPhone' : 'PC'} too.
                                     {:else}
-                                        Your own movie and TV tracker, for this profile. Leave the address empty to find it on this PC or at lightboxd.local.
+                                        Your watch history, scores and calendar from your Lightboxd server. Leave the address empty to look {isDesktop ? 'on this PC and ' : ''}at lightboxd.local.
                                     {/if}
                                 </div>
                             </div>
                             <div class="url">
-                                <input id="lightboxd-url" type="text" placeholder="lightboxd.local:8000" bind:value={lightboxdAddress} spellcheck="false" autocomplete="off" />
+                                <input
+                                    id="lightboxd-url"
+                                    type="text"
+                                    inputmode="url"
+                                    autocapitalize="off"
+                                    autocorrect="off"
+                                    spellcheck="false"
+                                    autocomplete="off"
+                                    enterkeyhint="go"
+                                    placeholder="lightboxd.local:8000"
+                                    bind:value={lightboxdAddress}
+                                />
                                 <button class="btn primary" type="submit" disabled={lightboxd.connecting}>{lightboxd.connecting ? 'Connecting…' : 'Connect'}</button>
                             </div>
                         </form>
@@ -829,7 +854,41 @@
         font-size: 28px;
         font-weight: 700;
         letter-spacing: 0.08em;
+        font-variant-numeric: tabular-nums;
         user-select: all;
+    }
+    /* TV pairing: the code to scan beside what to do, read from the sofa. */
+    .pair-tv {
+        justify-content: flex-start;
+        gap: 32px;
+        padding: 20px 18px;
+    }
+    .qr {
+        flex: none;
+        width: 200px;
+        height: 200px;
+        padding: 12px;
+        border-radius: var(--radius-l);
+        background: white;
+    }
+    .qr :global(svg) {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .pair-steps {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .pair-steps .sub {
+        margin: 8px 0;
+    }
+    .pair-steps strong {
+        color: var(--label);
+    }
+    .pair-steps .pair-code {
+        font-size: 44px;
     }
     .subhead {
         margin: 14px 0 8px 4px;
@@ -949,6 +1008,22 @@
             width: 100%;
             height: 40px;
             box-sizing: border-box;
+        }
+        /* The Lightboxd address: the field across, Connect beside it, 44 pt. */
+        .row.stack .url input {
+            flex: 1;
+            min-width: 0;
+            width: auto;
+            height: 44px;
+            font-size: 16px; /* 16 px and up: iOS doesn't zoom into the field */
+        }
+        .row.stack .url .btn,
+        .account-actions .btn {
+            height: 44px;
+        }
+        .pair-tv {
+            flex-direction: column;
+            align-items: flex-start;
         }
     }
 </style>

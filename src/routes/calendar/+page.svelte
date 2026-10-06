@@ -241,10 +241,10 @@
         source === 'pending'
             ? 'Checking Lightboxd…'
             : source === 'lightboxd'
-            ? 'From Lightboxd: new episodes of what you’re watching and premieres from your watchlist.'
+            ? 'From Lightboxd'
             : lightboxdDown
-              ? 'Lightboxd can’t be reached, so this is Stremio’s calendar: new episodes of the shows in your library.'
-              : 'New episodes of the shows in your library.'
+              ? 'Lightboxd isn’t reachable. Showing shows in your library.'
+              : 'Shows in your library'
     );
     const MAX_CHIPS = 3;
 </script>
@@ -360,13 +360,10 @@
             <span class="poster">{#if e.poster}<img src={e.poster} alt="" loading="lazy" />{/if}</span>
             <span class="release-text">
                 <span class="release-name">{e.name}</span>
-                {#if e.episodeName}<span class="release-sub">{e.episodeName}</span>{/if}
-                <span class="badges">
-                    {#if e.label}<span class="badge">{e.label}</span>{/if}
-                    {#if time}<span class="badge">{time}</span>{/if}
-                    {#each e.tags as tag (tag)}<span class="badge tag">{tag}</span>{/each}
-                </span>
+                {#if e.label || e.episodeName}<span class="release-sub">{[e.label, e.episodeName].filter(Boolean).join(' · ')}</span>{/if}
+                {#if e.tags.length}<span class="release-tags">{e.tags.join(' · ')}</span>{/if}
             </span>
+            {#if time}<span class="release-time">{time}</span>{/if}
         </svelte:element>
     </li>
 {/snippet}
@@ -671,7 +668,7 @@
     .release-text {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 3px;
         min-width: 0;
     }
     .release-name {
@@ -689,21 +686,34 @@
         white-space: nowrap;
         text-overflow: ellipsis;
     }
-    .badges {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
+    .release-tags {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--label);
     }
-    .badge {
-        padding: 2px 7px;
-        border-radius: var(--radius-s);
-        background: rgb(255 255 255 / 0.08);
-        font-size: 11px;
+    .release-time {
+        flex: none;
+        margin-left: auto;
+        align-self: flex-start;
+        padding-top: 2px;
+        font-size: 13px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
+        color: var(--label-2);
     }
-    .badge.tag {
-        color: var(--accent-text);
+    /* TV: the page scrolls as a whole (the remote moves through the days and
+       the list), inside the TV's safe area. */
+    :global(html.tv) .page {
+        padding-left: 60px;
+        padding-right: 60px;
+    }
+    :global(html.tv) .side {
+        position: static;
+        max-height: none;
+        overflow: visible;
+    }
+    :global(html.tv) .cell {
+        min-height: 120px;
     }
 
     /* Narrower windows: the list goes under the month. */

@@ -302,4 +302,18 @@
         font-size: 13px;
         color: var(--bad);
     }
+    /* Touch: 44 pt targets, so the scores take two rows of five. */
+    @media (pointer: coarse) {
+        .btn {
+            height: 44px;
+            padding: 0 16px;
+        }
+        .scores {
+            grid-template-columns: repeat(5, 1fr);
+        }
+        .scores button {
+            height: 44px;
+            font-size: 16px;
+        }
+    }
 </style>

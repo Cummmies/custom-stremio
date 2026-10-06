@@ -29,13 +29,14 @@ import { app } from '$lib/app.svelte';
 import { core } from '$lib/core';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
 
-/** Windows first; the iPhone and TV come later (docs/lightboxd.md). */
-export const lightboxdSupported = !isIOS && !isTV;
-
-const PLATFORM = isDesktop ? 'windows' : 'web';
+/** What Lightboxd's Devices list calls this one ("Windows", "iPhone", "TV"). */
+const PLATFORM = isDesktop ? 'windows' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
 const DEVICE_NAME = 'Custom Stremio';
-/** Where Lightboxd usually is, tried in order when no address is given. */
-const DEFAULT_SERVERS = ['http://localhost:8000', 'http://lightboxd.local:8000'];
+/**
+ * Where Lightboxd usually is, tried in order when no address is given. Only
+ * the PC can be running it itself; a phone or TV finds it on the network.
+ */
+const DEFAULT_SERVERS = isDesktop ? ['http://localhost:8000', 'http://lightboxd.local:8000'] : ['http://lightboxd.local:8000'];
 const TIMEOUT_MS = 4000;
 const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
@@ -177,7 +178,7 @@ class Lightboxd {
     lastResult = $state<{ event: WatchEvent; result: EventResult } | null>(null);
 
     start() {
-        if (this.#started || !lightboxdSupported) return;
+        if (this.#started) return;
         this.#started = true;
         $effect.root(() => {
             $effect(() => {
@@ -450,7 +451,9 @@ class Lightboxd {
                 ? 'Too many tries. Wait a few minutes and try again.'
                 : server
                   ? `Couldn’t reach Lightboxd at ${server.replace(/^https?:\/\//, '')}. Check that it’s running and the address is right.`
-                  : 'Couldn’t find Lightboxd on this PC or at lightboxd.local. Type its address.';
+                  : isDesktop
+                  ? 'Couldn’t find Lightboxd on this PC or at lightboxd.local. Enter its address.'
+                  : 'Couldn’t find Lightboxd at lightboxd.local. Enter its address.';
             return;
         }
         const { server: at, start } = found;
