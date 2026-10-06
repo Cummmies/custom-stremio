@@ -5,6 +5,7 @@ import type { Ctx, Library, MetaItemPreview, ServerStatus } from '$lib/core/type
 import { profiles } from '$lib/profiles.svelte';
 import { anime } from '$lib/anime.svelte';
 import { cloudSync } from '$lib/cloudSync.svelte';
+import { lightboxd } from '$lib/lightboxd.svelte';
 import { playerPrefs } from '$lib/player/prefs.svelte';
 import { addonLinkUrl, linkHandlingWanted } from '$lib/addonLinks';
 import { isDesktop } from '$lib/platform';
@@ -36,6 +37,8 @@ class AppState {
         core.watch<Library>('library', (s) => (this.library = s));
         // Profile picture, Home rows and settings follow your account (via an addon).
         cloudSync.start();
+        // Your Lightboxd tracker, when this profile has connected one.
+        lightboxd.start();
         watchServer((s) => (this.server = s));
 
         // The whole library stays loaded; screens filter it locally, which is instant.

@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { MetaItem } from '$lib/core/types';
     import { openExternal } from '$lib/links';
+    import LightboxdCard from './LightboxdCard.svelte';
 
     let { meta }: { meta: MetaItem } = $props();
 
@@ -43,6 +44,8 @@
 </script>
 
 <aside class="panel" aria-label="Details">
+    <LightboxdCard id={meta.id} type={meta.type} name={meta.name} />
+
     {#if rows.length || imdb}
         <section class="card">
             <dl>

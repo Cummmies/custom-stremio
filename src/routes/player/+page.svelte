@@ -33,6 +33,7 @@
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
     import { fmtTime } from '$lib/player/format';
     import { titleHref } from '$lib/links';
+    import { lightboxd } from '$lib/lightboxd.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import SeekBar from '$lib/player/SeekBar.svelte';
     import SeekPreview from '$lib/player/SeekPreview.svelte';
@@ -814,6 +815,86 @@
         const inCredits = currentSegment?.kind === 'credits';
         showNext = !!model?.nextVideo && !!d && (inCredits || d - player.time <= nextThreshold) && !nextDismissed && !pip;
     });
+
+    // Lightboxd (docs/lightboxd.md): tells it you started this (a minute in) and
+    // finished it (when the credits start, or 90% in when where they are isn't
+    // known), once each per episode or movie. Nothing when it isn't connected.
+    const LIGHTBOXD_STARTED_S = 60;
+    const LIGHTBOXD_FINISHED_SHARE = 0.9;
+    let lightboxdSent = { key: '', started: false, finished: false };
+    $effect(() => {
+        const t = player.time;
+        const d = player.duration;
+        const inCredits = currentSegment?.kind === 'credits';
+        untrack(() => {
+            if (!lightboxd.saved?.token || !firstFrameSeen || !id) return;
+            if (type !== 'movie' && type !== 'series') return;
+            if (!/^(tt\d+|kitsu:\d+)$/.test(id) || (type === 'series' && !videoId)) return;
+            if (d != null && d < ERROR_CLIP_MAX_S) return; // an addon's error clip
+            const key = `${id}|${videoId ?? ''}`;
+            if (lightboxdSent.key !== key) lightboxdSent = { key, started: false, finished: false };
+            if (!lightboxdSent.finished && d && (inCredits || t >= d * LIGHTBOXD_FINISHED_SHARE)) {
+                lightboxdSent.finished = lightboxdSent.started = true;
+                sendToLightboxd('finished', type, id, videoId);
+            } else if (!lightboxdSent.started && t >= LIGHTBOXD_STARTED_S) {
+                lightboxdSent.started = true;
+                sendToLightboxd('started', type, id, videoId);
+            }
+        });
+    });
+
+    async function sendToLightboxd(kind: 'started' | 'finished', type: 'movie' | 'series', id: string, video: string | null) {
+        const at = new Date().toISOString();
+        const name = metaName ?? undefined;
+        // A movie's watch count from the stored library record; Lightboxd's own
+        // Stremio sync counts with the same number, so the two never log it twice.
+        let times: number | undefined;
+        if (type === 'movie') {
+            const state = await core
+                .getState<{ libraryItem: { state?: { timesWatched?: number } } | null }>('player')
+                .catch(() => null);
+            times = state?.libraryItem?.state?.timesWatched || undefined;
+        }
+        lightboxd.track({ kind, type, id, video_id: type === 'series' ? (video ?? undefined) : undefined, name, times_watched: times, at });
+    }
+
+    // Lightboxd's rating prompt: when finishing this logged something new and
+    // unscored there (a movie, or the last episode of a show), ask for a score
+    // during the credits. Closing it is fine: it waits on Lightboxd's Home.
+    type RatePrompt = { logId: number; name: string; state: 'ask' | 'saving' | 'done' | 'failed'; score?: number };
+    let ratePrompt = $state<RatePrompt | null>(null);
+    const rateAsked = new Set<number>();
+    /** A result for an event from long ago (sent late from the queue) doesn't ask. */
+    const RATE_FRESH_MS = 30 * 60_000;
+    $effect(() => {
+        const last = lightboxd.lastResult;
+        untrack(() => {
+            const logId = last?.result.log_id;
+            if (!last || !logId || !last.result.needs_rating || rateAsked.has(logId)) return;
+            if (Date.now() - Date.parse(last.event.at) > RATE_FRESH_MS) return;
+            if (last.event.id !== id || (type === 'series' && last.event.video_id !== videoId)) return;
+            rateAsked.add(logId);
+            ratePrompt = { logId, name: last.event.name ?? heading, state: 'ask' };
+        });
+    });
+    // Another episode or movie: the prompt was about the last one.
+    $effect(() => {
+        void id;
+        void videoId;
+        untrack(() => (ratePrompt = null));
+    });
+
+    async function answerRate(answer: number | 'skip') {
+        const asked = ratePrompt;
+        if (!asked || asked.state !== 'ask') return;
+        ratePrompt = { ...asked, state: 'saving' };
+        const ok = await lightboxd.answerRating(asked.logId, answer);
+        if (ratePrompt?.logId !== asked.logId) return;
+        if (!ok) ratePrompt = { ...asked, state: 'failed' };
+        else if (typeof answer === 'number') ratePrompt = { ...asked, state: 'done', score: answer };
+        else ratePrompt = null;
+        if (ratePrompt) setTimeout(() => ratePrompt?.logId === asked.logId && (ratePrompt = null), 3000);
+    }
 
     // With "Play next episode automatically" on, the card counts down and starts the
     // next episode when it runs out: `AUTOPLAY_COUNTDOWN` seconds into the credits,
@@ -1614,6 +1695,30 @@
         </aside>
     {/if}
 
+    {#if ratePrompt}
+        <aside class="rate" aria-label="Rate in Lightboxd" out:fade={{ duration: 200 }}>
+            {#if ratePrompt.state === 'done'}
+                <span class="rate-note" role="status">Rated {ratePrompt.score} out of 10 in Lightboxd</span>
+            {:else if ratePrompt.state === 'failed'}
+                <span class="rate-note" role="status">Couldn’t reach Lightboxd. It’s waiting on Lightboxd’s Home to rate.</span>
+            {:else}
+                <div class="rate-head">
+                    <span class="next-eyebrow">Rate in Lightboxd</span>
+                    <button class="rate-close" onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not now. It waits on Lightboxd’s Home.">
+                        <Icon name="close" size={14} />
+                    </button>
+                </div>
+                <span class="next-title rate-name">{ratePrompt.name}</span>
+                <div class="rate-scores" role="group" aria-label="Score out of 10">
+                    {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as n (n)}
+                        <button disabled={ratePrompt.state === 'saving'} onclick={() => answerRate(n)} aria-label={`${n} out of 10`}>{n}</button>
+                    {/each}
+                </div>
+                <button class="rate-skip" disabled={ratePrompt.state === 'saving'} onclick={() => answerRate('skip')}>Don’t rate</button>
+            {/if}
+        </aside>
+    {/if}
+
     <!-- Touch: keep the controls up while dragging the seek bar. -->
     <footer class="bottom" onpointerdown={poke} onpointermove={poke}>
         <SeekBar time={shownTime} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
@@ -2048,6 +2153,94 @@
     /* Counting down: the button fills from the left as the time runs out. */
     .next-actions .primary.counting {
         background: linear-gradient(to right, white calc((1 - var(--left)) * 100%), rgb(255 255 255 / 0.72) 0);
+    }
+
+    /* Rate in Lightboxd: bottom left, clear of Skip and Up Next on the right. */
+    .rate {
+        position: absolute;
+        left: 24px;
+        bottom: 120px;
+        z-index: 3;
+        width: 340px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 14px 16px 16px;
+        border-radius: var(--radius-l);
+        background: rgb(24 24 32 / 0.9);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgb(255 255 255 / 0.1);
+        animation: rise var(--slow) var(--ease);
+    }
+    .rate-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .rate-close {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        margin: -4px -6px -4px 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: rgb(255 255 255 / 0.6);
+        cursor: pointer;
+    }
+    .rate-close:hover {
+        background: rgb(255 255 255 / 0.12);
+        color: white;
+    }
+    .rate-name {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .rate-scores {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 4px;
+        margin-top: 6px;
+    }
+    .rate-scores button {
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        background: rgb(255 255 255 / 0.12);
+        color: white;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+    }
+    .rate-scores button:hover:not(:disabled),
+    .rate-scores button:focus-visible {
+        background: white;
+        color: black;
+    }
+    .rate-skip {
+        align-self: flex-start;
+        margin-top: 4px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: rgb(255 255 255 / 0.6);
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .rate-skip:hover {
+        color: white;
+    }
+    .rate button:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+    .rate-note {
+        font-size: 14px;
     }
 
     /* Still watching? */

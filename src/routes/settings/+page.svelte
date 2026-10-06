@@ -18,6 +18,8 @@
     import { titleTracks } from '$lib/player/titleTracks.svelte';
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
+    import { lightboxd, lightboxdSupported } from '$lib/lightboxd.svelte';
+    import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
@@ -78,6 +80,15 @@
         update({ streamingServerUrl: url });
         core.dispatch({ action: 'StreamingServer', args: { action: 'Reload' } });
     }
+
+    // Lightboxd ($lib/lightboxd.svelte.ts): the address to connect to, filled
+    // in with this device's last one, or the one this profile uses elsewhere.
+    let lightboxdAddress = $state('');
+    $effect(() => {
+        lightboxdAddress = lightboxd.suggestedServer?.replace(/^http:\/\//, '') ?? '';
+    });
+    let lightboxdRowsError = $state<string | null>(null);
+    const lightboxdHost = $derived(lightboxd.saved?.server.replace(/^https?:\/\//, '') ?? '');
 
     // Every shortcut in the app. Keep in step with the key handlers in
     // routes/+layout.svelte, routes/player/+page.svelte and SeekBar.svelte.
@@ -419,6 +430,105 @@
             </section>
         {/if}
 
+        {#if lightboxdSupported && app.user}
+            <section>
+                <h2>Lightboxd</h2>
+                <div class="group">
+                    {#if lightboxd.pairing}
+                        {@const p = lightboxd.pairing}
+                        <div class="row">
+                            <div>
+                                {#if p.state === 'waiting'}
+                                    <div class="title">Approve this code in Lightboxd</div>
+                                    <div class="sub">Open Lightboxd, sign in if it asks, and approve the code. This continues by itself.</div>
+                                {:else if p.state === 'denied'}
+                                    <div class="title">The code was denied</div>
+                                    <div class="sub">Lightboxd said no to it. Get a new code to try again.</div>
+                                {:else}
+                                    <div class="title">The code expired</div>
+                                    <div class="sub">Codes last 10 minutes. Get a new code to try again.</div>
+                                {/if}
+                            </div>
+                            {#if p.state === 'waiting'}<div class="pair-code" aria-label="Pairing code">{p.code}</div>{/if}
+                        </div>
+                        <div class="row compact">
+                            <span class="sub">{p.server.replace(/^https?:\/\//, '')}</span>
+                            <div class="account-actions">
+                                <button class="btn" onclick={() => lightboxd.cancelPairing()}>Cancel</button>
+                                {#if p.state === 'waiting'}
+                                    <button class="btn primary" onclick={() => openExternal(p.pairUrl)}>Open Lightboxd</button>
+                                {:else}
+                                    <button class="btn primary" onclick={() => lightboxd.connect(p.server)}>Get a New Code</button>
+                                {/if}
+                            </div>
+                        </div>
+                    {:else if lightboxd.saved?.token}
+                        <div class="row">
+                            <div>
+                                <div class="title">{lightboxd.saved.user?.name ?? 'Lightboxd'}</div>
+                                <div class="sub">
+                                    {#if lightboxd.status === 'ok'}
+                                        Connected{lightboxd.saved.user?.handle ? ` as ${lightboxd.saved.user.handle}` : ''} · {lightboxdHost}
+                                    {:else if lightboxd.status === 'unreachable'}
+                                        Can’t reach {lightboxdHost} right now. Lightboxd features are hidden until it’s back.
+                                    {:else}
+                                        Checking {lightboxdHost}…
+                                    {/if}
+                                </div>
+                            </div>
+                            <button class="btn" onclick={() => lightboxd.disconnect()}>Disconnect</button>
+                        </div>
+                        <div class="row">
+                            <div>
+                                <div class="title">Rows on Home</div>
+                                <div class="sub" class:sync-error={!!lightboxdRowsError}>
+                                    {lightboxdRowsError ??
+                                        'Recently Watched and Airing This Week, from Lightboxd. They’re an addon in your Stremio account, so Customize Home can move or rename them.'}
+                                </div>
+                            </div>
+                            <Toggle
+                                label="Lightboxd rows on Home"
+                                checked={lightboxd.rowsInstalled}
+                                onchange={async (v) => {
+                                    lightboxdRowsError = null;
+                                    if (!(await lightboxd.setRows(v))) lightboxdRowsError = 'Couldn’t reach Lightboxd to add the rows. Try again when it’s running.';
+                                }}
+                            />
+                        </div>
+                    {:else}
+                        <form
+                            class="row"
+                            onsubmit={(e) => {
+                                e.preventDefault();
+                                lightboxd.connect(lightboxdAddress);
+                            }}
+                        >
+                            <div>
+                                <label class="title" for="lightboxd-url">
+                                    {lightboxd.status === 'removed' ? 'Lightboxd removed this device' : 'Connect Lightboxd'}
+                                </label>
+                                <div class="sub" class:sync-error={!!lightboxd.error}>
+                                    {#if lightboxd.error}
+                                        {lightboxd.error}
+                                    {:else if lightboxd.status === 'removed'}
+                                        Connect again to keep using it with this profile.
+                                    {:else if lightboxd.suggestedServer}
+                                        This profile uses Lightboxd on another device. Connect, then approve this one there too.
+                                    {:else}
+                                        Your own movie and TV tracker, for this profile. Leave the address empty to find it on this PC or at lightboxd.local.
+                                    {/if}
+                                </div>
+                            </div>
+                            <div class="url">
+                                <input id="lightboxd-url" type="text" placeholder="lightboxd.local:8000" bind:value={lightboxdAddress} spellcheck="false" autocomplete="off" />
+                                <button class="btn primary" type="submit" disabled={lightboxd.connecting}>{lightboxd.connecting ? 'Connecting…' : 'Connect'}</button>
+                            </div>
+                        </form>
+                    {/if}
+                </div>
+            </section>
+        {/if}
+
         {#if !isIOS && !isTV}<!-- iOS and TVs have no streaming server -->
         <section>
             <h2>Streaming Server</h2>
@@ -712,6 +822,14 @@
     .url input:focus {
         outline: none;
         border-color: var(--accent-hover);
+    }
+    .pair-code {
+        flex: none;
+        font-family: var(--font-display);
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        user-select: all;
     }
     .subhead {
         margin: 14px 0 8px 4px;

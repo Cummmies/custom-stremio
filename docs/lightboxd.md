@@ -1,0 +1,269 @@
+# Lightboxd integration plan
+
+Connect this app to [Lightboxd](../../movie%20review/README.md), the self-hosted movie/TV/anime tracker,
+so that Lightboxd provides your history, ratings, watchlist and calendar, and the app
+tells Lightboxd what you watch the moment you watch it.
+
+**Status:** All seven phases are built (Windows first). Phase 1 (Lightboxd: `core/devices.py`, migration 031, `/app-api/v1/*`,
+the `/pair` screen and Settings > Devices, `tests/test_devices.py`); Phase 2 (`src/lib/lightboxd.svelte.ts`, Settings → Lightboxd). **Windows first:** phases 2 onward
+target the desktop app; iPhone and TV come later.
+
+**Decided:** the Lightboxd connection is **per profile**: each profile pairs its own Lightboxd account.
+
+## Ground rules
+
+**Server-first.** Lightboxd runs in one place (a PC, Docker or a home server, reached at
+`lightboxd.local` or over Tailscale). Every device (Windows, iPhone, TV) connects to that
+one server. Nothing is embedded in the app, so every device sees the same history.
+
+**Who owns what:**
+
+| Data | Owner | Notes |
+| --- | --- | --- |
+| Resume points, Continue Watching, the Stremio library | Stremio | Untouched by this work. |
+| Watch history, ratings, reviews | Lightboxd | The app sends events; Lightboxd decides what becomes history. |
+| Watchlist and status (watching, plan to watch, dropped…) | Lightboxd | |
+| Calendar | Lightboxd | Includes dub dates and new seasons. |
+
+Lightboxd's existing Stremio sync rules (`instructions/stremio_sync_plan.md` §1: add only,
+deletions stick, your own logs win, progress only moves forward) apply to everything the
+app sends too.
+
+**When the server is down, the app hides Lightboxd quietly.** Every Lightboxd feature
+(rows, the Calendar tab, the title-page section, the rating prompt) disappears or stays
+hidden when the server can't be reached. It never shows an error card on Home and never
+slows anything else down. Watch events wait in a queue and are sent once the server is back.
+
+---
+
+## Phase 1 — Lightboxd: device tokens and pairing *(Lightboxd repo)* — built
+
+Today Lightboxd signs people in only with a session cookie plus a CSRF token. That
+doesn't suit an app, and Google sign-in can't work on a TV.
+
+1. **Migration `031_add_devices.sql`**
+   - `device_tokens`: `id`, `user_id`, `name` ("Living room TV"), `platform`, `scope`
+     (`app` now, `addon` for Phase 5), `token_hash` (SHA-256; the token is shown only once),
+     `created_at`, `last_used_at`. Revoking deletes the row.
+   - `device_pair_codes`: `code` (e.g. `K7QM-4P2X`), `poll_secret_hash`, `device_name`,
+     `platform`, `expires_at` (10 min, stored in the DB like migration 019), `approved_user_id`,
+     `denied`. The token is created on the first poll after approval, so it's never stored raw.
+2. **Pairing flow** (the same shape as Stremio's own Link sign-in, which the app already uses in `LinkLogin.svelte`):
+   1. The app calls `POST /app-api/v1/pair/start {name, platform}` and gets back `{code, pair_url, poll_secret, expires_in}`.
+   2. The app shows the code and a QR code for `pair_url` (`http://lightboxd.local:8000/pair?code=…`).
+   3. You open that link on your phone or PC while signed in to Lightboxd. It asks: *Pair "Living room TV"?* Approving sends `POST /api/device/pair/approve` (cookie + CSRF).
+   4. The app polls `POST /app-api/v1/pair/status` with its `poll_secret` in the body. Once the pairing is approved, it receives the token, exactly once.
+   - Rate-limit `start` and wrong codes with `core/ratelimit.py`.
+3. **A separate `/app-api/v1/*` surface** that accepts **only** `Authorization: Bearer <token>`
+   and ignores cookies:
+   - Because nothing is sent automatically, it needs no CSRF and can allow **any origin
+     without credentials** in CORS. That matters because the app's origins are awkward:
+     `http://tauri.localhost` (Windows), `tauri://localhost` (iOS) and `null` (the TV's
+     `file://`). The existing cookie API's CORS settings stay exactly as they are.
+   - A versioned path gives the app a stable contract while the web UI's `/api/*` keeps changing.
+4. **Lightboxd Settings → Devices**: a list of paired devices (name, platform, last used)
+   with **Revoke**.
+5. Also `GET /app-api/v1/me` (the app's connection check: who it's signed in as) and
+   `POST /app-api/v1/disconnect` (the app's own Disconnect).
+6. Tests: pairing happy path, expiry, deny, wrong code, revoked token, a cookie on `/app-api`
+   being ignored, CSRF skipped only there, CORS headers on 401s, rate limits.
+
+## Phase 2 — App: connect to Lightboxd *(this repo)* — built
+
+1. **`src/lib/lightboxd.svelte.ts`**: holds the server address and token **per profile on
+   this device** (`localStorage` key `lightboxd:<uid>`, which the desktop app mirrors to
+   disk like everything else), plus `status`: `off | checking | ok | unreachable | removed`.
+   `ready` (status `ok`) is what later phases check before showing anything.
+   - Every request gives up after 4 s and never throws into the UI. `request()` returns
+     `null` on any failure and updates `status`.
+   - It checks `GET /app-api/v1/me` (not `/health`, which only allows Lightboxd's own
+     origins) when the profile is known, when the app returns to the foreground (at most
+     once a minute), and every minute while `unreachable`.
+   - On a 401 it drops the token but keeps the address: status `removed`, and Settings
+     offers to connect again.
+   - Started from `app.start()`; follows profile switches.
+2. **Settings → Lightboxd** (only for a signed-in profile, not on iPhone or TV yet):
+   - **Connect:** an address field. Left empty, the app tries `localhost:8000`, then
+     `lightboxd.local:8000`.
+   - **Pairing:** the code, with an **Open Lightboxd** button that opens the approval page
+     in the browser. There's no QR code on the PC; it comes with the TV.
+   - **Connected:** the Lightboxd name and handle, a status line, and **Disconnect**.
+   - The device is called "Custom Stremio" with platform `windows`.
+3. **The address follows the profile** through the Settings sync addon (`cloudSync.svelte.ts`,
+   part `lightboxd`: `{server}`). The token never goes there; each device pairs itself.
+   - A device shares its address when it pairs, or when the profile has none yet. Two devices
+     reaching Lightboxd by different addresses (`lightboxd.local` vs Tailscale) don't keep
+     overwriting each other.
+   - `localhost`, `127.x` and `::1` are never shared, since they mean nothing on another device.
+   - A new device's Settings fills the address in ("This profile uses Lightboxd on another
+     device. Connect, then approve this one there too."), so it only takes Connect and an
+     approval.
+   - Chosen over a separate Lightboxd sync addon: the Settings sync is already per Stremio
+     account (per profile), already merges each part by when it changed, and can be read
+     before Lightboxd is connected, which a Lightboxd-served addon couldn't be.
+4. **Platform checks for later:**
+   - **iOS:** plain `http://` to a `.local` address or a LAN IP needs
+     `NSAllowsLocalNetworking` and an `NSLocalNetworkUsageDescription` (iOS asks for
+     Local Network permission). Tailscale HTTPS avoids both.
+   - **TV (Tizen):** the widget's `config.xml` needs network access to the server, and
+     `http` to a LAN address must be allowed.
+
+## Phase 3 — Send watch events right away — built
+
+1. **Lightboxd: `POST /app-api/v1/events`** (`core/app_events.py`, `tests/test_app_events.py`)
+   `{kind: "started" | "finished", type: "movie" | "series", id: "tt…" | "kitsu:…", video_id: "tt…:2:5", name, times_watched, at}`
+   - It uses the sync's own functions (`apply_movie`, `apply_series_title`, and
+     `EpisodePlacer`, moved out of `process_item` so both share it), so the **`stremio_imports`
+     ledger keys are the same**. The poller and a push can never log the same watch twice,
+     resending is harmless, and a deleted log stays deleted.
+   - **Movies:** `finished` logs it, dated that day. The ledger key uses Stremio's
+     times-watched count (the app reads it from the player's library record), so a rewatch
+     is a new log. `started` sets it to Watching.
+   - **Shows:** `finished` raises the running episode count, and the last episode of an
+     ended show completes it with a log. `started` sets it to Watching. Specials don't count.
+   - It returns `{result: applied | unchanged | unmatched, title_id, note, log_id, needs_rating}`.
+   - It shares the sync's per-user lock. While a Stremio sync is running it answers 503 with
+     `Retry-After`, and the app tries again.
+   - The poller stays. It still catches what you watch in the official Stremio apps.
+2. **App: when to send** (`routes/player/+page.svelte`). `started` goes a minute in.
+   `finished` goes when the credits segment starts, or at 90% if the credits aren't known.
+   Each is sent once per episode or movie, only for `tt…`/`kitsu:…` titles, never for error
+   clips, and only while connected.
+3. **Queue** (`lightboxd.track()`). Events are saved per profile in `localStorage`
+   (`lightboxd-queue:<uid>`) and sent in order whenever the status is `ok`. They're kept
+   while Lightboxd is unreachable, busy or rejecting this device, and dropped once taken or
+   refused as malformed. Anything older than 30 days or beyond 200 events is dropped.
+   `lightboxd.lastResult` holds the last applied event, for Phase 4's rating prompt.
+4. **Not tested in a real player:** the browser dev build can't play video. The queue, the
+   endpoint and the round trip were tested against a throwaway Lightboxd.
+
+## Phase 4 — Rating prompt at the credits — built
+
+- **When:** a `finished` event that made a new, unscored log (`needs_rating` in the reply).
+  That's a movie, or the last episode of an ended show. Lightboxd keeps shows as a running
+  count with one log at the end, so there's nothing to rate per season. An anime's seasons
+  are separate AniList titles, so finishing one does ask. It only asks about what's playing
+  now, and not for an event sent late from the queue (over 30 minutes old).
+- **Card** (`routes/player/+page.svelte`): bottom left, clear of Skip and Up Next on the
+  right. It has buttons **1–10**, **Don't rate**, and **✕** (not now). Lightboxd scores out
+  of 10 in 0.1 steps; whole numbers are quicker in the credits, and decimals can be set in
+  Lightboxd. It says "Rated 8 out of 10 in Lightboxd" and fades out. If Lightboxd can't be
+  reached, it says the title is waiting on Lightboxd's Home.
+- **Lightboxd:** `POST /app-api/v1/ratings/{log_id}` (`{rating}`), `…/later` and `…/skip`.
+  These are the same queue as Home's "Rate what you finished", so ✕ (no request) leaves the
+  title there, and rating or skipping in either place clears it from both.
+- **App:** `lightboxd.answerRating(logId, score | 'later' | 'skip')`.
+- **Later, with the TV:** remote focus for the card (D-pad across 1–10).
+
+## Phase 5 — Lightboxd rows as a Stremio addon — built
+
+1. **Lightboxd serves an addon** (`core/addon.py`, `tests/test_addon.py`):
+   `/addon/{token}/manifest.json` and `/addon/{token}/catalog/Lightboxd/{id}.json`.
+   - **Recently Watched** (`lightboxd.recent`): like Lightboxd's Home row, which is logs
+     plus shows whose episode count went up, newest first and one tile per title. It shows
+     "S1 E3" for a show and "★ 8" for a scored log.
+   - **Airing This Week** (`lightboxd.airing`): the calendar's next seven days in your
+     sub/dub preference, one tile per title (its next release), shown as "Tomorrow · S1 E4".
+   - Each row mixes movies and shows, so the catalogs have a type of their own,
+     `Lightboxd`. Stremio shows that next to the name ("Recently Watched · Lightboxd"), and
+     the rows stay off the Movies and Series pages.
+   - Metas use IMDb IDs, or `kitsu:` (through the crossref) for anime with none, so
+     Cinemeta and Kitsu fill in details and streams. Titles with neither are left out.
+   - The link carries a **read-only `addon` token** (`device_tokens.scope`). An app's link
+     points at the app's own token (`parent_id`, migration 032), so asking again replaces it
+     and removing the device removes it. Device tokens and addon tokens don't open each
+     other's endpoints.
+   - CORS allows any origin there, and nothing under `/addon/` reads cookies. Catalogs can
+     be cached for 60 s, the manifest for an hour.
+2. **App** (`lightboxd.svelte.ts`): the first successful connection asks for a link
+   (`POST /app-api/v1/addon`) and installs it. Settings → Lightboxd → **Rows on Home** turns
+   them on (a fresh link) or off. Disconnect, or Lightboxd removing the device, uninstalls
+   it. If you remove it on the Addons page, it isn't put back.
+3. **Official Stremio apps:** Lightboxd Settings → Devices → **Stremio addon link** shows a
+   link once, with Copy. It's listed under Devices as "Addon link" and turned off with Remove.
+4. **When Lightboxd is down**, the catalogs fail and Home already leaves out rows whose
+   catalogs fail or are empty (`CatalogList.svelte`). There was nothing to add.
+5. **Also changed:** an episode finished in the app now stamps `watchlist.last_progress_at`
+   even when that's how the show got onto the watchlist. Otherwise it was missing from
+   Recently Watched, on Lightboxd's Home too.
+6. **Worth knowing:** the addon is saved in your Stremio account, so it reaches every
+   device signed in to it, with the address the app connected through. Connected via
+   `localhost`, the rows only work on this PC. Connect through `lightboxd.local` (or
+   Tailscale) for other devices. The token is in the URL, so it can show up in server
+   access logs; it's read-only.
+
+## Phase 6 — Calendar tab — built
+
+- **Lightboxd:** `GET /app-api/v1/calendar?days=14` (`addon.calendar_events`). It returns
+  every release of the calendar feed (in the preferred sub/dub track), each with its Stremio
+  ID, poster, season and episode, `kind` (series, season or movie premiere, or an episode)
+  and `track`. `datetime` is a UTC moment only when the release has a time of day; a
+  date-only release keeps its plain date. It starts a day early so the app's time zone can't
+  lose an evening release.
+- **App:** `src/routes/calendar/+page.svelte`, an agenda list grouped by day (Today,
+  Tomorrow, then "Wednesday, October 7") for the next two weeks:
+  - Releases with a time are converted to local time and placed on the local day, the same
+    rule as Lightboxd's own calendar. Date-only releases come first in their day.
+  - Each row has the poster, title, "S1 E5 · Chapter 5", the time, and tags (Series or
+    Season Premiere, Premiere, Sub/Dub).
+  - A row opens the title page when Stremio knows the title.
+  - Not connected: "Connect Lightboxd" with a link to Settings. Unreachable: "Can't reach
+    Lightboxd" with Try Again. Nothing coming up: an empty state.
+- **Nav:** **Calendar** is in the top bar and the phone tab bar (new `calendar` icon) only
+  while `lightboxd.ready`. The tab bar's grid now fits any number of tabs (it was fixed at five).
+
+## Phase 7 — Lightboxd on the title page — built
+
+- **Lightboxd** (`core/app_titles.py`, `tests/test_app_titles.py`):
+  - `GET /app-api/v1/titles/{tt…|kitsu:…}` finds every Lightboxd title behind the ID. An
+    anime's seasons share one IMDb ID, so each one is listed. For each it returns your status
+    (Watching, Watchlist, Dropped, Completed), episode count, latest score, watch count, last
+    watch date, and friends' reviews with each friend's sharing settings. It never downloads
+    metadata.
+  - `POST /app-api/v1/watchlist` adds Plan to Watch, importing the title first (like the
+    Stremio sync) if Lightboxd doesn't have it. A status you already set is kept.
+  - `POST /app-api/v1/titles/{title_id}/rating` puts your score on your latest watch log.
+    It's a 404 before you've logged it.
+- **App:** `components/detail/LightboxdCard.svelte`, the first card in Details (the column
+  beside the episodes, or the Details tab in a narrow window):
+  - Status line, e.g. "Watching · 12 of 62 episodes" or "Watched · Mar 14, 2025".
+  - "Your score: 9 / 10".
+  - **Add to Watchlist** when it isn't on your list, and **Rate** / **Change Score** (1–10)
+    once it's logged.
+  - Friends' reviews: avatar, name, ★ score, date, and up to four lines of review.
+  - A title Lightboxd doesn't have gets "Not in your Lightboxd yet" with Add to Watchlist.
+  - The card isn't drawn while Lightboxd is unreachable, or for IDs other than `tt…`/`kitsu:…`.
+- **Different from the plan:** no Lightboxd average rating. Lightboxd's own figures come from
+  TMDb/OMDb lookups that can download data, so the card sticks to your own data and your
+  friends'.
+
+## Later, maybe
+
+- **Windows:** "Start Lightboxd for me" if it's installed on the same PC, as a convenience
+  only. It's still the same server-first model.
+- **Lightboxd → Stremio** watched marks (one direction only, as `stremio_sync_plan.md`
+  already says).
+
+---
+
+## Order and size
+
+| Phase | Repo | Size | Usable on its own? |
+| --- | --- | --- | --- |
+| 1 Tokens + pairing | Lightboxd | M | No (foundation) |
+| 2 Connect | App | M | No (foundation) |
+| 3 Push events | Both | M | Yes: instant history |
+| 4 Rating prompt | App (+ small API) | S | Yes |
+| 5 Addon rows | Lightboxd (+ small app change) | S–M | Yes, in every Stremio app |
+| 6 Calendar tab | App (+ small API) | M | Yes |
+| 7 Title page | Both | S–M | Yes |
+
+Phase 5 needs only the `addon` token from Phase 1, so it can come straight after Phase 1
+if you want the rows first.
+
+## Open questions
+
+1. ~~Per profile or per device?~~ Per profile.
+2. Rating prompt for series: at the end of a season (as planned), the end of the show, or never?
+3. Which Lightboxd rating scale does the prompt show (stars, halves, 10-point)?
+4. Should the Calendar tab replace something in the phone tab bar, or add a tab?
