@@ -4,14 +4,15 @@
     import { page } from '$app/state';
     import { appUrl } from '$lib/nav';
     import Icon, { type IconName } from './Icon.svelte';
+    import { lightboxd } from '$lib/lightboxd.svelte';
 
-    const tabs: { href: string; label: string; icon: IconName }[] = [
+    // Calendar comes from Lightboxd: only while it's connected and reachable.
+    const tabs = $derived<{ href: string; label: string; icon: IconName }[]>([
         { href: '/', label: 'Home', icon: 'home' },
-        { href: '/movies', label: 'Movies', icon: 'film' },
-        { href: '/series', label: 'Series', icon: 'tv' },
         { href: '/library', label: 'Library', icon: 'library' },
+        ...(lightboxd.ready ? [{ href: '/calendar', label: 'Calendar', icon: 'calendar' as IconName }] : []),
         { href: '/search', label: 'Search', icon: 'search' },
-    ];
+    ]);
     const path = $derived(appUrl(page.url).pathname);
     const isActive = (href: string) => (href === '/' ? path === '/' || path === '/customize' : path.startsWith(href));
 
@@ -26,7 +27,7 @@
 <nav class="tabbar" aria-label="Sections">
     {#each tabs as t (t.href)}
         <a href={t.href} class:active={isActive(t.href)} aria-current={isActive(t.href) ? 'page' : undefined} onclick={(e) => onclick(e, t.href)}>
-            <Icon name={t.icon} size={24} filled={isActive(t.href) && t.icon !== 'search' && t.icon !== 'film' && t.icon !== 'tv'} />
+            <Icon name={t.icon} size={24} filled={isActive(t.href) && t.icon !== 'search' && t.icon !== 'calendar'} />
             <span>{t.label}</span>
         </a>
     {/each}
@@ -42,7 +43,8 @@
             inset: auto 0 0 0;
             z-index: 30;
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-auto-flow: column;
+            grid-auto-columns: 1fr;
             height: var(--tabbar-h);
             padding-bottom: var(--safe-bottom);
             background: rgb(18 18 24 / 0.82);

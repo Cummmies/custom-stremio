@@ -6,6 +6,7 @@
     import { page } from '$app/state';
     import { app } from '$lib/app.svelte';
     import { isTV } from '$lib/platform';
+    import { lightboxd } from '$lib/lightboxd.svelte';
     import Icon from './Icon.svelte';
     import ServerStatus from './ServerStatus.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -14,12 +15,12 @@
 
     let { scrolled }: { scrolled: boolean } = $props();
 
-    const sections = [
+    // Calendar comes from Lightboxd: only while it's connected and reachable.
+    const sections = $derived([
         { href: '/', label: 'Home' },
-        { href: '/movies', label: 'Movies' },
-        { href: '/series', label: 'Series' },
         { href: '/library', label: 'Library' },
-    ];
+        ...(lightboxd.ready ? [{ href: '/calendar', label: 'Calendar' }] : []),
+    ]);
     const isActive = (href: string) => (href === '/' ? appUrl(page.url).pathname === '/' || appUrl(page.url).pathname === '/customize' : appUrl(page.url).pathname.startsWith(href));
 
     let input = $state<HTMLInputElement>();
