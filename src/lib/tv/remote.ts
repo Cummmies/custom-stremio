@@ -389,13 +389,30 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
     // the TV's keyboard closed); OK does. Focus the app gives a field itself
     // (opening search, say) types right away.
     // The focused item went away (the banner moved to its next title, a list
-    // re-rendered): focus what's now in its place, so focus never vanishes.
-    document.addEventListener('focusout', (e) => {
-        const gone = e.target as HTMLElement;
-        const rect = gone.getBoundingClientRect();
-        const wasInBar = !!gone.closest('header.nav');
-        requestAnimationFrame(() => {
-            if (gone.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
+    // re-rendered): focus what's now in its place, so focus never vanishes
+    // (focus-and-selection.md: when the focused item disappears, move focus to
+    // one within a step of it, where people can find it).
+    //
+    // Two triggers, because browsers differ: some fire focusout when the
+    // focused element is removed; Chromium doesn't, so the page is also watched
+    // for the focused element leaving it.
+    /** The focused item, and where it was on the page (scroll-independent). */
+    let held: { el: HTMLElement; x: number; y: number; inBar: boolean } | null = null;
+    const hold = (el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        held = { el, x: r.left + r.width / 2 + scrollX, y: r.top + r.height / 2 + scrollY, inBar: !!el.closest('header.nav') };
+    };
+    let fixPending = false;
+    const refocusNear = () => {
+        if (fixPending) return;
+        fixPending = true;
+        // The next task, not the next frame: the replacement is in the page by
+        // then, and it still runs while frames are paused (a hidden window).
+        setTimeout(() => {
+            fixPending = false;
+            const lost = held;
+            if (!lost || lost.el.isConnected) return;
+            if (document.activeElement && document.activeElement !== document.body) return;
             // In the player, the video itself takes focus (OK pauses, arrows seek).
             const video = document.querySelector<HTMLElement>('.player .surface');
             if (video) {
@@ -405,10 +422,10 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             // From the page, stay in the page: while a new page is still
             // loading the top bar would be all that's left (the logo lit up);
             // its main action takes focus when it appears (focusPrimary).
-            const list = candidates().filter(({ el }) => wasInBar || !el.closest('header.nav'));
+            const list = candidates().filter(({ el }) => lost.inBar || !el.closest('header.nav'));
             if (!list.length) return;
-            const cx = rect.left + rect.width / 2;
-            const cy = rect.top + rect.height / 2;
+            const cx = lost.x - scrollX;
+            const cy = lost.y - scrollY;
             let best = list[0];
             let bestD = Infinity;
             for (const c of list) {
@@ -422,8 +439,23 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             best.el.focus({ preventScroll: true });
             movingFocus = false;
             stopgap = best.el;
-        });
+        }, 0);
+    };
+    document.addEventListener('focusin', (e) => {
+        if (e.target instanceof HTMLElement) hold(e.target);
     });
+    document.addEventListener('focusout', (e) => {
+        // Where it was, before it goes: a removed element has no position.
+        if (e.target instanceof HTMLElement && e.target.isConnected) hold(e.target);
+        refocusNear();
+    });
+    new MutationObserver(() => {
+        const active = document.activeElement;
+        if (held && !held.el.isConnected) refocusNear();
+        // Focus that moved without a focusin (the window itself not focused):
+        // noted here, so its removal is still caught.
+        else if (active instanceof HTMLElement && active !== document.body && held?.el !== active) hold(active);
+    }).observe(document.body, { childList: true, subtree: true });
     document.addEventListener('focusin', (e) => {
         const el = e.target as Element;
         if (isTextField(el) && movingFocus && !el.readOnly) lock(el);
