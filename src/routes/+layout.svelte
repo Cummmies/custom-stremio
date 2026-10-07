@@ -11,6 +11,8 @@
     import MenuHost from '$lib/components/menu/MenuHost.svelte';
     import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
     import UpdateToast from '$lib/components/UpdateToast.svelte';
+    import WhatsNew from '$lib/components/WhatsNew.svelte';
+    import { whatsNew } from '$lib/whatsNew.svelte';
     import TabBar from '$lib/components/TabBar.svelte';
     import ProfilePicker from '$lib/components/ProfilePicker.svelte';
     import { profiles } from '$lib/profiles.svelte';
@@ -35,6 +37,8 @@
             focusPrimary();
         }
         app.start();
+        // Opened for the first time since an update: what changed.
+        whatsNew.start();
         // A reload skips the player's cleanup; make sure no video keeps playing unseen.
         if (!inPlayer && canPlay) player.stop();
         // The page came up, so a freshly applied iOS web update is good to keep.
@@ -107,6 +111,8 @@
 {#if !inPlayer}
     <TabBar />
     <UpdateToast />
+    <!-- After choosing who's watching, not on top of it. -->
+    {#if !profiles.pickerOpen && !app.loginOpen}<WhatsNew />{/if}
 {/if}
 
 <MenuHost />

@@ -5,4 +5,8 @@ interface ImportMetaEnv {
     readonly TV_BUILD: boolean;
     /** The @stremio/stremio-core-web version this build carries (vite.config.js). */
     readonly CORE_VERSION: string;
+    /** This build's commit time, in seconds (vite.config.js; 0 without git). */
+    readonly BUILD_TIME: number;
+    /** Recent commits' subjects, newest first, for What's New (vite.config.js). */
+    readonly CHANGES: { at: number; text: string }[];
 }

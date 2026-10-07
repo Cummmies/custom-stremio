@@ -2,10 +2,33 @@ import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import process from "node:process";
 import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import tvLegacyCss from "./scripts/tv-legacy-css.mjs";
 const host = process.env.TAURI_DEV_HOST;
 // The Stremio core this build carries, for Settings' About line.
 const coreVersion = JSON.parse(readFileSync(new URL("./node_modules/@stremio/stremio-core-web/package.json", import.meta.url), "utf8")).version;
+// What's New (src/lib/whatsNew.svelte.ts): this build's commit time, and the
+// latest commits' subjects (written for people), minus housekeeping. The
+// workflows check out enough history for it (fetch-depth).
+const SKIP_SUBJECT = /^(merge|revert|ci|docs?|tests?|chore|build|wip|temp)\b|\[skip/i;
+function gitChanges() {
+  try {
+    const git = (/** @type {string} */ args) => execSync(`git ${args}`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const changes = git("log -100 --no-merges --format=%ct%x1f%s")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [at, text] = line.split("\x1f");
+        return { at: Number(at), text: (text ?? "").trim() };
+      })
+      .filter((c) => c.at && c.text && !SKIP_SUBJECT.test(c.text));
+    const at = Number(git("log -1 --format=%ct").trim()) || 0;
+    return { at, changes };
+  } catch {
+    return { at: 0, changes: [] };
+  }
+}
+const build = gitChanges();
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
@@ -36,6 +59,8 @@ export default defineConfig(() => ({
   define: {
     "import.meta.env.TV_BUILD": JSON.stringify(!!process.env.TV_BUILD),
     "import.meta.env.CORE_VERSION": JSON.stringify(coreVersion),
+    "import.meta.env.BUILD_TIME": JSON.stringify(build.at),
+    "import.meta.env.CHANGES": JSON.stringify(build.changes),
   },
 
   // Samsung TVs from 2020 sometimes run apps on their built-in Chromium 69 and

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { core } from '$lib/core';
+    import { invoke } from '@tauri-apps/api/core';
     import { app } from '$lib/app.svelte';
     import type { Settings } from '$lib/core/types';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
@@ -10,6 +11,7 @@
     import { isDesktop, isIOS, isTV } from '$lib/platform';
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
+    import { whatsNew } from '$lib/whatsNew.svelte';
     import { profiles } from '$lib/profiles.svelte';
     import { cloudSync } from '$lib/cloudSync.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
@@ -72,6 +74,19 @@
         if (settings) serverUrl = settings.streamingServerUrl;
     });
     const serverUrlChanged = $derived(!!settings && serverUrl.trim() !== settings.streamingServerUrl);
+
+    /** Downloads Stremio's streaming server into this app (src-tauri/src/server.rs). */
+    let serverSetupError = $state<string | null>(null);
+    async function setUpServer() {
+        serverSetupError = null;
+        try {
+            await invoke('server_install');
+        } catch {
+            // An app from before this could set it up (the update brought only the screens).
+            serverSetupError = 'This version of the app can’t set it up. Install the latest version, or Stremio Service.';
+        }
+    }
+    const canSetUpServer = $derived(isDesktop && (app.server.state === 'missing' || app.server.state === 'failed'));
 
     function saveServerUrl(e: SubmitEvent) {
         e.preventDefault();
@@ -562,9 +577,15 @@
                 <div class="row">
                     <div>
                         <div class="title">Status</div>
-                        <div class="sub">Plays torrents and converts formats. This app starts it automatically.</div>
+                        <div class="sub" class:sync-error={!!serverSetupError}>
+                            {serverSetupError ??
+                                (canSetUpServer
+                                    ? 'Torrents need Stremio’s streaming server. Set Up downloads it from Stremio (about 30 MB) and starts it.'
+                                    : 'Plays torrents and converts formats. This app starts it automatically.')}
+                        </div>
                     </div>
                     <div class="status"><ServerStatus status={app.server} /></div>
+                    {#if canSetUpServer}<button class="btn primary" onclick={setUpServer}>Set Up</button>{/if}
                 </div>
                 <form class="row" onsubmit={saveServerUrl}>
                     <div>
@@ -694,6 +715,15 @@
                         </button>
                     {/if}
                 </div>
+                {#if whatsNew.available}
+                    <div class="row">
+                        <div>
+                            <div class="title">What’s New</div>
+                            <div class="sub">The latest changes to this app.</div>
+                        </div>
+                        <button class="btn" onclick={() => whatsNew.showRecent()}>Show</button>
+                    </div>
+                {/if}
             </div>
         </section>
     {/if}
