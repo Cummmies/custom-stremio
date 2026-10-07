@@ -1,4 +1,13 @@
 <script lang="ts">
+    import DetailsPanel from '$lib/components/detail/DetailsPanel.svelte';
+    import LogDialog, { type LogMode, type LogDraft } from '$lib/components/detail/LogDialog.svelte';
+    import ReviewsTab from '$lib/components/detail/ReviewsTab.svelte';
+    import ReviewPeek from '$lib/components/detail/ReviewPeek.svelte';
+    import RelatedTab from '$lib/components/detail/RelatedTab.svelte';
+    import NewListDialog from '$lib/components/NewListDialog.svelte';
+    import { LightboxdTitle } from '$lib/lightboxd/title.svelte';
+    import { STATUS_LABEL, day, score, today, type Status } from '$lib/lightboxd/api';
+    import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { core } from '$lib/core';
@@ -17,7 +26,6 @@
     import EpisodeList from '$lib/components/detail/EpisodeList.svelte';
     import SourcesSheet from '$lib/components/detail/SourcesSheet.svelte';
     import TrailerDialog from '$lib/components/detail/TrailerDialog.svelte';
-    import DetailsPanel from '$lib/components/detail/DetailsPanel.svelte';
 
     const type = $derived(page.params.type ?? '');
     const id = $derived(page.params.id ?? '');
@@ -26,7 +34,7 @@
     let details = $state<MetaDetails | null>(null);
     let season = $state(1);
     let seasonFor = '';
-    let tab = $state<'episodes' | 'extras' | 'details'>('episodes');
+    let tab = $state<'episodes' | 'extras' | 'reviews' | 'related' | 'details'>('episodes');
     let trailer = $state<string | null>(null);
     let expanded = $state(false);
     // "More" shows when the summary is cut off (it's one to three lines, by the window's height).
@@ -88,7 +96,7 @@
         listSaysAnime ?? looksLikeAnime(details?.streams.flatMap((g) => (g.content.type === 'Ready' ? g.content.content : [])) ?? [])
     );
     const chips = $derived(
-        [rating ? `★ ${rating}` : null, meta?.releaseInfo, meta?.runtime, listSaysAnime ? 'Anime' : null, ...genres.slice(0, 3)].filter(Boolean)
+        [meta?.releaseInfo, meta?.runtime, listSaysAnime ? 'Anime' : null, ...genres.slice(0, 3)].filter(Boolean)
     );
 
     // Where "Play" goes: the episode you were on, else the first released episode.
@@ -117,14 +125,14 @@
         seasonFor = meta.id;
         const fromUrl = videoId ? meta.videos.find((v) => v.id === videoId)?.season : undefined;
         season = fromUrl ?? resumeVideo?.season ?? meta.videos[0]?.season ?? 1;
-        tab = isSeries ? 'episodes' : 'extras';
+        tab = firstTab();
     });
 
     // The Details tab only exists on narrow windows; widening goes back to the main section.
     $effect(() => {
         const wide = matchMedia('(min-width: 1001px)');
         const onChange = () => {
-            if (wide.matches && tab === 'details') tab = isSeries ? 'episodes' : 'extras';
+            if (wide.matches && tab === 'details') tab = firstTab();
         };
         wide.addEventListener('change', onChange);
         return () => wide.removeEventListener('change', onChange);
@@ -220,17 +228,188 @@
         playVideo(target, replace);
     }
 
-    function toggleLibrary() {
-        if (!meta) return;
-        core.dispatch({
-            action: 'Ctx',
-            args: meta.inLibrary ? { action: 'RemoveFromLibrary', args: meta.id } : { action: 'AddToLibrary', args: meta },
-        });
+    // --- Lightboxd --------------------------------------------------------------
+    // With Lightboxd connected (docs/lightboxd.md), + sets your status and
+    // lists there (and saves to Stremio's library too, a backup for its other
+    // apps), ★ is your score, and a movie's eye logs your watches. Your score,
+    // friends' and AniList's join IMDb's in the scores row, and Reviews and
+    // Related are tabs. Without it, + and the eye are Stremio's, as before.
+    const lbt = new LightboxdTitle();
+    $effect(() => {
+        if (meta) lbt.load(id, type, meta.name);
+    });
+    $effect(() => lbt.watchForChanges());
+    const lbOn = $derived(lbt.on);
+    const main = $derived(lbOn ? lbt.main : null);
+    const related = $derived(lbOn ? (lbt.related ?? []) : []);
+    const watches = $derived(main?.log ?? []);
+    /** Your score: your latest watch's, or (a rewatch not scored yet) the one before. */
+    const myScore = $derived(main ? (main.rating ?? main.earlier_rating) : null);
+    const myReview = $derived(main?.review ?? null);
+    const STATUSES: Status[] = ['plan_to_watch', 'watching', 'completed', 'dropped'];
+    const saved = $derived(lbOn ? !!main && (main.status !== null || main.lists.length > 0) : !!meta?.inLibrary);
+
+    function firstTab() {
+        return isSeries ? 'episodes' : trailers.length ? 'extras' : 'reviews';
+    }
+    const hasTabs = $derived(isSeries || trailers.length > 0 || lbOn);
+
+    // Stremio's library keeps a copy of what you save in Lightboxd.
+    function addToStremio() {
+        if (meta && !meta.inLibrary) core.dispatch({ action: 'Ctx', args: { action: 'AddToLibrary', args: meta } });
+    }
+    function removeFromStremio() {
+        if (meta?.inLibrary) core.dispatch({ action: 'Ctx', args: { action: 'RemoveFromLibrary', args: meta.id } });
     }
 
-    function toggleWatched() {
-        if (meta) core.dispatch({ action: 'MetaDetails', args: { action: 'MarkAsWatched', args: !meta.watched } });
+    let newListOpen = $state(false);
+    async function createList(name: string) {
+        addToStremio();
+        if (await lbt.newList(name)) newListOpen = false;
     }
+
+    function toggleLibrary(e: MouseEvent) {
+        if (!meta) return;
+        if (!lbOn) {
+            core.dispatch({
+                action: 'Ctx',
+                args: meta.inLibrary ? { action: 'RemoveFromLibrary', args: meta.id } : { action: 'AddToLibrary', args: meta },
+            });
+            return;
+        }
+        const button = e.currentTarget as HTMLElement;
+        const status = main?.status ?? null;
+        const entries: MenuEntry[] = [
+            { header: 'Status' },
+            ...STATUSES.map((st) => ({
+                label: STATUS_LABEL[st],
+                checked: status === st,
+                onselect: () => {
+                    addToStremio();
+                    lbt.setStatus(st);
+                },
+            })),
+            { separator: true },
+            { header: 'Lists' },
+            ...lbt.lists.map((l) => ({
+                label: l.name,
+                checked: !!main?.lists.includes(l.id),
+                onselect: () => {
+                    addToStremio();
+                    lbt.toggleList(l.id);
+                },
+            })),
+            { label: 'New List…', icon: 'plus', onselect: () => (newListOpen = true) },
+        ];
+        if (saved) {
+            entries.push({ separator: true }, { label: 'Remove from Library…', icon: 'trash', destructive: true, onselect: () => confirmRemove(button) });
+        }
+        menu.toggleFor(button, entries);
+    }
+
+    /** Removing takes your watches, score and list entries with it: asked once more. */
+    function confirmRemove(button: HTMLElement) {
+        setTimeout(() =>
+            menu.toggleFor(button, [
+                { header: `Remove ${meta?.name ?? 'this'} from your library?`, detail: 'Your watches, score and lists for it go too.' },
+                {
+                    label: 'Remove',
+                    icon: 'trash',
+                    destructive: true,
+                    onselect: async () => {
+                        if (await lbt.remove()) removeFromStremio();
+                    },
+                },
+                { label: 'Cancel' },
+            ])
+        );
+    }
+
+    // The rate / log dialog: ★, Log a Watch… and Edit Watch… all open it.
+    let log = $state<{ mode: LogMode; id: number | null; rewatch: boolean; initial: LogDraft } | null>(null);
+    function openRate() {
+        const w = watches[0];
+        // Lightboxd puts a score on your latest watch; with none yet, rating logs one.
+        log = w
+            ? { mode: 'rate', id: w.id, rewatch: w.rewatch, initial: { score: w.rating ?? main?.earlier_rating ?? 5, date: w.date, review: w.review ?? '' } }
+            : { mode: 'watch', id: null, rewatch: false, initial: { score: 5, date: null, review: '' } };
+    }
+    function openLog() {
+        // As Lightboxd: a first watch starts unscored; a rewatch from your last score (else IMDb's, else 8.5).
+        const rewatch = watches.length > 0;
+        const imdb = Number(main?.scores.imdb ?? rating);
+        log = { mode: 'watch', id: null, rewatch, initial: { score: rewatch ? (myScore ?? (imdb || 8.5)) : null, date: null, review: '' } };
+    }
+    function openEdit(watchId: number) {
+        const w = watches.find((x) => x.id === watchId);
+        if (w) log = { mode: 'edit', id: w.id, rewatch: w.rewatch, initial: { score: w.rating, date: w.date, review: w.review ?? '' } };
+    }
+    async function saveLog(d: LogDraft) {
+        if (!log) return;
+        const fields = { rating: d.score, review: d.review, watch_date: d.date };
+        const ok = log.id != null ? await lbt.editWatch(log.id, fields) : await lbt.addWatch(fields);
+        if (!ok) return;
+        if (log.id == null) {
+            addToStremio();
+            markStremioWatched();
+        }
+        log = null;
+    }
+    async function deleteLog() {
+        if (log?.id != null && (await lbt.deleteWatch(log.id))) log = null;
+    }
+    function markStremioWatched() {
+        if (meta && !isSeries && !meta.watched) core.dispatch({ action: 'MetaDetails', args: { action: 'MarkAsWatched', args: true } });
+    }
+
+    function toggleWatched(e: MouseEvent) {
+        if (!meta) return;
+        if (!lbOn) {
+            core.dispatch({ action: 'MetaDetails', args: { action: 'MarkAsWatched', args: !meta.watched } });
+            return;
+        }
+        menu.toggleFor(e.currentTarget as HTMLElement, [
+            {
+                label: watches.length ? 'Rewatched Today' : 'Watched Today',
+                icon: 'eye',
+                onselect: async () => {
+                    if (await lbt.addWatch({ watch_date: today() })) {
+                        addToStremio();
+                        markStremioWatched();
+                    }
+                },
+            },
+            { label: watches.length ? 'Log a Rewatch…' : 'Log a Watch…', icon: 'calendar', onselect: openLog },
+            ...(watches.length
+                ? ([
+                      { separator: true },
+                      { header: 'Your Watches' },
+                      ...watches.map((w) => ({
+                          label: `${day(w.date) ?? 'Date unknown'}${w.rating != null ? ` · ${score(w.rating)}` : ''}`,
+                          onselect: () => openEdit(w.id),
+                      })),
+                  ] as MenuEntry[])
+                : []),
+        ]);
+    }
+
+    // Details' Status and Lists rows.
+    const statusLine = $derived.by(() => {
+        const s = main?.status;
+        if (!main || !s) return null;
+        if (s === 'watching') return main.episodes ? `Watching · ${main.progress ?? 0} of ${main.episodes} episodes` : 'Watching';
+        if (s === 'completed') return [main.watches > 1 ? `Watched ${main.watches} times` : 'Watched', day(main.last_watched)].filter(Boolean).join(' · ');
+        return STATUS_LABEL[s];
+    });
+    const listNames = $derived(main ? lbt.lists.filter((l) => main.lists.includes(l.id)).map((l) => l.name) : []);
+
+    // Scores row: yours, friends', AniList's (anime) and IMDb's.
+    const scoreRow = $derived([
+        ...(myScore != null ? [{ label: 'You', value: score(myScore) }] : []),
+        ...(main?.scores.friends != null ? [{ label: 'Friends', value: score(main.scores.friends) }] : []),
+        ...(main?.scores.anilist ? [{ label: 'AniList', value: `${main.scores.anilist}%` }] : []),
+        ...((main?.scores.imdb ?? rating) ? [{ label: 'IMDb', value: (main?.scores.imdb ?? rating)! }] : []),
+    ]);
 
     function toggleEpisodeWatched(v: Video) {
         core.dispatch({
@@ -247,7 +426,6 @@
             : (meta?.releaseInfo ?? null)
     );
 
-    const back = () => (history.length > 1 ? history.back() : goto('/'));
     const art = $derived(meta ? backgroundOf(meta) : null);
     const logo = $derived(meta && !logoFailed ? logoOf(meta) : null);
 </script>
@@ -272,9 +450,6 @@
     <!-- The page fits the window; only the episode list (and details) scroll. -->
     <div class="screen">
     <header class="hero">
-        <button class="back" onclick={back} aria-label="Back" title="Back">
-            <Icon name="back" size={20} />
-        </button>
 
         {#if meta}
             <div class="copy" use:titleContext={{ type: meta.type, id: meta.id, name: meta.name, preview: meta }}>
@@ -305,16 +480,31 @@
                         <Icon name="play" size={16} filled />
                         {playLabel}
                     </button>
-                    <button
-                        class="round"
-                        class:on={meta.inLibrary}
-                        onclick={toggleLibrary}
-                        aria-pressed={meta.inLibrary}
-                        aria-label={meta.inLibrary ? 'Remove from Library' : 'Add to Library'}
-                        title={meta.inLibrary ? 'In your Library' : 'Add to Library'}
-                    >
-                        <Icon name={meta.inLibrary ? 'check' : 'plus'} size={18} />
-                    </button>
+                    {#if lbOn}
+                        <button class="round" class:on={saved} onclick={toggleLibrary} aria-haspopup="menu" aria-label="Status and Lists" title={saved ? 'Saved' : 'Save'}>
+                            <Icon name={saved ? 'check' : 'plus'} size={18} />
+                        </button>
+                        <button
+                            class="round"
+                            class:on={myScore != null}
+                            onclick={openRate}
+                            aria-label={myScore != null ? `Your Score ${score(myScore)}, Edit` : 'Rate'}
+                            title={myScore != null ? `Your score: ${score(myScore)}` : 'Rate'}
+                        >
+                            <Icon name="star" size={18} filled={myScore != null} />
+                        </button>
+                    {:else}
+                        <button
+                            class="round"
+                            class:on={meta.inLibrary}
+                            onclick={toggleLibrary}
+                            aria-pressed={meta.inLibrary}
+                            aria-label={meta.inLibrary ? 'Remove from Library' : 'Add to Library'}
+                            title={meta.inLibrary ? 'In your Library' : 'Add to Library'}
+                        >
+                            <Icon name={meta.inLibrary ? 'check' : 'plus'} size={18} />
+                        </button>
+                    {/if}
                     {#if trailers.length}
                         <button class="round" onclick={() => (trailer = trailers[0].ytId!)} aria-label="Play Trailer" title="Play Trailer">
                             <Icon name="film" size={18} />
@@ -323,16 +513,18 @@
                     {#if !isSeries}
                         <button
                             class="round"
-                            class:on={meta.watched}
+                            class:on={lbOn ? watches.length > 0 : meta.watched}
                             onclick={toggleWatched}
-                            aria-pressed={meta.watched}
-                            aria-label={meta.watched ? 'Mark as Unwatched' : 'Mark as Watched'}
-                            title={meta.watched ? 'Watched' : 'Mark as Watched'}
+                            aria-haspopup={lbOn ? 'menu' : undefined}
+                            aria-pressed={lbOn ? undefined : meta.watched}
+                            aria-label={lbOn ? 'Your Watches' : meta.watched ? 'Mark as Unwatched' : 'Mark as Watched'}
+                            title={lbOn ? (watches.length ? `Watched ${watches.length === 1 ? 'once' : `${watches.length} times`}` : 'Mark as Watched') : meta.watched ? 'Watched' : 'Mark as Watched'}
                         >
                             <Icon name="eye" size={18} />
                         </button>
                     {/if}
                 </div>
+                {#if lbt.error && !log && !newListOpen}<p class="lb-error" role="alert">{lbt.error}</p>{/if}
             </div>
         {:else}
             <div class="copy skeleton" aria-busy="true" aria-label="Loading">
@@ -346,7 +538,7 @@
     {#if meta}
         <div class="body">
             <!-- Sections bar: its rule runs the full width, and both columns start below it. -->
-            {#if isSeries || trailers.length}
+            {#if meta}
                 <div class="bar">
                     <div class="tabs" role="tablist" aria-label="Sections">
                         {#if isSeries}
@@ -354,19 +546,35 @@
                         {/if}
                         {#if trailers.length}
                             <!-- TV: alone (a movie's), it's a heading, not a stop for the remote. -->
-                            <button role="tab" aria-selected={tab === 'extras'} class:on={tab === 'extras'} tabindex={isTV && !isSeries ? -1 : undefined} onclick={() => (tab = 'extras')}>Trailers & Extras</button>
+                            <button role="tab" aria-selected={tab === 'extras'} class:on={tab === 'extras'} tabindex={isTV && !isSeries ? -1 : undefined} onclick={() => (tab = 'extras')}><span class="wide-label">{'Trailers & '}</span>Extras</button>
+                        {/if}
+                        {#if lbOn}
+                            <button role="tab" aria-selected={tab === 'reviews'} class:on={tab === 'reviews'} onclick={() => (tab = 'reviews')}>Reviews</button>
+                        {/if}
+                        {#if related.length}
+                            <button role="tab" aria-selected={tab === 'related'} class:on={tab === 'related'} onclick={() => (tab = 'related')}>Related</button>
                         {/if}
                         <!-- Narrow windows have no room for the Details column: it becomes a tab. -->
                         <button class="narrow-only" role="tab" aria-selected={tab === 'details'} class:on={tab === 'details'} onclick={() => (tab = 'details')}>Details</button>
                     </div>
+                    <!-- Scores sit over the Details column, on every tab (phones: in Reviews). -->
+                    <dl class="bar-scores" aria-label="Scores">
+                        {#each scoreRow as sc (sc.label)}
+                            <div><dd>{sc.value}</dd><dt>{sc.label}</dt></div>
+                        {/each}
+                    </dl>
                 </div>
             {/if}
 
-            <div class="columns" class:single={!isSeries && !trailers.length}>
-                {#if isSeries || trailers.length}
-                    <section class="main" aria-label={tab === 'details' ? 'Details' : isSeries && tab === 'episodes' ? 'Episodes' : 'Trailers & Extras'}>
-                        {#if tab === 'details'}
-                            <div class="details-tab"><DetailsPanel {meta} /></div>
+            <div class="columns" class:single={!hasTabs}>
+                {#if hasTabs}
+                    <section class="main" aria-label={tab === 'details' ? 'Details' : tab === 'reviews' ? 'Reviews' : tab === 'related' ? 'Related' : isSeries && tab === 'episodes' ? 'Episodes' : 'Trailers & Extras'}>
+                        {#if tab === 'related'}
+                            <RelatedTab groups={related} />
+                        {:else if tab === 'reviews'}
+                            <ReviewsTab name={meta.name} scores={scoreRow} reviews={lbt.reviews} {myScore} {myReview} {watches} onrate={openRate} oneditwatch={openEdit} />
+                        {:else if tab === 'details'}
+                            <div class="details-tab"><DetailsPanel {meta} status={statusLine} lists={listNames} /></div>
                         {:else if isSeries && tab === 'episodes'}
                             <EpisodeList
                                 videos={meta.videos}
@@ -396,7 +604,8 @@
 
                 <div class="side">
                     <h2 class="side-title">Details</h2>
-                    <DetailsPanel {meta} />
+                    <DetailsPanel {meta} status={statusLine} lists={listNames} />
+                    {#if lbOn && tab !== 'reviews' && lbt.reviews}<ReviewPeek reviews={lbt.reviews} onseeall={() => (tab = 'reviews')} />{/if}
                 </div>
             </div>
         </div>
@@ -428,6 +637,27 @@
             <button onclick={chooseManually}>Choose Manually</button>
         </div>
     </div>
+{/if}
+
+{#if log && meta}
+    <LogDialog
+        mode={log.mode}
+        rewatch={log.rewatch}
+        name={meta.name}
+        year={meta.releaseInfo ?? null}
+        poster={meta.poster ?? null}
+        earliest={main?.earliest_watch_date ?? null}
+        initial={log.initial}
+        busy={lbt.busy}
+        error={lbt.error}
+        onsave={saveLog}
+        ondelete={deleteLog}
+        onclose={() => (log = null)}
+    />
+{/if}
+
+{#if newListOpen}
+    <NewListDialog busy={lbt.busy} error={lbt.error} oncreate={createList} onclose={() => (newListOpen = false)} />
 {/if}
 
 {#if trailer && meta}
@@ -546,27 +776,7 @@
         /* Proportions (as Home's): the header is only as tall as it must be, so
            the episodes (3 to 6, by the window's height) and the whole Details
            column (details and cast) fit below it without scrolling. */
-        padding: calc(var(--nav-h) + 56px) var(--gutter) clamp(12px, 2.2vh, 24px);
-    }
-    .back {
-        position: absolute;
-        top: calc(var(--nav-h) + 8px);
-        left: var(--gutter);
-        display: grid;
-        place-items: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        border: 1px solid rgb(255 255 255 / 0.18);
-        background: rgb(30 30 38 / 0.55);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        color: var(--label);
-        cursor: pointer;
-        transition: background var(--fast);
-    }
-    .back:hover {
-        background: rgb(60 60 72 / 0.75);
+        padding: calc(var(--nav-h) + 40px) var(--gutter) clamp(24px, 4vh, 40px);
     }
     .copy {
         max-width: 600px;
@@ -651,15 +861,13 @@
         :global(html:not(.tv)) .actions {
             margin-top: 10px;
         }
-        /* Back sits beside the title instead of above it. */
         :global(html:not(.tv)) .hero {
             padding-top: calc(var(--nav-h) + 16px);
         }
-        :global(html:not(.tv)) .hero .copy {
-            margin-left: 56px;
-        }
-        :global(html:not(.tv)) .back {
-            top: calc(var(--nav-h) + 16px);
+    }
+    @media (min-width: 701px) and (min-height: 820px) {
+        :global(html:not(.tv)) .hero {
+            min-height: min(50vh, 600px);
         }
     }
     .description.expanded {
@@ -713,6 +921,8 @@
         transform: scale(1.03);
     }
     .round {
+        transform: translateZ(0);
+        isolation: isolate;
         display: grid;
         place-items: center;
         width: 44px;
@@ -761,9 +971,42 @@
     }
     /* Full-width sections bar, like a toolbar under the hero. */
     .bar {
+        contain: paint;
         flex: none;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 40px;
         padding: 0 var(--gutter);
         border-bottom: 1px solid var(--separator);
+    }
+    /* As wide as the Details column below it. */
+    .bar-scores {
+        flex: none;
+        width: 340px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 36px;
+        margin: 0;
+        padding-bottom: 10px;
+        text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+    }
+    .bar-scores dd {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-title3);
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+    }
+    .bar-scores dt {
+        font-size: 11px;
+        color: var(--label-2);
+    }
+    @media (max-width: 1000px) {
+        .bar-scores {
+            display: none;
+        }
     }
     .columns {
         flex: 1;
@@ -777,6 +1020,11 @@
     .columns.single {
         grid-template-columns: minmax(0, 720px);
     }
+    .lb-error {
+        margin: 10px 0 0;
+        font-size: 13px;
+        color: var(--bad);
+    }
     /* Each column fills the remaining height and scrolls inside itself. */
     .main {
         display: flex;
@@ -785,6 +1033,8 @@
     }
     .side {
         min-height: 0;
+        display: flex;
+        flex-direction: column;
         overflow-y: auto;
         overscroll-behavior: contain;
         padding-bottom: 12px;
@@ -830,6 +1080,7 @@
     }
     .tabs button {
         position: relative;
+        white-space: nowrap;
         padding: 0 0 12px;
         border: 0;
         background: none;
@@ -936,10 +1187,6 @@
         .hero {
             padding: calc(var(--nav-h) + 30vh) var(--gutter) 12px;
         }
-        /* The tab bar is the way back on phones. */
-        .back {
-            display: none;
-        }
         .copy {
             max-width: none;
             display: flex;
@@ -982,6 +1229,19 @@
         .columns {
             grid-template-rows: auto;
             padding-top: 12px;
+        }
+        /* Four tabs on a phone: shorter labels, closer together, and the bar
+           scrolls sideways if it still doesn't fit. */
+        .tabs {
+            gap: 22px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .wide-label {
+            display: none;
+        }
+        .tabs button.on::after {
+            bottom: 0;
         }
         .side,
         .details-tab,

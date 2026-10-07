@@ -259,6 +259,48 @@ doesn't suit an app, and Google sign-in can't work on a TV.
 - **Different from the plan:** no Lightboxd average rating. Lightboxd's own figures come from
   TMDb/OMDb lookups that can download data, so the card sticks to your own data and your
   friends'.
+- **Replaced by Phase 8:** the card is gone; what it showed is now part of the page itself.
+
+## Phase 8 — Library, Lists and the title page, from Lightboxd — built
+
+Lightboxd moves into the app's own screens instead of a card: the app looks the same, with
+Lightboxd behind it. Without Lightboxd connected, everything is as before (Stremio's library,
+Stremio's + and eye buttons).
+
+- **Lightboxd** (`core/app_library.py`, `tests/test_app_library.py`; the summary in
+  `core/app_titles.py` gained `log`, `lists`, `earliest_watch_date` and `scores`):
+  - `GET /library?section=watchlist|watched|ratings`: watching then plan to watch; every watch,
+    newest first; each title once by your latest score.
+  - `GET /lists`, `POST /lists` `{name}`, `GET /lists/{id}`, `POST /lists/{id}/titles`
+    `{id, type, name}` (imports the title if needed), `DELETE /lists/{id}/titles/{title_id}`.
+    Only your own lists: someone else's, or an old ownerless one, is a 404.
+  - `POST /titles/{title_id}/status` `{status}` and `DELETE /titles/{title_id}` (your
+    watchlist entry, watches and list entries for it; the shared catalog row stays).
+  - `POST /titles/{title_id}/watches`, `PUT /watches/{log_id}` (only the fields sent change;
+    `rating: null` clears the score, `watch_date: null` makes the date unknown), `DELETE
+    /watches/{log_id}`. Dates move into range as `log_watch` moves them: not after today, not
+    before the title was out. Rewatch is Lightboxd's to say (every watch after your first).
+  - `GET /titles/{title_id}/reviews`: the reviews Lightboxd gathers (TMDb, Trakt, AniList),
+    and friends' as each shares them.
+  - `GET /titles/{title_id}/related`: an anime's seasons in watch order (following prequels
+    and sequels, up to 10 each way, each hop cached 6 hours like `core/related.py`) and its side
+    stories, as Kitsu IDs; or a film's TMDb collection in release order. Regular TV has none.
+  - The app API's CORS allows PUT now (editing a watch).
+- **App** (`src/lib/lightboxd/api.ts` the calls, `src/lib/lightboxd/title.svelte.ts` a title
+  page's state and actions):
+  - **Library** (`routes/library`): Watchlist / Watched (by month) / Ratings (by score), with
+    All / Movies / Series.
+  - **Lists** (`routes/lists`), a tab in the nav: your lists as poster stacks; one opens in
+    place (`?id=`); New List.
+  - **Title page:** + is Status (Plan to Watch, Watching, Completed, Dropped), your lists, New
+    List… and Remove from Library… (asked once more); saving also adds to Stremio's library, a
+    backup for its other apps. ★ is your score (`LogDialog`: score, date, review, as
+    Lightboxd's Log Watch form). A movie's eye logs a watch today, or opens the dialog, and
+    lists your watches to edit or delete. The scores row in the tab bar: You, Friends, AniList
+    (anime) and IMDb. Reviews (Aggregate / Friends / You) and Related are tabs; Details has
+    Status and Lists rows, then a Reviews box that fills the rest of the column.
+  - An anime that's several Lightboxd titles: the first stands for the show, as Lightboxd's own
+    Add to Watchlist does.
 
 ## iPhone and TV — built
 

@@ -8,6 +8,7 @@
     const tabs: { href: string; label: string; icon: IconName }[] = [
         { href: '/', label: 'Home', icon: 'home' },
         { href: '/library', label: 'Library', icon: 'library' },
+        { href: '/lists', label: 'Lists', icon: 'list' },
         { href: '/calendar', label: 'Calendar', icon: 'calendar' },
         { href: '/search', label: 'Search', icon: 'search' },
     ];
@@ -25,7 +26,7 @@
 <nav class="tabbar" aria-label="Sections">
     {#each tabs as t (t.href)}
         <a href={t.href} class:active={isActive(t.href)} aria-current={isActive(t.href) ? 'page' : undefined} onclick={(e) => onclick(e, t.href)}>
-            <Icon name={t.icon} size={24} filled={isActive(t.href) && t.icon !== 'search' && t.icon !== 'calendar'} />
+            <Icon name={t.icon} size={24} filled={isActive(t.href) && t.icon !== 'search' && t.icon !== 'calendar' && t.icon !== 'list'} />
             <span>{t.label}</span>
         </a>
     {/each}

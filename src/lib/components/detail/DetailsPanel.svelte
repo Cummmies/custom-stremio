@@ -1,13 +1,13 @@
 <script lang="ts">
+    // A title's Cast and Details. With Lightboxd, your status and lists are
+    // rows like any other. IMDb is in the scores above, genres and runtime in
+    // the tags under the title: nothing here repeats them.
     import type { MetaItem } from '$lib/core/types';
-    import { openExternal } from '$lib/links';
-    import LightboxdCard from './LightboxdCard.svelte';
 
-    let { meta }: { meta: MetaItem } = $props();
+    let { meta, status = null, lists = [] }: { meta: MetaItem; status?: string | null; lists?: string[] } = $props();
 
     const byCategory = (cat: string) => meta.links.filter((l) => l.category === cat).map((l) => l.name);
 
-    const genres = $derived(byCategory('Genres'));
     const directors = $derived(byCategory('Directors'));
     const writers = $derived(byCategory('Writers'));
     const cast = $derived(byCategory('Cast'));
@@ -15,7 +15,6 @@
         meta.released ? new Date(meta.released).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null
     );
 
-    const imdb = $derived(meta.links.find((l) => l.category === 'imdb') ?? null);
     const seasonsLine = $derived.by(() => {
         const regular = meta.videos.filter((v) => (v.season ?? 0) > 0 && !v.upcoming);
         const seasons = new Set(regular.map((v) => v.season)).size;
@@ -25,11 +24,11 @@
 
     const rows = $derived(
         [
-            ['Genres', genres.join(', ')],
+            ['Status', status],
+            ['Lists', lists.join(', ')],
             [directors.length > 1 ? 'Directors' : 'Director', directors.join(', ')],
             [writers.length > 1 ? 'Writers' : 'Writer', writers.join(', ')],
             ['Released', released ?? meta.releaseInfo],
-            ['Runtime', meta.runtime],
             ['Seasons', seasonsLine],
         ].filter(([, v]) => v) as [string, string][]
     );
@@ -44,31 +43,6 @@
 </script>
 
 <aside class="panel" aria-label="Details">
-    <LightboxdCard id={meta.id} type={meta.type} name={meta.name} />
-
-    {#if rows.length || imdb}
-        <section class="card">
-            <dl>
-                {#if imdb}
-                    <div>
-                        <dt>IMDb</dt>
-                        <dd>
-                            <button class="link" onclick={() => openExternal(imdb.url)} title="Open on IMDb">
-                                ★ {imdb.name}<span class="out" aria-hidden="true">↗</span>
-                            </button>
-                        </dd>
-                    </div>
-                {/if}
-                {#each rows as [k, v] (k)}
-                    <div>
-                        <dt>{k}</dt>
-                        <dd>{v}</dd>
-                    </div>
-                {/each}
-            </dl>
-        </section>
-    {/if}
-
     {#if cast.length}
         <section class="card">
             <h3>Cast</h3>
@@ -82,6 +56,19 @@
                     </li>
                 {/each}
             </ul>
+        </section>
+    {/if}
+
+    {#if rows.length}
+        <section class="card">
+            <dl>
+                {#each rows as [k, v] (k)}
+                    <div>
+                        <dt>{k}</dt>
+                        <dd>{v}</dd>
+                    </div>
+                {/each}
+            </dl>
         </section>
     {/if}
 </aside>
@@ -124,23 +111,6 @@
     dd {
         margin: 0;
         font-size: 13px;
-    }
-    .link {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--label);
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-        border-radius: 4px;
-    }
-    .link:hover {
-        text-decoration: underline;
-    }
-    .out {
-        margin-left: 4px;
-        color: var(--label-2);
     }
     .cast {
         list-style: none;

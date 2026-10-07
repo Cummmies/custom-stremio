@@ -17,6 +17,7 @@
     const sections = [
         { href: '/', label: 'Home' },
         { href: '/library', label: 'Library' },
+        { href: '/lists', label: 'Lists' },
         { href: '/calendar', label: 'Calendar' },
     ];
     const isActive = (href: string) => (href === '/' ? appUrl(page.url).pathname === '/' || appUrl(page.url).pathname === '/customize' : appUrl(page.url).pathname.startsWith(href));
