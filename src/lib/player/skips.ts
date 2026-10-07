@@ -2,10 +2,13 @@
 //
 // Sources, best first:
 //   1. The file's own chapter markers ("Intro", "Opening", "Credits"…): exact for this file.
-//   2. TheIntroDB and IntroDB: crowdsourced timings looked up by IMDb id + season/episode.
+//   2. Anime: AniSkip, crowdsourced openings and endings by MyAnimeList episode
+//      ($lib/anime.svelte.ts finds which), for episodes of about this length.
+//   3. TheIntroDB and IntroDB: crowdsourced timings looked up by IMDb id + season/episode.
 import { invoke } from '@tauri-apps/api/core';
 import { inTauri } from '$lib/platform';
 import type { RawChapter } from './backend';
+import { anime } from '$lib/anime.svelte';
 
 export type SkipKind = 'intro' | 'recap' | 'credits' | 'preview';
 export type Segment = { kind: SkipKind; start: number; end: number; source: string };
@@ -68,6 +71,27 @@ async function fromIntroDB(imdb: string, season: number | null, episode: number 
         toSegment('recap', data.recap, duration, 'IntroDB'),
         toSegment('credits', data.outro, duration, 'IntroDB'),
     ].filter((s): s is Segment => !!s);
+}
+
+const ANISKIP_KINDS: Record<string, SkipKind> = { op: 'intro', 'mixed-op': 'intro', ed: 'credits', 'mixed-ed': 'credits', recap: 'recap' };
+
+/**
+ * AniSkip (it allows any app to ask). Given the episode's length, it leaves
+ * out timings submitted for a differently cut release.
+ */
+async function fromAniSkip(mal: number, episode: number, duration: number) {
+    const q = new URLSearchParams({ episodeLength: String(Math.round(duration)) });
+    for (const t of Object.keys(ANISKIP_KINDS)) q.append('types[]', t);
+    try {
+        const r = await fetch(`https://api.aniskip.com/v2/skip-times/${mal}/${episode}?${q}`);
+        const data = r.ok ? await r.json() : null;
+        if (!data?.found || !Array.isArray(data.results)) return [];
+        return (data.results as { skipType: string; interval: { startTime: number; endTime: number } }[])
+            .map((x) => toSegment(ANISKIP_KINDS[x.skipType], { start_sec: x.interval?.startTime, end_sec: x.interval?.endTime }, duration, 'AniSkip'))
+            .filter((s): s is Segment => !!s && !!s.kind);
+    } catch {
+        return [];
+    }
 }
 
 const CHAPTER_KINDS: [RegExp, SkipKind][] = [
@@ -167,10 +191,13 @@ export function fromChapters(chapters: RawChapter[], duration: number): Segment[
 
 /**
  * All known segments for a title. Chapters win (they match this exact file),
- * then TheIntroDB (consensus of several submissions), then IntroDB.
+ * then AniSkip for anime, then TheIntroDB (consensus of several submissions),
+ * then IntroDB.
  */
 export async function lookupSegments(opts: {
     imdb: string | null;
+    /** The title's own id when it isn't IMDb's (`kitsu:…` from an anime addon). */
+    id?: string | null;
     season: number | null;
     episode: number | null;
     duration: number;
@@ -180,11 +207,15 @@ export async function lookupSegments(opts: {
     movie?: boolean;
 }): Promise<Segment[]> {
     const { imdb, season, episode, duration, chapters, movie = false } = opts;
-    const [a, b] = imdb && /^tt\d+$/.test(imdb)
-        ? await Promise.all([fromTheIntroDB(imdb, season, episode, duration), fromIntroDB(imdb, season, episode, duration)])
-        : [[], []];
+    const isImdb = !!imdb && /^tt\d+$/.test(imdb);
+    const malEp = !movie && opts.id && anime.isAnime(opts.id) ? anime.malEpisode(opts.id, season, episode) : null;
+    const [k, a, b] = await Promise.all([
+        malEp ? fromAniSkip(malEp.mal, malEp.episode, duration) : [],
+        isImdb ? fromTheIntroDB(imdb!, season, episode, duration) : [],
+        isImdb ? fromIntroDB(imdb!, season, episode, duration) : [],
+    ]);
     const merged: Segment[] = [];
-    for (const s of [...chapters, ...a, ...b].filter((s) => plausible(s, duration, movie))) {
+    for (const s of [...chapters, ...k, ...a, ...b].filter((s) => plausible(s, duration, movie))) {
         const clash = merged.some((m) => m.kind === s.kind && s.start < m.end && m.start < s.end);
         if (!clash) merged.push(s);
     }

@@ -724,6 +724,7 @@
         const chapters = fromChapters(await player.chapters(), duration);
         const found = await lookupSegments({
             imdb: id,
+            id,
             season: type === 'series' ? season : null,
             episode: type === 'series' ? episode : null,
             duration,
