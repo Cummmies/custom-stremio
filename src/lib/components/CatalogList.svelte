@@ -16,7 +16,7 @@
     // Renders a CatalogsWithExtra model (board or search) and only asks addons
     // for the catalogs that are on, or close to, the screen.
     import { tick, type Snippet } from 'svelte';
-    import { interleave } from '$lib/homeLayout.svelte';
+    import { catalogKey, interleave, type BoardCatalog } from '$lib/homeLayout.svelte';
     import { core } from '$lib/core';
     import CatalogRow from './CatalogRow.svelte';
     import { isTV } from '$lib/platform';
@@ -36,6 +36,15 @@
         /** Draws a built-in row (Continue Watching) where it sits in `rows`. */
         special?: Snippet<[string]>;
     } = $props();
+
+    /**
+     * Lightboxd's Airing This Week: when each release airs goes on its picture
+     * ("Tomorrow · 5:30 PM"), what airs under the title. Only that row, and
+     * only on its own (not combined with other catalogs).
+     */
+    const AIRING = 'cat:app.lightboxd.rows/Lightboxd/lightboxd.airing';
+    const timeOnArt = (indices: number[]) =>
+        indices.length > 0 && indices.every((i) => catalogs[i] && catalogKey(catalogs[i] as BoardCatalog) === AIRING);
 
     /** Titles for a row drawn from one or more catalogs (null while none has loaded). */
     function mergedItems(indices: number[]) {
@@ -120,6 +129,7 @@
                         title={row.title}
                         {items}
                         loading={!items || items.length === 0}
+                        timeOnArt={timeOnArt(row.indices)}
                     />
                 </div>
             {/if}
@@ -135,6 +145,7 @@
                 title={rowTitle(catalog, index)}
                 {items}
                 loading={catalog.content?.type !== 'Ready'}
+                timeOnArt={timeOnArt([index])}
             />
         </div>
     {/if}

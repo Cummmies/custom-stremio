@@ -18,13 +18,19 @@
     import type { MetaItemPreview } from '$lib/core/types';
 
     /** `wide`: a 16:9 tile (a landscape catalog) instead of a 2:3 poster. */
-    let { item, wide = false }: { item: PosterItem; wide?: boolean } = $props();
+    /**
+     * `timeOnArt`: releaseInfo is when it airs ("Tomorrow · 5:30 PM"), shown on
+     * the picture; the description (what airs) goes under the title instead.
+     */
+    let { item, wide = false, timeOnArt = false }: { item: PosterItem; wide?: boolean; timeOnArt?: boolean } = $props();
 
     let loaded = $state(false);
     let failed = $state(false);
 
     // Catalog items are full previews (addable to the library); library items aren't.
     const preview = $derived('posterShape' in item ? item : undefined);
+    const when = $derived(timeOnArt ? item.releaseInfo : null);
+    const below = $derived(timeOnArt ? ((preview as MetaItemPreview | undefined)?.description ?? null) : item.releaseInfo);
     // What the Home banner shows while this card is hovered.
     const heroItem = $derived<MetaItemPreview>(
         (preview as MetaItemPreview | undefined) ?? {
@@ -47,7 +53,7 @@
     use:titleContext={{ type: item.type, id: item.id, name: item.name, preview }}
     use:previewInHero={heroItem}
     onkeydown={arrowNav}
-    aria-label={[item.name, item.releaseInfo].filter(Boolean).join(', ')}
+    aria-label={[item.name, when, below].filter(Boolean).join(', ')}
 >
     <div class="poster" class:loaded class:wide>
         {#if item.poster && !failed}
@@ -65,12 +71,15 @@
         {#if !item.poster || failed}
             <span class="fallback">{item.name}</span>
         {/if}
+        {#if when}
+            <span class="when" aria-hidden="true">{when}</span>
+        {/if}
         {#if item.progress != null && item.progress > 0}
             <span class="progress" aria-hidden="true"><span style="width: {Math.min(100, item.progress * 100)}%"></span></span>
         {/if}
     </div>
     <span class="name" aria-hidden="true">{item.name}</span>
-    {#if item.releaseInfo}<span class="meta" aria-hidden="true">{item.releaseInfo}</span>{/if}
+    {#if below}<span class="meta" aria-hidden="true">{below}</span>{/if}
 </a>
 
 <style>
@@ -150,6 +159,31 @@
         height: 100%;
         background: var(--accent-hover);
     }
+    /* When it airs, on the picture: a dark tag at the bottom left. */
+    .when {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        display: flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 6px;
+        background: rgb(14 14 20 / 0.72);
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    :global(html.tv) .when {
+        left: 10px;
+        bottom: 10px;
+        height: 30px;
+        padding: 0 11px;
+        font-size: 15px;
+    }
     .name {
         font-size: 13px;
         font-weight: 500;
@@ -160,5 +194,8 @@
     .meta {
         font-size: var(--text-caption);
         color: var(--label-2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 </style>
