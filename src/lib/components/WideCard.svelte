@@ -120,9 +120,9 @@
         font-weight: 600;
         color: var(--label-2);
     }
-    /* "+N" new episodes: a light tag in the corner, the count in the accent.
-       Flex-centred at a fixed height, so the digits sit in the middle whatever
-       the font's own line metrics are. */
+    /* "+N" new episodes: the same dark tag as an air time on Airing This
+       Week (PosterCard's .when), in the top right corner. Flex-centred at a
+       fixed height, so the digits sit in the middle. */
     .fresh {
         position: absolute;
         top: 8px;
@@ -130,27 +130,22 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 22px;
-        min-width: 34px;
+        height: 24px;
         padding: 0 9px;
-        box-sizing: border-box;
         border-radius: 6px;
-        border: 1px solid rgb(255 255 255 / 0.9);
-        background: rgb(244 243 252 / 0.92);
-        box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
-        color: #4d35c7; /* the accent, darkened for 4.5:1 on the light tag */
-        font-size: 13px;
-        font-weight: 500;
+        background: rgb(14 14 20 / 0.72);
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
         line-height: 1;
         font-variant-numeric: tabular-nums;
     }
     :global(html.tv) .fresh {
         top: 10px;
         right: 10px;
-        height: 28px;
-        min-width: 42px;
+        height: 30px;
         padding: 0 11px;
-        font-size: 16px;
+        font-size: 15px;
     }
     .progress {
         position: absolute;
