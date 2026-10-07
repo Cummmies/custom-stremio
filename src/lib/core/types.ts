@@ -40,6 +40,8 @@ export type Ctx = {
         settings: Settings;
         addons: import('$lib/components/addons/AddonCard.svelte').AddonDescriptor[];
     };
+    /** New episodes core found, by title then episode id. */
+    notifications?: { items: Record<string, Record<string, { videoReleased?: string | null }>> };
 };
 
 export type Settings = {

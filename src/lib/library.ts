@@ -41,3 +41,28 @@ export function episodeLabel(item: LibraryItem): string | null {
     if (item.type !== 'series' || !parts || parts.length < 3) return null;
     return `S${parts[parts.length - 2]} · E${parts[parts.length - 1]}`;
 }
+
+/** Season and episode from an episode id ("tt…:1:8"); null when it isn't one. */
+function seasonEpisode(videoId: string | null | undefined): [number, number] | null {
+    const parts = cleanVideoId(videoId)?.split(':');
+    if (!parts || parts.length < 3) return null;
+    const [s, e] = parts.slice(-2).map(Number);
+    return Number.isFinite(s) && Number.isFinite(e) ? [s, e] : null;
+}
+
+/**
+ * Stremio's new-episode count, leaving out episodes you're already on or past.
+ * Core counts an episode as new when its listed release is after you last
+ * watched, so one watched before its listed time (a show out at 9 PM listed
+ * for the next morning) would stay "+1" after you've seen it.
+ */
+export function newEpisodeCount(item: LibraryItem, notified: Record<string, unknown> | undefined): number {
+    const ids = Object.keys(notified ?? {});
+    if (ids.length === 0) return item.notifications ?? 0;
+    const at = seasonEpisode(item.state?.videoId);
+    if (!at) return ids.length;
+    return ids.filter((id) => {
+        const se = seasonEpisode(id);
+        return !se || se[0] > at[0] || (se[0] === at[0] && se[1] > at[1]);
+    }).length;
+}

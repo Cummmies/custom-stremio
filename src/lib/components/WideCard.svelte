@@ -1,7 +1,7 @@
 <script lang="ts">
     // Continue Watching card: 16:9 artwork, progress, and where you are.
     import type { LibraryItem } from '$lib/core/types';
-    import { episodeLabel, libraryItemPreview } from '$lib/library';
+    import { episodeLabel, libraryItemPreview, newEpisodeCount } from '$lib/library';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
@@ -10,6 +10,7 @@
     import { canPlay } from '$lib/platform';
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { lightboxd } from '$lib/lightboxd.svelte';
+    import { app } from '$lib/app.svelte';
 
     let { item }: { item: LibraryItem } = $props();
 
@@ -19,9 +20,10 @@
     const detail = $derived(episodeLabel(item) ?? '');
     // New episodes out since you last watched: "+N" in the corner. For anime,
     // Lightboxd's count when it's connected (it knows when the dub is out, if
-    // that's what you watch); otherwise Stremio's own.
+    // that's what you watch); otherwise Stremio's own, minus episodes you've seen.
     const lightboxdCount = $derived(lightboxd.ready ? lightboxd.newEpisodes[item._id] : undefined);
-    const fresh = $derived(item.type === 'series' ? Math.max(0, lightboxdCount ?? item.notifications ?? 0) : 0);
+    const stremioCount = $derived(newEpisodeCount(item, app.ctx?.notifications?.items[item._id]));
+    const fresh = $derived(item.type === 'series' ? Math.max(0, lightboxdCount ?? stremioCount) : 0);
     const freshLabel = $derived(fresh ? `${fresh} new ${fresh === 1 ? 'episode' : 'episodes'}` : '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
     // Core remembers the stream you last used; if it has one, go straight back to it.
