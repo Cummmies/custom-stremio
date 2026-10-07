@@ -144,15 +144,16 @@ doesn't suit an app, and Google sign-in can't work on a TV.
   are separate AniList titles, so finishing one does ask. It only asks about what's playing
   now, and not for an event sent late from the queue (over 30 minutes old).
 - **Card** (`routes/player/+page.svelte`): bottom left, clear of Skip and Up Next on the
-  right. It has buttons **1–10**, **Don't rate**, and **✕** (not now). Lightboxd scores out
-  of 10 in 0.1 steps; whole numbers are quicker in the credits, and decimals can be set in
-  Lightboxd. It says "Rated 8 out of 10 in Lightboxd" and fades out. If Lightboxd can't be
-  reached, it says the title is waiting on Lightboxd's Home.
-- **Lightboxd:** `POST /app-api/v1/ratings/{log_id}` (`{rating}`), `…/later` and `…/skip`.
+  right. A slider scores 0–10 in tenths, as Lightboxd does (`components/ScoreSlider.svelte`;
+  it starts at 5, like Lightboxd's own), with an optional review under it
+  (`components/ReviewField.svelte`), then **Don't Rate**, **Rate**, and **✕** (not now).
+  On TV focus starts on the slider: Left/Right move a tenth, OK rates. It says "Rated 7.4
+  out of 10 in Lightboxd" and fades out. If Lightboxd can't be reached, it says the title is
+  waiting on Lightboxd's Home.
+- **Lightboxd:** `POST /app-api/v1/ratings/{log_id}` (`{rating, review?}`), `…/later` and `…/skip`.
   These are the same queue as Home's "Rate what you finished", so ✕ (no request) leaves the
   title there, and rating or skipping in either place clears it from both.
-- **App:** `lightboxd.answerRating(logId, score | 'later' | 'skip')`.
-- **Later, with the TV:** remote focus for the card (D-pad across 1–10).
+- **App:** `lightboxd.answerRating(logId, score | 'later' | 'skip', review?)`.
 
 ## Phase 5 — Lightboxd rows as a Stremio addon — built
 
@@ -231,8 +232,11 @@ doesn't suit an app, and Google sign-in can't work on a TV.
     metadata.
   - `POST /app-api/v1/watchlist` adds Plan to Watch, importing the title first (like the
     Stremio sync) if Lightboxd doesn't have it. A status you already set is kept.
-  - `POST /app-api/v1/titles/{title_id}/rating` puts your score on your latest watch log.
-    It's a 404 before you've logged it.
+  - `POST /app-api/v1/titles/{title_id}/rating` (`{rating, review?}`) puts your score and
+    review on your latest watch log; a review left out stays, an empty one clears it. It's a
+    404 before you've logged it. The summary's `rating` and `review` are that latest log's, so a
+    rewatch starts unscored; `earlier_rating` (the last scored watch before it) shows as
+    "Last time" and starts the slider there.
 - **App:** `components/detail/LightboxdCard.svelte`, the first card in Details (the column
   beside the episodes, or the Details tab in a narrow window):
   - Status line, e.g. "Watching · 12 of 62 episodes" or "Watched · Mar 14, 2025".

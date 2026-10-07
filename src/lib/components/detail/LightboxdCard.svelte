@@ -4,6 +4,8 @@
     // Watchlist and Rate. Shown only while Lightboxd is connected and reachable;
     // an anime whose seasons are separate titles in Lightboxd gets one each.
     import { lightboxd } from '$lib/lightboxd.svelte';
+    import ScoreSlider from '$lib/components/ScoreSlider.svelte';
+    import ReviewField from '$lib/components/ReviewField.svelte';
 
     let { id, type, name }: { id: string; type: string; name: string } = $props();
 
@@ -23,6 +25,9 @@
         progress: number | null;
         episodes: number | null;
         rating: number | null;
+        review: string | null;
+        /** A rewatch: your score from an earlier watch (Lightboxd scores each watch). */
+        earlier_rating?: number | null;
         watches: number;
         last_watched: string | null;
         can_rate: boolean;
@@ -36,6 +41,15 @@
     let error = $state<string | null>(null);
     /** The title whose score row is open. */
     let rating = $state<number | null>(null);
+    /** The score on its slider: your current one, the last watch's, or Lightboxd's starting 5. */
+    let draft = $state(5);
+    let draftReview = $state('');
+
+    function toggleRating(t: Summary) {
+        draft = t.rating ?? t.earlier_rating ?? 5;
+        draftReview = t.review ?? '';
+        rating = rating === t.title_id ? null : t.title_id;
+    }
 
     // Load for this title once Lightboxd is reachable (again after switching titles).
     $effect(() => {
@@ -50,6 +64,29 @@
         });
     });
 
+    // Rated or logged in Lightboxd meanwhile (on the web, your phone): pick it
+    // up when you come back to the app, and every minute while it's open (the
+    // TV never loses focus). Not while you're editing, or mid-save.
+    const REFRESH_MS = 60_000;
+    function refresh() {
+        const key = loadedFor;
+        if (!key || !titles || busy || rating !== null || document.visibilityState !== 'visible') return;
+        lightboxd.request<{ titles: Summary[] }>(`/titles/${encodeURIComponent(key)}`).then((res) => {
+            if (loadedFor === key && res && rating === null && !busy) titles = res.titles;
+        });
+    }
+    $effect(() => {
+        if (!lightboxd.ready || !supported) return;
+        const timer = setInterval(refresh, REFRESH_MS);
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        return () => {
+            clearInterval(timer);
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
+        };
+    });
+
     async function addToWatchlist() {
         busy = true;
         error = null;
@@ -59,10 +96,13 @@
         else error = 'Couldn’t add it. Lightboxd may not know this title.';
     }
 
-    async function rate(title: Summary, score: number) {
+    async function rate(title: Summary, score: number, review: string) {
         busy = true;
         error = null;
-        const res = await lightboxd.request<{ title: Summary }>(`/titles/${title.title_id}/rating`, { method: 'POST', body: { rating: score } });
+        const res = await lightboxd.request<{ title: Summary }>(`/titles/${title.title_id}/rating`, {
+            method: 'POST',
+            body: { rating: score, review: review.trim() },
+        });
         busy = false;
         if (res && titles) {
             titles = titles.map((t) => (t.title_id === title.title_id ? res.title : t));
@@ -104,22 +144,27 @@
                     <p class="line">
                         {statusLine(t)}{#if t.last_watched}{' · '}{fmtDate(t.last_watched)}{/if}
                     </p>
-                    {#if t.rating != null}<p class="line">Your score: <strong>{score(t.rating)}</strong> / 10</p>{/if}
+                    {#if t.rating != null}<p class="line">Your score: <strong>{score(t.rating)}</strong> / 10</p>
+                    {:else if t.earlier_rating != null}<p class="line">Last time: <strong>{score(t.earlier_rating)}</strong> / 10</p>{/if}
+                    {#if t.review && rating !== t.title_id}<p class="mine">{t.review}</p>{/if}
                     <div class="actions">
                         {#if t.status === null}
                             <button class="btn" disabled={busy} onclick={addToWatchlist}>Add to Watchlist</button>
                         {/if}
                         {#if t.can_rate}
-                            <button class="btn" disabled={busy} onclick={() => (rating = rating === t.title_id ? null : t.title_id)}>
-                                {t.rating != null ? 'Change Score' : 'Rate'}
+                            <button class="btn" disabled={busy} onclick={() => toggleRating(t)}>
+                                {t.rating != null ? 'Edit Rating' : 'Rate'}
                             </button>
                         {/if}
                     </div>
                     {#if rating === t.title_id}
-                        <div class="scores" role="group" aria-label="Score out of 10">
-                            {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as n (n)}
-                                <button disabled={busy} class:on={t.rating === n} onclick={() => rate(t, n)} aria-label={`${n} out of 10`}>{n}</button>
-                            {/each}
+                        <div class="scores">
+                            <ScoreSlider bind:value={draft} disabled={busy} onsubmit={() => rate(t, draft, draftReview)} />
+                            <ReviewField bind:value={draftReview} disabled={busy} onsubmit={() => rate(t, draft, draftReview)} />
+                            <div class="actions">
+                                <button class="btn" disabled={busy} onclick={() => (rating = null)}>Cancel</button>
+                                <button class="btn primary" disabled={busy} onclick={() => rate(t, draft, draftReview)}>{busy ? 'Saving…' : 'Save'}</button>
+                            </div>
                         </div>
                     {/if}
                     {#if t.friends.length}
@@ -207,32 +252,42 @@
     .btn:hover:not(:disabled) {
         background: var(--fill-hover);
     }
-    .btn:disabled,
-    .scores button:disabled {
+    .btn.primary {
+        border-color: transparent;
+        background: var(--label);
+        color: var(--bg);
+    }
+    .btn.primary:hover:not(:disabled) {
+        background: var(--label-2);
+    }
+    .btn:disabled {
         opacity: 0.5;
         cursor: default;
     }
     .scores {
-        display: grid;
-        grid-template-columns: repeat(10, 1fr);
-        gap: 4px;
-        margin-top: 8px;
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        --score-fill: var(--label);
+        --review-bg: var(--fill);
+        --review-border: var(--separator);
+        --review-placeholder: var(--label-3);
     }
-    .scores button {
-        height: 30px;
-        padding: 0;
-        border: 0;
-        border-radius: 7px;
-        background: var(--fill);
+    .scores .actions {
+        margin-top: 0;
+        justify-content: flex-end;
+    }
+    .mine {
+        margin-top: 4px;
+        font-size: 13px;
         color: var(--label);
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        cursor: pointer;
-    }
-    .scores button:hover:not(:disabled),
-    .scores button.on {
-        background: var(--label);
-        color: var(--bg);
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        white-space: pre-line;
     }
     .friends {
         list-style: none;
@@ -302,18 +357,11 @@
         font-size: 13px;
         color: var(--bad);
     }
-    /* Touch: 44 pt targets, so the scores take two rows of five. */
+    /* Touch: 44 pt targets. */
     @media (pointer: coarse) {
         .btn {
             height: 44px;
             padding: 0 16px;
-        }
-        .scores {
-            grid-template-columns: repeat(5, 1fr);
-        }
-        .scores button {
-            height: 44px;
-            font-size: 16px;
         }
     }
 </style>

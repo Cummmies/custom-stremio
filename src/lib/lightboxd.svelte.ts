@@ -395,17 +395,19 @@ class Lightboxd {
     }
 
     /**
-     * Answers the rating prompt for a log Lightboxd just made: a score out of 10,
-     * 'later' (it waits on Lightboxd's Home instead) or 'skip' (never asked again).
-     * True once Lightboxd has it; also true when the log no longer needs a score
-     * (rated or removed meanwhile), since there's nothing left to do.
+     * Answers the rating prompt for a log Lightboxd just made: a score out of 10
+     * (with your review, if you wrote one), 'later' (it waits on Lightboxd's
+     * Home instead) or 'skip' (never asked again).
+     * 'saved' once Lightboxd has it; 'gone' when the log no longer needs a score
+     * (rated in Lightboxd, or removed, meanwhile); false when it couldn't reach it.
      */
-    async answerRating(logId: number, answer: number | 'later' | 'skip'): Promise<boolean> {
+    async answerRating(logId: number, answer: number | 'later' | 'skip', review = ''): Promise<'saved' | 'gone' | false> {
         const res =
             typeof answer === 'number'
-                ? await this.#send(`/ratings/${logId}`, { method: 'POST', body: { rating: answer } })
+                ? await this.#send(`/ratings/${logId}`, { method: 'POST', body: { rating: answer, ...(review.trim() && { review: review.trim() }) } })
                 : await this.#send(`/ratings/${logId}/${answer}`, { method: 'POST' });
-        return !!res && (res.ok || res.status === 404);
+        if (!res) return false;
+        return res.ok ? 'saved' : res.status === 404 ? 'gone' : false;
     }
 
     #installedRows(url: string): AddonDescriptor | null {

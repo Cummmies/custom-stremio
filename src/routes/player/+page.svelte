@@ -8,6 +8,8 @@
 <script lang="ts">
     // Full-window player. mpv draws the video underneath this transparent page;
     // everything you see here is the control layer on top of it.
+    import ScoreSlider from '$lib/components/ScoreSlider.svelte';
+    import ReviewField from '$lib/components/ReviewField.svelte';
     import { onMount, untrack } from 'svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
@@ -863,6 +865,11 @@
     // during the credits. Closing it is fine: it waits on Lightboxd's Home.
     type RatePrompt = { logId: number; name: string; state: 'ask' | 'saving' | 'done' | 'failed'; score?: number };
     let ratePrompt = $state<RatePrompt | null>(null);
+    /** The score on the prompt's slider; Lightboxd's own starts at 5. */
+    let rateScore = $state(5);
+    let rateReview = $state('');
+    /** Typing the review (touch: the prompt moves up, clear of the keyboard). */
+    let rateTyping = $state(false);
     const rateAsked = new Set<number>();
     /** A result for an event from long ago (sent late from the queue) doesn't ask. */
     const RATE_FRESH_MS = 30 * 60_000;
@@ -874,6 +881,9 @@
             if (Date.now() - Date.parse(last.event.at) > RATE_FRESH_MS) return;
             if (last.event.id !== id || (type === 'series' && last.event.video_id !== videoId)) return;
             rateAsked.add(logId);
+            rateScore = 5;
+            rateReview = '';
+            rateTyping = false;
             ratePrompt = { logId, name: last.event.name ?? heading, state: 'ask' };
         });
     });
@@ -888,10 +898,11 @@
         const asked = ratePrompt;
         if (!asked || asked.state !== 'ask') return;
         ratePrompt = { ...asked, state: 'saving' };
-        const ok = await lightboxd.answerRating(asked.logId, answer);
+        const result = await lightboxd.answerRating(asked.logId, answer, rateReview);
         if (ratePrompt?.logId !== asked.logId) return;
-        if (!ok) ratePrompt = { ...asked, state: 'failed' };
-        else if (typeof answer === 'number') ratePrompt = { ...asked, state: 'done', score: answer };
+        if (!result) ratePrompt = { ...asked, state: 'failed' };
+        // Already rated in Lightboxd: nothing to confirm, so it just goes.
+        else if (result === 'saved' && typeof answer === 'number') ratePrompt = { ...asked, state: 'done', score: answer };
         else ratePrompt = null;
         if (ratePrompt) setTimeout(() => ratePrompt?.logId === asked.logId && (ratePrompt = null), 3000);
     }
@@ -1323,7 +1334,7 @@
         // TV: any press keeps the controls up, moving between them included.
         if (isTV && !onVideo()) poke();
         // Already handled (the TV remote moved focus between controls).
-        if (e.defaultPrevented || menu.open || e.target instanceof HTMLInputElement) return;
+        if (e.defaultPrevented || menu.open || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         const k = e.key.toLowerCase();
         let handled = true;
         // TV: Left/Right on the video or the timeline skip.
@@ -1696,25 +1707,40 @@
     {/if}
 
     {#if ratePrompt}
-        <aside class="rate" aria-label="Rate in Lightboxd" out:fade={{ duration: 200 }}>
+        <aside
+            class="rate"
+            class:typing={rateTyping}
+            aria-label="Rate in Lightboxd"
+            onfocusin={(e) => e.target instanceof HTMLTextAreaElement && (rateTyping = true)}
+            onfocusout={(e) => !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null) && (rateTyping = false)}
+            out:fade={{ duration: 200 }}>
             {#if ratePrompt.state === 'done'}
-                <span class="rate-note" role="status">Rated {ratePrompt.score} out of 10 in Lightboxd</span>
+                <span class="rate-note" role="status">Rated {ratePrompt.score?.toFixed(1)} out of 10 in Lightboxd</span>
             {:else if ratePrompt.state === 'failed'}
                 <span class="rate-note" role="status">Couldn’t reach Lightboxd. It’s waiting on Lightboxd’s Home to rate.</span>
             {:else}
                 <div class="rate-head">
-                    <span class="next-eyebrow">Rate in Lightboxd</span>
-                    <button class="rate-close" {@attach tvPrompt} onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not now. It waits on Lightboxd’s Home.">
+                    <span class="next-eyebrow">Rate in Lightboxd{#if rateTyping} · {rateScore.toFixed(1)}{/if}</span>
+                    <button class="rate-close" onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not now. It waits on Lightboxd’s Home.">
                         <Icon name="close" size={14} />
                     </button>
                 </div>
                 <span class="next-title rate-name">{ratePrompt.name}</span>
-                <div class="rate-scores" role="group" aria-label="Score out of 10">
-                    {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as n (n)}
-                        <button disabled={ratePrompt.state === 'saving'} onclick={() => answerRate(n)} aria-label={`${n} out of 10`}>{n}</button>
-                    {/each}
+                <div class="rate-score">
+                    <ScoreSlider
+                        bind:value={rateScore}
+                        disabled={ratePrompt.state === 'saving'}
+                        onsubmit={() => answerRate(rateScore)}
+                        {@attach tvPrompt}
+                    />
                 </div>
-                <button class="rate-skip" disabled={ratePrompt.state === 'saving'} onclick={() => answerRate('skip')}>Don’t rate</button>
+                <ReviewField bind:value={rateReview} disabled={ratePrompt.state === 'saving'} onsubmit={() => answerRate(rateScore)} />
+                <div class="rate-actions">
+                    <button class="rate-skip" disabled={ratePrompt.state === 'saving'} onclick={() => answerRate('skip')}>Don’t Rate</button>
+                    <button class="rate-save" disabled={ratePrompt.state === 'saving'} onclick={() => answerRate(rateScore)}>
+                        {ratePrompt.state === 'saving' ? 'Saving…' : 'Rate'}
+                    </button>
+                </div>
             {/if}
         </aside>
     {/if}
@@ -2200,31 +2226,29 @@
         white-space: nowrap;
         text-overflow: ellipsis;
     }
-    .rate-scores {
-        display: grid;
-        grid-template-columns: repeat(10, 1fr);
-        gap: 4px;
-        margin-top: 6px;
+    .rate-score {
+        margin-top: 4px;
     }
-    .rate-scores button {
+    .rate-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 4px;
+    }
+    .rate-save {
         height: 32px;
-        padding: 0;
+        padding: 0 18px;
         border: 0;
         border-radius: 8px;
-        background: rgb(255 255 255 / 0.12);
-        color: white;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        cursor: pointer;
-    }
-    .rate-scores button:hover:not(:disabled),
-    .rate-scores button:focus-visible {
         background: white;
         color: black;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .rate-save:hover:not(:disabled) {
+        background: rgb(255 255 255 / 0.85);
     }
     .rate-skip {
-        align-self: flex-start;
-        margin-top: 4px;
         padding: 0;
         border: 0;
         background: none;
@@ -2459,8 +2483,9 @@
         bottom: 144px;
         width: 520px;
     }
-    :global(html.tv) .rate-scores button {
+    :global(html.tv) .rate-save {
         height: 48px;
+        padding: 0 24px;
         font-size: 18px;
     }
     :global(html.tv) .rate-close {
@@ -2516,8 +2541,18 @@
         .touch.hidden .rate {
             bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
         }
-        .touch .rate-scores button {
+        /* Typing: up top, clear of the keyboard, over the controls. */
+        .touch .rate.typing {
+            top: max(12px, env(safe-area-inset-top));
+            bottom: auto;
+            z-index: 6;
+        }
+        .touch .rate.typing .rate-score {
+            display: none;
+        }
+        .touch .rate-save {
             height: 44px;
+            padding: 0 20px;
             font-size: 16px;
         }
         .touch .rate-close {
@@ -2527,7 +2562,6 @@
         }
         .touch .rate-skip {
             min-height: 44px;
-            margin: 0 0 -8px;
             font-size: 15px;
         }
         .touch .next-thumb {
