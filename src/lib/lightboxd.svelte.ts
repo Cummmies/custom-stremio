@@ -121,6 +121,33 @@ export function normalizeServer(input: string): string | null {
 
 type Result<T> = { ok: true; data: T } | { ok: false; status: number | null };
 
+/** `url` with its scheme, host and port taken from `server` (the path kept). */
+function onServer(url: string, server: string): string | null {
+    try {
+        const u = new URL(url);
+        const base = new URL(server.endsWith('/') ? server : `${server}/`);
+        // A Lightboxd under a path (reverse proxy) keeps its prefix.
+        return new URL(u.pathname.replace(/^\//, '') + u.search, base).toString();
+    } catch {
+        return null;
+    }
+}
+
+/** An addon's manifest, or null when it can't be had from there (a few seconds at most). */
+async function fetchManifest(url: string): Promise<unknown> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+        const r = await fetch(url, { signal: ctrl.signal });
+        const m = r.ok ? await r.json() : null;
+        return m && typeof m === 'object' && 'id' in m ? m : null;
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /** One request to Lightboxd. Never throws: `status` is null when it couldn't be reached. */
 async function call<T>(
     server: string,
@@ -185,6 +212,11 @@ class Lightboxd {
                 const uid = app.user?._id ?? null;
                 untrack(() => this.#switchTo(uid));
             });
+            // Once connected and the account's addons have loaded (they can
+            // arrive after the connection check): move localhost rows over.
+            $effect(() => {
+                if (this.status === 'ok' && this.rowsInstalled) untrack(() => this.#uid && this.#moveRowsToShared(this.#uid));
+            });
         });
         const recheck = () => {
             if (Date.now() - this.#lastCheck > RETRY_MS) this.check();
@@ -201,6 +233,7 @@ class Lightboxd {
         this.saved = uid ? this.#load(uid) : null;
         this.#queue = uid ? this.#loadQueue(uid) : [];
         this.lastResult = null;
+        this.#rowsMoveTried = false;
         this.check();
     }
 
@@ -270,6 +303,7 @@ class Lightboxd {
             this.#setStatus('ok');
             // Just connected: the rows go on Home.
             if (this.saved?.rows === undefined) this.setRows(true);
+            else if (uid) this.#moveRowsToShared(uid);
         } else if (res.status === 401) {
             this.#forgetToken();
         } else {
@@ -380,17 +414,35 @@ class Lightboxd {
         }
         const uid = this.#uid;
         const res = await this.request<{ manifest_url: string }>('/addon', { method: 'POST' });
-        const manifest = res
-            ? await fetch(res.manifest_url)
-                  .then((r) => (r.ok ? r.json() : null))
-                  .catch(() => null)
-            : null;
-        if (!res || !manifest || uid !== this.#uid || !this.saved?.token) return false;
+        if (!res || uid !== this.#uid) return false;
+        // The addon is saved in the Stremio account, so every device signed in
+        // to it asks this address for the rows. Connected through localhost
+        // (Lightboxd on this PC), that address means nothing elsewhere: use the
+        // profile's shared one instead, when it serves this account's rows.
+        let url = res.manifest_url;
+        let manifest: unknown = null;
+        const shared = uid ? this.sharedServerFor(uid) : null;
+        if (shared && !shareableServer(url)) {
+            const elsewhere = onServer(url, shared);
+            manifest = elsewhere ? await fetchManifest(elsewhere) : null;
+            if (manifest) url = elsewhere!;
+        }
+        manifest ??= await fetchManifest(url);
+        if (!manifest || uid !== this.#uid || !this.saved?.token) return false;
         this.#uninstallRows(); // an older link of this device's
-        this.#save({ ...this.saved, addonUrl: res.manifest_url, rows: true });
-        const addon: AddonDescriptor = { transportUrl: res.manifest_url, manifest, flags: { official: false, protected: false } };
+        this.#save({ ...this.saved, addonUrl: url, rows: true });
+        const addon: AddonDescriptor = { transportUrl: url, manifest, flags: { official: false, protected: false } };
         core.dispatch({ action: 'Ctx', args: { action: 'InstallAddon', args: addon } });
         return true;
+    }
+
+    /** Rows installed through localhost before the profile had a shared address: moved over once. */
+    #rowsMoveTried = false;
+    #moveRowsToShared(uid: string) {
+        const url = this.saved?.addonUrl;
+        if (this.#rowsMoveTried || !url || !this.rowsInstalled || shareableServer(url) || !this.sharedServerFor(uid)) return;
+        this.#rowsMoveTried = true;
+        this.setRows(true);
     }
 
     /** Sends queued events in order; stops at the first that can't be sent now. */

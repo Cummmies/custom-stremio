@@ -186,10 +186,12 @@ doesn't suit an app, and Google sign-in can't work on a TV.
    even when that's how the show got onto the watchlist. Otherwise it was missing from
    Recently Watched, on Lightboxd's Home too.
 6. **Worth knowing:** the addon is saved in your Stremio account, so it reaches every
-   device signed in to it, with the address the app connected through. Connected via
-   `localhost`, the rows only work on this PC. Connect through `lightboxd.local` (or
-   Tailscale) for other devices. The token is in the URL, so it can show up in server
-   access logs; it's read-only.
+   device signed in to it. A device connected through `localhost` (Lightboxd on that PC)
+   builds the rows' link on the profile's shared address instead (`lightboxd.local`, say),
+   if that address serves this account's rows. Rows installed through `localhost` earlier
+   move over by themselves once the profile has a shared address. If there's no reachable
+   shared address, they stay on `localhost` and only work on that PC. The token is in the
+   URL, so it can show up in server access logs; it's read-only.
 
 ## Phase 6 — Calendar tab — built (then redesigned)
 
