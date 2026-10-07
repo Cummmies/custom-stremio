@@ -31,7 +31,10 @@ import { isDesktop, isIOS, isTV } from '$lib/platform';
 
 /** What Lightboxd's Devices list calls this one ("Windows", "iPhone", "TV"). */
 const PLATFORM = isDesktop ? 'windows' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
-const DEVICE_NAME = 'Custom Stremio';
+/** What Lightboxd's Settings > Connected Accounts lists this device as. */
+const DEVICE_NAME = isDesktop ? 'PC' : isIOS ? 'iPhone' : isTV ? 'TV' : 'Browser';
+/** The Stremio account this device is signed in to (Lightboxd groups devices by it). */
+const stremioAccount = () => app.ctx?.profile.auth?.user.email ?? null;
 /**
  * Where Lightboxd usually is, tried in order when no address is given. Only
  * the PC can be running it itself; a phone or TV finds it on the network.
@@ -309,6 +312,7 @@ class Lightboxd {
             const shareable = shareableServer(saved.server);
             if (uid && shareable && !this.sharedServerFor(uid)) this.setSharedServer(uid, shareable);
             this.#setStatus('ok');
+            this.#reportDevice(saved);
             this.#loadNewEpisodes();
             // Just connected: the rows go on Home.
             if (this.saved?.rows === undefined) this.setRows(true);
@@ -368,6 +372,22 @@ class Lightboxd {
      * An authenticated request for later phases (events, calendar, title info).
      * null when not connected, unreachable, or refused.
      */
+    /** What Lightboxd last heard from this device, per token (sent again only when it changes). */
+    #reported = new Map<string, string>();
+
+    /** Tells Lightboxd which Stremio account this device is on, and its name. Best effort. */
+    #reportDevice(saved: { server: string; token: string | null }) {
+        if (!saved.token) return;
+        const body = { stremio_account: stremioAccount(), name: DEVICE_NAME };
+        const key = JSON.stringify(body);
+        if (this.#reported.get(saved.token) === key) return;
+        this.#reported.set(saved.token, key);
+        const token = saved.token;
+        call(saved.server, '/device', { method: 'POST', body, token }).then((res) => {
+            if (!res.ok) this.#reported.delete(token);
+        });
+    }
+
     async request<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number } = {}): Promise<T | null> {
         const res = await this.#send<T>(path, opts);
         return res?.ok ? res.data : null;
@@ -511,7 +531,7 @@ class Lightboxd {
         let found: { server: string; start: Start } | null = null;
         let tooMany = false;
         for (const s of server ? [server] : DEFAULT_SERVERS) {
-            const res = await call<Start>(s, '/pair/start', { method: 'POST', body: { name: DEVICE_NAME, platform: PLATFORM } });
+            const res = await call<Start>(s, '/pair/start', { method: 'POST', body: { name: DEVICE_NAME, platform: PLATFORM, stremio_account: stremioAccount() } });
             if (run !== this.#pairRun) return;
             if (res.ok) {
                 found = { server: s, start: res.data };
