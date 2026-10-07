@@ -8,7 +8,9 @@
             ? 'Streaming ready'
             : status.state === 'starting'
               ? 'Starting server'
-              : 'Server offline'
+              : status.state === 'installing'
+                ? 'Setting up'
+                : 'Server offline'
     );
     const detail = $derived(
         status.state === 'ready'
@@ -17,7 +19,13 @@
                 : 'Using the running Stremio server'
             : status.state === 'starting'
               ? 'Torrents will play in a moment'
-              : status.message
+              : status.state === 'installing'
+                ? status.percent == null
+                    ? 'Downloading…'
+                    : status.percent >= 100
+                      ? 'Unpacking…'
+                      : `Downloading… ${status.percent}%`
+                : status.message
     );
 </script>
 
@@ -56,7 +64,8 @@
     .ready .dot {
         background: var(--ok);
     }
-    .starting .dot {
+    .starting .dot,
+    .installing .dot {
         background: var(--warn);
     }
     .missing .dot,

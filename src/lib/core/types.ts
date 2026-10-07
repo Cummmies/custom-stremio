@@ -57,6 +57,8 @@ export type ServerStatus =
     | { state: 'starting' }
     | { state: 'ready'; url: string; source: 'external' | 'managed' }
     | { state: 'missing'; message: string }
+    /** Setting it up from Settings: downloading (percent, when known), then unpacking. */
+    | { state: 'installing'; percent: number | null }
     | { state: 'failed'; message: string };
 
 /** A library entry as the Library and Continue Watching models send it (a slim view). */
