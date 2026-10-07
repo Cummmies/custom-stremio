@@ -1303,7 +1303,7 @@
         else {
             // On the video: the skip badge, not the controls (as on tvOS).
             const by = Math.round(scrubTo - player.time);
-            if (by) showSkip(by > 0 ? 1 : -1, 0, scrubTo, Math.abs(by));
+            if (by) showSkip(by > 0 ? 1 : -1, 0, Math.abs(by));
         }
         clearTimeout(scrubTimer);
         scrubTimer = setTimeout(commitScrub, 700);
@@ -1410,7 +1410,7 @@
         const from = player.time;
         const to = Math.max(0, Math.min(end, from + seconds));
         player.seekBy(seconds);
-        if (to !== from) showSkip(seconds > 0 ? 1 : -1, Math.abs(seconds), to);
+        if (to !== from) showSkip(seconds > 0 ? 1 : -1, Math.abs(seconds));
         return QUIET;
     }
 
@@ -1523,18 +1523,17 @@
     let tapTimer: ReturnType<typeof setTimeout> | undefined;
     /**
      * The side badge for a run of skips (double-taps, arrow keys, the remote):
-     * how far, and where to. It stays while the skips keep coming.
+     * how far. It stays while the skips keep coming.
      */
-    let tapSkip = $state<{ side: -1 | 1; total: number; at: number | null; key: number } | null>(null);
+    let tapSkip = $state<{ side: -1 | 1; total: number; key: number } | null>(null);
     let tapSkipTimer: ReturnType<typeof setTimeout> | undefined;
 
     /** `seconds` more that way (or `total` outright: the TV's running target). */
-    function showSkip(side: -1 | 1, seconds: number, at: number | null, total?: number) {
+    function showSkip(side: -1 | 1, seconds: number, total?: number) {
         const same = tapSkip?.side === side;
         tapSkip = {
             side,
             total: total ?? (same && tapSkip ? tapSkip.total : 0) + seconds,
-            at,
             key: same && tapSkip ? tapSkip.key : Date.now(),
         };
         clearTimeout(tapSkipTimer);
@@ -1628,7 +1627,6 @@
             <div class="tap-skip" class:right={tapSkip.side > 0} aria-hidden="true" in:skipIn out:fade={{ duration: 220 }}>
                 <Icon name={tapSkip.side > 0 ? 'forward' : 'replay'} size={26} />
                 <span>{skipAmount(tapSkip.total)}</span>
-                {#if tapSkip.at != null}<span class="tap-skip-at">{fmtTime(tapSkip.at)}</span>{/if}
             </div>
         {/key}
     {/if}
@@ -2446,10 +2444,13 @@
         letter-spacing: -0.02em;
         text-box: trim-both cap alphabetic;
     }
+    /* The skip badge, on the side you skipped toward. Keys and the remote: a
+       fifth in from the edge, near where you're looking; touch (below): out
+       at the edge, where the double-tap was. */
     .tap-skip {
         position: absolute;
         top: 50%;
-        left: 12%;
+        left: 20%;
         translate: -50% -50%;
         display: flex;
         flex-direction: column;
@@ -2464,20 +2465,19 @@
         pointer-events: none;
         font-variant-numeric: tabular-nums;
     }
-    .tap-skip-at {
-        font-size: 12px;
-        font-weight: 600;
-        color: rgb(255 255 255 / 0.8);
-    }
+    /* TV: zoomed 1.35× already, so a little larger reads from the couch. */
     :global(html.tv) .tap-skip {
-        width: 140px;
-        height: 140px;
-        font-size: 20px;
-    }
-    :global(html.tv) .tap-skip-at {
-        font-size: 17px;
+        width: 112px;
+        height: 112px;
+        font-size: 16px;
     }
     .tap-skip.right {
+        left: 80%;
+    }
+    .touch .tap-skip {
+        left: 12%;
+    }
+    .touch .tap-skip.right {
         left: 88%;
     }
     .touch .top {
