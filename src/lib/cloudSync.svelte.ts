@@ -1,6 +1,7 @@
 // Keeps this app's own data with your Stremio account: your profile's name,
 // color and picture, your Home layout (Customize Home), all its settings, and
-// the address of your Lightboxd (never its sign-in: each device pairs itself).
+// your Lightboxd connection (its address and token, so a device signed in to
+// the account is connected too).
 // Log in on another PC or your phone and it's there. Settings about the device
 // (upscaling, HDR/audio passthrough, volume, window pausing) are kept per kind
 // of device and only applied to that kind: a new PC gets your PC's, a new
@@ -47,8 +48,8 @@ type Payload = {
     profile?: { name: string; color: string; avatar?: string };
     home?: Layout;
     prefs?: SyncedPrefs;
-    /** Where this profile's Lightboxd is (lightboxd.svelte.ts), so another device only has to pair. */
-    lightboxd?: { server: string | null };
+    /** This profile's Lightboxd connection (lightboxd.svelte.ts); older data has only the server. */
+    lightboxd?: { server: string | null; token?: string | null; addonUrl?: string | null };
     /** Device settings, by kind of device ('desktop', 'ios', …). */
     devices?: Record<string, DevicePrefs>;
 };
@@ -205,7 +206,7 @@ class CloudSync {
             home: JSON.stringify($state.snapshot(homeLayout.layout)),
             prefs: JSON.stringify(playerPrefs.synced()),
             // Always a value, so connecting (from none) counts as a change to send.
-            lightboxd: JSON.stringify({ server: lightboxd.sharedServerFor(uid) }),
+            lightboxd: JSON.stringify(lightboxd.sharedFor(uid)),
             devices: JSON.stringify(playerPrefs.device()),
         };
     }
@@ -264,7 +265,7 @@ class CloudSync {
             took = true;
         }
         if (remote.lightboxd && theirs.lightboxd > mine.lightboxd) {
-            lightboxd.setSharedServer(uid, remote.lightboxd.server);
+            lightboxd.setShared(uid, remote.lightboxd);
             mine.lightboxd = theirs.lightboxd;
             took = true;
         }
@@ -325,7 +326,7 @@ class CloudSync {
                         version: '1.0.0',
                         name: 'Stremio Sync',
                         description:
-                            'Added by this app to keep your profile picture, Home rows and app settings the same on every device you log in to. It stores those settings in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
+                            'Added by this app to keep your profile picture, Home rows, app settings and Lightboxd connection the same on every device you log in to. It stores those in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
                         contactEmail: encode(payload),
                         types: [],
                         resources: [],

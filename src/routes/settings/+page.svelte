@@ -490,8 +490,9 @@
                                         Checking {lightboxdHost}…
                                     {/if}
                                 </div>
+                                <div class="sub">On every device signed in to this Stremio account.</div>
                             </div>
-                            <button class="btn" onclick={() => lightboxd.disconnect()}>Disconnect</button>
+                            <button class="btn" onclick={() => lightboxd.disconnect()} title="Disconnects every device signed in to this Stremio account">Disconnect</button>
                         </div>
                         <div class="row">
                             <div>

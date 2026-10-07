@@ -87,12 +87,22 @@ doesn't suit an app, and Google sign-in can't work on a TV.
    - **Pairing:** the code, with an **Open Lightboxd** button that opens the approval page
      in the browser. There's no QR code on the PC; it comes with the TV.
    - **Connected:** the Lightboxd name and handle, a status line, and **Disconnect**.
-   - The device is called "Custom Stremio" with platform `windows`.
-3. **The address follows the profile** through the Settings sync addon (`cloudSync.svelte.ts`,
-   part `lightboxd`: `{server}`). The token never goes there; each device pairs itself.
-   - A device shares its address when it pairs, or when the profile has none yet. Two devices
-     reaching Lightboxd by different addresses (`lightboxd.local` vs Tailscale) don't keep
-     overwriting each other.
+   - The approval page names the device (PC, iPhone, TV); once connected, the connection is
+     called "Custom Stremio" and reports its Stremio account (`POST /app-api/v1/device`).
+3. **The connection follows the Stremio account** through the Settings sync addon
+   (`cloudSync.svelte.ts`, part `lightboxd`: `{server, token, addonUrl}`). A device signed in
+   to the account is connected without pairing, and Lightboxd's Settings > Connected Accounts
+   lists the account once. The tradeoff: the token sits in the account's synced addon data, so
+   someone in the Stremio account has the app's access to Lightboxd (not its website).
+   - The first device to connect shares its token; a device that paired on its own moves to
+     the account's token and revokes its own. Two connecting at once settle on the newer one.
+   - It tries its own address, the account's, then the usual places with the token.
+   - Removed in Lightboxd (a 401): the shared token is cleared, so no device tries it again.
+   - **Disconnect** ends the connection on every device signed in to the account.
+   - The rows' addon link is the account's too (it's made from the shared token, and Stremio
+     syncs installed addons), so devices don't replace each other's.
+   - Two devices reaching Lightboxd by different addresses (`lightboxd.local` vs Tailscale)
+     don't keep overwriting each other's address.
    - `localhost`, `127.x` and `::1` are never shared, since they mean nothing on another device.
    - A new device's Settings fills the address in ("This profile uses Lightboxd on another
      device. Connect, then approve this one there too."), so it only takes Connect and an

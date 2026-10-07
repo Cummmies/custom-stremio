@@ -3,8 +3,8 @@
 // saved on this device.
 //
 // Connecting is pairing: Lightboxd gives this app a code, you approve it in a
-// browser where you're signed in to Lightboxd, and the app gets a token of its
-// own (never your password). Lightboxd can remove it in Settings > Devices.
+// browser where you're signed in to Lightboxd, and the app gets a token (never
+// your password). Lightboxd can remove it in Settings > Connected Accounts.
 //
 // Lightboxd is optional and may be off or asleep: every call here gives up
 // after a few seconds and returns null instead of throwing, and `ready` says
@@ -15,13 +15,16 @@
 // Lightboxd can't be reached, and go once it's back. Lightboxd applies each one
 // once, whatever the app resends, and agrees with its own Stremio sync.
 //
-// The address (never the token) follows the profile to its other devices
-// through the Settings sync addon (cloudSync.svelte.ts, part "lightboxd"), so
-// a new device only has to approve its own code. A `localhost` address means
-// nothing on another device, so it isn't shared.
+// The connection belongs to the Stremio account, not the device: its address,
+// token and rows link follow the profile to its other devices through the
+// Settings sync addon (cloudSync.svelte.ts, part "lightboxd"), so a device
+// signed in to the account is connected without pairing, and Lightboxd lists
+// the account once. A device that had paired on its own moves over to the
+// account's token and drops its own. A `localhost` address means nothing on
+// another device, so it isn't shared: that device looks in the usual places.
 //
 // Lightboxd's rows (Recently Watched, Airing This Week) come as a Stremio
-// addon Lightboxd serves, with a read-only link of this device's own. It's
+// addon Lightboxd serves, with a read-only link of the account's token. It's
 // installed on connecting, so Customize Home treats them like any other row,
 // and when Lightboxd is down their catalogs fail and Home leaves them out.
 import { untrack } from 'svelte';
@@ -29,10 +32,12 @@ import { app } from '$lib/app.svelte';
 import { core } from '$lib/core';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
 
-/** What Lightboxd's Devices list calls this one ("Windows", "iPhone", "TV"). */
+/** What kind of device this is, for Lightboxd ("windows", "ios", "tv"). */
 const PLATFORM = isDesktop ? 'windows' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
-/** What Lightboxd's Settings > Connected Accounts lists this device as. */
+/** What Lightboxd's approval page says is asking to connect. */
 const DEVICE_NAME = isDesktop ? 'PC' : isIOS ? 'iPhone' : isTV ? 'TV' : 'Browser';
+/** What the account's connection is called, once every device shares it. */
+const CONNECTION_NAME = 'Custom Stremio';
 /** The Stremio account this device is signed in to (Lightboxd groups devices by it). */
 const stremioAccount = () => app.ctx?.profile.auth?.user.email ?? null;
 /**
@@ -51,11 +56,14 @@ type Saved = {
     /** null once Lightboxd removed this device (the server is kept for reconnecting). */
     token: string | null;
     user?: LightboxdUser;
-    /** This device's addon link for the rows, once made. */
+    /** The account's addon link for the rows, once made. */
     addonUrl?: string;
     /** Whether the rows are wanted (unset until first connected). */
     rows?: boolean;
 };
+/** The account's connection, as synced between its devices (all null: none). */
+export type Shared = { server: string | null; token: string | null; addonUrl: string | null };
+const NO_SHARED: Shared = { server: null, token: null, addonUrl: null };
 type AddonDescriptor = { transportUrl: string; manifest: unknown; flags: { official: boolean; protected: boolean } };
 export type Status = 'off' | 'checking' | 'ok' | 'unreachable' | 'removed';
 export type Pairing = {
@@ -192,7 +200,7 @@ class Lightboxd {
     /** The rows' addon is installed in this profile. */
     rowsInstalled = $derived(!!this.saved?.addonUrl && !!this.#installedRows(this.saved.addonUrl));
 
-    /** Bumped when a profile's shared address changes, so readers of sharedServerFor re-run. */
+    /** Bumped when a profile's shared connection changes, so readers of sharedFor re-run. */
     #sharedVersion = $state(0);
 
     #started = false;
@@ -248,6 +256,76 @@ class Lightboxd {
         this.check();
     }
 
+    /** The token being tried from the account, so it's tried once at a time. */
+    #adopting: string | null = null;
+
+    /**
+     * Another device's connection is the account's: use it here instead of
+     * pairing (or instead of a token this device got on its own, which goes).
+     * Tries this device's address, the account's, then the usual places.
+     */
+    async #followShared() {
+        const uid = this.#uid;
+        if (!uid) return;
+        const shared = this.sharedFor(uid);
+        const token = shared.token;
+        if (!token || token === this.saved?.token || this.#adopting === token) return;
+        this.#adopting = token;
+        try {
+            const candidates = [this.saved?.server, shared.server, ...DEFAULT_SERVERS].filter((s): s is string => !!s);
+            for (const server of new Set(candidates)) {
+                const res = await call<{ user: LightboxdUser }>(server, '/me', { token });
+                if (uid !== this.#uid) return;
+                if (res.ok) {
+                    const old = this.saved;
+                    if (old?.token && old.token !== token) {
+                        // This device's own link and token go: the account's replace them.
+                        if (old.addonUrl && old.addonUrl !== shared.addonUrl) this.#uninstallRows();
+                        call(old.server, '/disconnect', { method: 'POST', token: old.token });
+                    }
+                    this.#save({
+                        server,
+                        token,
+                        user: old?.user,
+                        addonUrl: shared.addonUrl ?? undefined,
+                        rows: old?.rows ?? (shared.addonUrl ? true : undefined),
+                    });
+                    await this.check();
+                    return;
+                }
+                if (res.status === 401) {
+                    // Removed in Lightboxd: no device should try it again.
+                    const now = this.sharedFor(uid);
+                    if (now.token === token) this.setShared(uid, { ...now, token: null, addonUrl: null });
+                    return;
+                }
+            }
+        } finally {
+            if (this.#adopting === token) this.#adopting = null;
+        }
+    }
+
+    /**
+     * This device's working connection becomes the account's, unless the
+     * account has another: then that one is followed instead, and false says
+     * this device's token is on its way out.
+     */
+    #publish(uid: string, saved: Saved): boolean {
+        if (!saved.token) return false;
+        const shared = this.sharedFor(uid);
+        if (shared.token && shared.token !== saved.token) {
+            this.#followShared();
+            return false;
+        }
+        const next: Shared = {
+            server: shareableServer(saved.server) ?? shared.server,
+            token: saved.token,
+            addonUrl: saved.addonUrl ?? shared.addonUrl,
+        };
+        if (JSON.stringify(next) !== JSON.stringify(shared)) this.setShared(uid, next);
+        return true;
+    }
+
     #loadQueue(uid: string): WatchEvent[] {
         try {
             const v = JSON.parse(localStorage.getItem(queueKey(uid)) ?? '[]');
@@ -300,6 +378,8 @@ class Lightboxd {
         this.#lastCheck = Date.now();
         if (!saved?.token) {
             this.#setStatus(saved ? 'removed' : 'off');
+            // Connected on another device signed in to this account: so is this one.
+            this.#followShared();
             return;
         }
         if (this.status !== 'ok') this.status = 'checking';
@@ -308,14 +388,14 @@ class Lightboxd {
         if (res.ok) {
             const { name, handle, avatar_url } = res.data.user;
             this.#save({ ...saved, user: { name, handle, avatar_url } });
-            // Connected, and the profile has no address for its other devices yet: this one.
-            const shareable = shareableServer(saved.server);
-            if (uid && shareable && !this.sharedServerFor(uid)) this.setSharedServer(uid, shareable);
             this.#setStatus('ok');
+            // The account's connection, for its other devices. If the account has
+            // another, this device moves to it; nothing more on this token meanwhile.
+            if (uid && this.saved && !this.#publish(uid, this.saved)) return;
             this.#reportDevice(saved);
             this.#loadNewEpisodes();
-            // Just connected: the rows go on Home.
-            if (this.saved?.rows === undefined) this.setRows(true);
+            // Just connected, or the rows link went with an old token: the rows go on Home.
+            if (this.saved?.rows === undefined || (this.saved?.rows && !this.saved.addonUrl)) this.setRows(true);
             else if (uid) this.#moveRowsToShared(uid);
         } else if (res.status === 401) {
             this.#forgetToken();
@@ -325,27 +405,49 @@ class Lightboxd {
     }
 
     /**
-     * The address this profile uses for Lightboxd, as synced between its
-     * devices (null when none). Reactive. Read per profile, so the Settings
-     * sync can ask about the profile it's syncing before this switches to it.
+     * The profile's Lightboxd connection, as synced between its devices.
+     * Reactive. Read per profile, so the Settings sync can ask about the
+     * profile it's syncing before this switches to it.
      */
-    sharedServerFor(uid: string): string | null {
+    sharedFor(uid: string): Shared {
         void this.#sharedVersion;
         try {
-            return localStorage.getItem(sharedKey(uid)) || null;
+            const raw = localStorage.getItem(sharedKey(uid));
+            if (!raw) return NO_SHARED;
+            // Before the token was shared, only the address was kept (as is).
+            if (!raw.startsWith('{')) return { ...NO_SHARED, server: raw };
+            const v = JSON.parse(raw);
+            return { server: v.server ?? null, token: v.token ?? null, addonUrl: v.addonUrl ?? null };
         } catch {
-            return null;
+            return NO_SHARED;
         }
     }
 
+    /** The address in the profile's shared connection (null when none). */
+    sharedServerFor(uid: string): string | null {
+        return this.sharedFor(uid).server;
+    }
+
     /** Set by connecting here, or by the Settings sync bringing another device's. */
-    setSharedServer(uid: string, server: string | null) {
-        if (this.sharedServerFor(uid) === server) return;
+    setShared(uid: string, next: Partial<Shared> | null) {
+        const value: Shared = {
+            server: next?.server ?? null,
+            token: next?.token ?? null,
+            addonUrl: next?.addonUrl ?? null,
+        };
+        if (JSON.stringify(this.sharedFor(uid)) === JSON.stringify(value)) return;
         try {
-            if (server) localStorage.setItem(sharedKey(uid), server);
+            if (value.server || value.token) localStorage.setItem(sharedKey(uid), JSON.stringify(value));
             else localStorage.removeItem(sharedKey(uid));
         } catch {}
         this.#sharedVersion++;
+        if (uid !== this.#uid) return;
+        // Another device connected (or moved to a new token): follow it here.
+        if (value.token && value.token !== this.saved?.token) untrack(() => this.#followShared());
+        // Same connection, a new rows link (made on another device): it's this one's too.
+        else if (value.token && this.saved && value.addonUrl && value.addonUrl !== this.saved.addonUrl) {
+            this.#save({ ...this.saved, addonUrl: value.addonUrl });
+        }
     }
 
     /** What Settings fills the address field with: this device's, else the profile's shared one. */
@@ -359,9 +461,13 @@ class Lightboxd {
         if (res && uid === this.#uid) this.newEpisodes = res.counts ?? {};
     }
 
-    /** Lightboxd removed this device: keep the address for reconnecting. */
+    /** Lightboxd removed this connection: keep the address for reconnecting. */
     #forgetToken() {
         this.newEpisodes = {};
+        // The account's too, so no other device tries it.
+        const uid = this.#uid;
+        const shared = uid ? this.sharedFor(uid) : null;
+        if (uid && shared?.token && shared.token === this.saved?.token) this.setShared(uid, { ...shared, token: null, addonUrl: null });
         // Its addon link went with it.
         this.#uninstallRows();
         if (this.saved) this.#save({ server: this.saved.server, token: null, user: this.saved.user });
@@ -375,10 +481,10 @@ class Lightboxd {
     /** What Lightboxd last heard from this device, per token (sent again only when it changes). */
     #reported = new Map<string, string>();
 
-    /** Tells Lightboxd which Stremio account this device is on, and its name. Best effort. */
+    /** Tells Lightboxd which Stremio account this connection is for. Best effort. */
     #reportDevice(saved: { server: string; token: string | null }) {
         if (!saved.token) return;
-        const body = { stremio_account: stremioAccount(), name: DEVICE_NAME };
+        const body = { stremio_account: stremioAccount(), name: CONNECTION_NAME };
         const key = JSON.stringify(body);
         if (this.#reported.get(saved.token) === key) return;
         this.#reported.set(saved.token, key);
@@ -467,8 +573,10 @@ class Lightboxd {
         }
         manifest ??= await fetchManifest(url);
         if (!manifest || uid !== this.#uid || !this.saved?.token) return false;
-        this.#uninstallRows(); // an older link of this device's
+        this.#uninstallRows(); // the older link
         this.#save({ ...this.saved, addonUrl: url, rows: true });
+        // The account's other devices see this link installed, and use it.
+        if (uid && this.saved) this.#publish(uid, this.saved);
         const addon: AddonDescriptor = { transportUrl: url, manifest, flags: { official: false, protected: false } };
         core.dispatch({ action: 'Ctx', args: { action: 'InstallAddon', args: addon } });
         return true;
@@ -568,10 +676,8 @@ class Lightboxd {
             const state = res.ok ? res.data.state : 'pending'; // unreachable for a moment: keep waiting
             if (state === 'approved' && res.ok && res.data.token) {
                 this.pairing = null;
+                // Just paired here: check() makes it the account's, for its other devices.
                 this.#save({ server, token: res.data.token });
-                // Just paired here: the profile's other devices get this address.
-                const shareable = shareableServer(server);
-                if (this.#uid && shareable) this.setSharedServer(this.#uid, shareable);
                 await this.check();
                 return;
             }
@@ -591,9 +697,16 @@ class Lightboxd {
         this.connecting = false;
     }
 
-    /** Disconnect: Lightboxd forgets this device (when it's reachable), and so does this profile. */
+    /**
+     * Disconnect: the account's connection ends, on every device signed in to
+     * it. Lightboxd forgets the token (when it's reachable), and so does this
+     * profile; the address stays shared, for connecting again.
+     */
     async disconnect() {
         const saved = this.saved;
+        const uid = this.#uid;
+        const shared = uid ? this.sharedFor(uid) : null;
+        if (uid && shared && (!shared.token || shared.token === saved?.token)) this.setShared(uid, { server: shared.server });
         this.cancelPairing();
         this.#uninstallRows();
         this.newEpisodes = {};
