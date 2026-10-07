@@ -120,32 +120,37 @@
         font-weight: 600;
         color: var(--label-2);
     }
-    /* "+N" new episodes: a small frosted tag in the top right corner, over the art. */
+    /* "+N" new episodes: a light tag in the corner, the count in the accent.
+       Flex-centred at a fixed height, so the digits sit in the middle whatever
+       the font's own line metrics are. */
     .fresh {
         position: absolute;
         top: 8px;
         right: 8px;
-        min-width: 22px;
-        padding: 2px 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 22px;
+        min-width: 34px;
+        padding: 0 9px;
         box-sizing: border-box;
-        border-radius: 7px;
-        border: 1px solid rgb(255 255 255 / 0.28);
-        background: rgb(20 20 28 / 0.62);
-        backdrop-filter: blur(10px) saturate(1.4);
-        -webkit-backdrop-filter: blur(10px) saturate(1.4);
-        color: white;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 16px;
-        text-align: center;
+        border-radius: 6px;
+        border: 1px solid rgb(255 255 255 / 0.9);
+        background: rgb(244 243 252 / 0.92);
+        box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+        color: #4d35c7; /* the accent, darkened for 4.5:1 on the light tag */
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1;
         font-variant-numeric: tabular-nums;
     }
     :global(html.tv) .fresh {
         top: 10px;
         right: 10px;
-        font-size: 15px;
-        line-height: 20px;
-        padding: 2px 9px;
+        height: 28px;
+        min-width: 42px;
+        padding: 0 11px;
+        font-size: 16px;
     }
     .progress {
         position: absolute;
