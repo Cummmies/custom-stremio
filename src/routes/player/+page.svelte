@@ -1299,7 +1299,12 @@
         const step = heldFor > 4000 ? 60 : heldFor > 1500 ? 30 : 10;
         const end = player.duration ? player.duration - 1 : Infinity;
         scrubTo = Math.max(0, Math.min(end, (scrubTo ?? player.time) + direction * step));
-        poke();
+        if (controlsVisible) poke();
+        else {
+            // On the video: the skip badge, not the controls (as on tvOS).
+            const by = Math.round(scrubTo - player.time);
+            if (by) showSkip(by > 0 ? 1 : -1, 0, scrubTo, Math.abs(by));
+        }
         clearTimeout(scrubTimer);
         scrubTimer = setTimeout(commitScrub, 700);
     }
@@ -1337,6 +1342,7 @@
         if (e.defaultPrevented || menu.open || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         const k = e.key.toLowerCase();
         let handled = true;
+        let quiet = false;
         // TV: Left/Right on the video or the timeline skip.
         if (isTV && (k === 'arrowleft' || k === 'arrowright') && (onVideo() || (e.target as Element)?.closest?.('.seek'))) {
             e.preventDefault();
@@ -1361,8 +1367,8 @@
             // The remote's own keys (its media keys reach here as these too).
             if (k === 's') tabSkip();
             else if (k === ' ' || k === 'k' || k === 'enter') player.togglePause();
-            else if (k === 'arrowright') player.seekBy(seekStep);
-            else if (k === 'arrowleft') player.seekBy(-seekStep);
+            else if (k === 'arrowright') quiet = skipBy(seekStep) === QUIET;
+            else if (k === 'arrowleft') quiet = skipBy(-seekStep) === QUIET;
             // Up or down brings up the controls on the timeline, as on tvOS
             // (left/right there skip; down again reaches the buttons).
             else if (k === 'arrowup' || k === 'arrowdown') {
@@ -1378,12 +1384,13 @@
                 e.preventDefault();
                 return;
             }
-            if (action) runHotkey(action);
+            if (action) quiet = runHotkey(action) === QUIET;
             else handled = false;
         }
         if (handled) {
             e.preventDefault();
-            poke();
+            // Skipping shows its badge, not the controls.
+            if (!quiet) poke();
             markActive();
         }
     }
@@ -1393,6 +1400,19 @@
     let holdSpeed: { timer: ReturnType<typeof setTimeout>; restore: number | null } | null = null;
     /** The subtitles turned off by the shortcut, to turn back on. */
     let lastSubtitle: number | null = null;
+
+    /** A hotkey that skipped: the key handler leaves the controls hidden. */
+    const QUIET = Symbol('quiet');
+
+    /** Skips without bringing up the controls; the side badge says by how much. */
+    function skipBy(seconds: number): typeof QUIET {
+        const end = player.duration ? player.duration - 1 : Infinity;
+        const from = player.time;
+        const to = Math.max(0, Math.min(end, from + seconds));
+        player.seekBy(seconds);
+        if (to !== from) showSkip(seconds > 0 ? 1 : -1, Math.abs(seconds), to);
+        return QUIET;
+    }
 
     function runHotkey(action: HotkeyAction) {
         switch (action) {
@@ -1412,13 +1432,13 @@
                 return;
             }
             case 'seek-forward':
-                return void player.seekBy(seekStep);
+                return skipBy(seekStep);
             case 'seek-backward':
-                return void player.seekBy(-seekStep);
+                return skipBy(-seekStep);
             case 'seek-forward-short':
-                return void player.seekBy(seekStep / 3);
+                return skipBy(seekStep / 3);
             case 'seek-backward-short':
-                return void player.seekBy(-seekStep / 3);
+                return skipBy(-seekStep / 3);
             case 'volume-up':
                 return void player.setVolume(player.volume + 5);
             case 'volume-down':
@@ -1501,9 +1521,26 @@
     const TAP_MS = 280;
     let lastTap: { at: number; side: -1 | 0 | 1 } | null = null;
     let tapTimer: ReturnType<typeof setTimeout> | undefined;
-    /** Seconds skipped by the current run of double-taps, for the side indicator. */
-    let tapSkip = $state<{ side: -1 | 1; total: number; key: number } | null>(null);
+    /**
+     * The side badge for a run of skips (double-taps, arrow keys, the remote):
+     * how far, and where to. It stays while the skips keep coming.
+     */
+    let tapSkip = $state<{ side: -1 | 1; total: number; at: number | null; key: number } | null>(null);
     let tapSkipTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /** `seconds` more that way (or `total` outright: the TV's running target). */
+    function showSkip(side: -1 | 1, seconds: number, at: number | null, total?: number) {
+        const same = tapSkip?.side === side;
+        tapSkip = {
+            side,
+            total: total ?? (same && tapSkip ? tapSkip.total : 0) + seconds,
+            at,
+            key: same && tapSkip ? tapSkip.key : Date.now(),
+        };
+        clearTimeout(tapSkipTimer);
+        tapSkipTimer = setTimeout(() => (tapSkip = null), 900);
+    }
+    const skipAmount = (s: number) => (s >= 60 ? fmtTime(s) : `${Math.round(s)}s`);
     let lastPointerType = '';
 
     function onsurfaceup(e: PointerEvent) {
@@ -1537,12 +1574,12 @@
             poke();
         }
     }
+    /** The badge pops in. */
+    function skipIn(_node: Element) {
+        return { duration: 140, css: (t: number) => `opacity: ${t}; scale: ${0.8 + 0.2 * t}` };
+    }
     function tapBy(side: -1 | 1) {
-        player.seekBy(side * 10);
-        const total = tapSkip?.side === side ? tapSkip.total + 10 : 10;
-        tapSkip = { side, total, key: Date.now() };
-        clearTimeout(tapSkipTimer);
-        tapSkipTimer = setTimeout(() => (tapSkip = null), 700);
+        skipBy(side * 10);
     }
 
     // Clicking empty video area toggles play; double-click toggles fullscreen.
@@ -1588,9 +1625,10 @@
 
     {#if tapSkip}
         {#key tapSkip.key}
-            <div class="tap-skip" class:right={tapSkip.side > 0} aria-hidden="true">
+            <div class="tap-skip" class:right={tapSkip.side > 0} aria-hidden="true" in:skipIn out:fade={{ duration: 220 }}>
                 <Icon name={tapSkip.side > 0 ? 'forward' : 'replay'} size={26} />
-                <span>{tapSkip.total}s</span>
+                <span>{skipAmount(tapSkip.total)}</span>
+                {#if tapSkip.at != null}<span class="tap-skip-at">{fmtTime(tapSkip.at)}</span>{/if}
             </div>
         {/key}
     {/if}
@@ -2424,26 +2462,23 @@
         font-size: 13px;
         font-weight: 700;
         pointer-events: none;
-        animation: tap-pop 700ms var(--ease) forwards;
+        font-variant-numeric: tabular-nums;
+    }
+    .tap-skip-at {
+        font-size: 12px;
+        font-weight: 600;
+        color: rgb(255 255 255 / 0.8);
+    }
+    :global(html.tv) .tap-skip {
+        width: 140px;
+        height: 140px;
+        font-size: 20px;
+    }
+    :global(html.tv) .tap-skip-at {
+        font-size: 17px;
     }
     .tap-skip.right {
         left: 88%;
-    }
-    @keyframes tap-pop {
-        0% {
-            opacity: 0;
-            scale: 0.8;
-        }
-        15% {
-            opacity: 1;
-            scale: 1;
-        }
-        75% {
-            opacity: 1;
-        }
-        100% {
-            opacity: 0;
-        }
     }
     .touch .top {
         padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left));
