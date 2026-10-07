@@ -2,8 +2,10 @@
 // Apple's Subtitles & Captioning settings). One style for every device: mpv
 // draws it on the PC and iPhone (`mpvSubtitleOptions`), the player page on the
 // TV, whose player leaves subtitles to the app (`subtitleCss`), and Settings'
-// preview the same way. Styled subtitles (ASS, common in anime) keep their own
-// look; this applies to plain ones (SRT, WebVTT).
+// preview the same way. It applies to every subtitle, ASS ones too (many
+// releases ship ordinary dialogue as ASS, in Arial with an outline), except in
+// anime, whose ASS subtitles place signs and songs on screen: those keep their
+// own look.
 
 export type SubSize = 'small' | 'medium' | 'large' | 'xlarge';
 export type SubFont = 'default' | 'serif' | 'mono';
@@ -73,8 +75,11 @@ function mpvFont(font: SubFont, ios: boolean): string {
 /** mpv's colours are #AARRGGBB. */
 const argb = (alpha: number, rgb: string) => `#${Math.round(alpha * 255).toString(16).padStart(2, '0').toUpperCase()}${rgb.slice(1)}`;
 
-/** The mpv options for a style (phones read a little smaller, as they're held close). */
-export function mpvSubtitleOptions(style: SubStyle, ios = false): Record<string, string> {
+/**
+ * The mpv options for a style (phones read a little smaller, as they're held
+ * close). `keepStyled`: ASS subtitles keep their own look, only scaled (anime).
+ */
+export function mpvSubtitleOptions(style: SubStyle, ios = false, keepStyled = false): Record<string, string> {
     const s = normalizeSubStyle(style);
     const size = Math.round(SIZE_720[s.size] * (ios ? 0.92 : 1));
     const o: Record<string, string> = {
@@ -85,12 +90,14 @@ export function mpvSubtitleOptions(style: SubStyle, ios = false): Record<string,
         // From the bottom of the picture (720-pixel scale), never right on the edge.
         'sub-margin-y': String(Math.max(12, Math.round((s.position / 100) * 720))),
         'sub-blur': '0',
+        'sub-ass-override': keepStyled ? 'scale' : 'force',
     };
     if (s.background) {
         Object.assign(o, {
             'sub-border-style': 'background-box',
             'sub-back-color': argb(0.62, '#000000'),
             'sub-border-size': '6', // the box's padding
+            'sub-border-color': '#00000000', // no outline around the letters inside it
             'sub-shadow-offset': '0',
         });
     } else {

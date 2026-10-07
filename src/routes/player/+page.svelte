@@ -707,10 +707,14 @@
 
     /** The picture's height, for the TV's subtitles (sized like mpv's, by 720 lines). */
     let playerHeight = $state(0);
-    // Settings > Subtitle Style changed while playing (or synced from another device).
+    // Your subtitle style, once the video is open (and again if it's changed
+    // meanwhile, or synced from another device). Anime's styled subtitles keep
+    // their own look: they place signs and songs on screen.
     $effect(() => {
         const style = playerPrefs.subStyle;
-        untrack(() => player.loaded && player.setSubtitleStyle?.(style));
+        const keepStyled = anime.isAnime(id) === true;
+        if (!player.loaded) return;
+        untrack(() => player.setSubtitleStyle?.(style, keepStyled));
     });
 
     // Look them up once per video, as soon as its length is known (it isn't yet

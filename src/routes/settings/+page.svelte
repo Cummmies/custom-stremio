@@ -368,7 +368,7 @@
                 <div class="row">
                     <div>
                         <div class="title">Style</div>
-                        <div class="sub">On every device. Styled subtitles, common in anime, keep their own look.</div>
+                        <div class="sub">On every device. Anime’s styled subtitles keep their own look, for their signs and songs.</div>
                     </div>
                     <PopupButton
                         label="Subtitle style"

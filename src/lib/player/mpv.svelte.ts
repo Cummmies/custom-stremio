@@ -302,9 +302,9 @@ class Mpv implements PlayerBackend {
         return { delay, scale };
     }
 
-    /** Settings > Subtitle Style changed: shown from the next line on. */
-    async setSubtitleStyle(style: SubStyle) {
-        for (const [k, v] of Object.entries(mpvSubtitleOptions(style, isIOS))) await this.set(k, v).catch(() => {});
+    /** Your subtitle style for this video (`keepStyled`: anime's ASS keeps its own look). */
+    async setSubtitleStyle(style: SubStyle, keepStyled = false) {
+        for (const [k, v] of Object.entries(mpvSubtitleOptions(style, isIOS, keepStyled))) await this.set(k, v).catch(() => {});
     }
 
     async setHdrPassthrough(on: boolean) {
@@ -382,10 +382,10 @@ function buildOptions(settings: StartSettings): Record<string, string> {
         volume: String(playerPrefs.volume),
         'volume-max': '130',
         'sub-auto': 'fuzzy',
-        // Plain subtitles in your style (Settings > Subtitle Style); styled
-        // ones (ASS) keep theirs, only scaled.
-        ...mpvSubtitleOptions(playerPrefs.subStyle, isIOS),
-        'sub-ass-override': 'scale',
+        // Subtitles in your style (Settings > Subtitle Style). Until the
+        // player page says whether it's anime (setSubtitleStyle), ASS ones
+        // keep their own look.
+        ...mpvSubtitleOptions(playerPrefs.subStyle, isIOS, true),
     };
     // Files tag tracks "en" or "eng" (or "fre"/"fra"): list every spelling.
     if (settings.audioLanguage) o.alang = spellings(settings.audioLanguage);
