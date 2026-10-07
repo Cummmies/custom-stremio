@@ -16,6 +16,9 @@
     const art = $derived(isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster);
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
     const detail = $derived(episodeLabel(item) ?? '');
+    // New episodes out since you last watched: "+N" in the corner.
+    const fresh = $derived(item.type === 'series' ? Math.max(0, item.notifications ?? 0) : 0);
+    const freshLabel = $derived(fresh ? `${fresh} new ${fresh === 1 ? 'episode' : 'episodes'}` : '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
     // Core remembers the stream you last used; if it has one, go straight back to it.
     // Otherwise Easy Mode picks a source for the episode (or movie) you were on, and
@@ -38,7 +41,7 @@
     use:titleContext={{ type: item.type, id: item._id, name: item.name, preview: libraryItemPreview(item) }}
     use:previewInHero={libraryItemPreview(item)}
     onkeydown={arrowNav}
-    aria-label={[item.name, detail].filter(Boolean).join(', ')}>
+    aria-label={[item.name, detail, freshLabel].filter(Boolean).join(', ')}>
     <div class="art" class:loaded>
         {#if art && !failed}
             <img
@@ -53,6 +56,9 @@
             />
         {:else}
             <span class="fallback">{item.name}</span>
+        {/if}
+        {#if fresh}
+            <span class="fresh" aria-hidden="true" title={freshLabel}>+{fresh > 99 ? '99' : fresh}</span>
         {/if}
         {#if progress > 0}
             <span class="progress" aria-hidden="true"><span style="width: {progress * 100}%"></span></span>
@@ -109,6 +115,33 @@
         text-align: center;
         font-weight: 600;
         color: var(--label-2);
+    }
+    /* "+N" new episodes: a small frosted tag in the top right corner, over the art. */
+    .fresh {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        min-width: 22px;
+        padding: 2px 7px;
+        box-sizing: border-box;
+        border-radius: 7px;
+        border: 1px solid rgb(255 255 255 / 0.28);
+        background: rgb(20 20 28 / 0.62);
+        backdrop-filter: blur(10px) saturate(1.4);
+        -webkit-backdrop-filter: blur(10px) saturate(1.4);
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 16px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+    :global(html.tv) .fresh {
+        top: 10px;
+        right: 10px;
+        font-size: 15px;
+        line-height: 20px;
+        padding: 2px 9px;
     }
     .progress {
         position: absolute;

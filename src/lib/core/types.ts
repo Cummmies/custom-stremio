@@ -65,6 +65,8 @@ export type LibraryItem = {
     /** Percent watched, 0–100. */
     progress: number;
     watched?: boolean;
+    /** Episodes released since you last watched (core's notifications for a series). */
+    notifications?: number;
     /** Continue Watching only: the episode to resume. */
     state?: { videoId?: string | null };
     /** `player` is set when core remembers the stream you last used for it. */
