@@ -22,6 +22,16 @@
      * `timeOnArt`: releaseInfo is when it airs ("Tomorrow · 5:30 PM"), shown on
      * the picture; the description (what airs) goes under the title instead.
      */
+    /** "Tomorrow · 5:30 PM", here; null without a usable moment. */
+    function localAirTime(released: string | null | undefined): string | null {
+        const at = released ? new Date(released) : null;
+        if (!at || isNaN(at.getTime())) return null;
+        const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const days = Math.round((startOf(at) - startOf(new Date())) / 86_400_000);
+        const day = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : at.toLocaleDateString([], { weekday: 'long' });
+        return `${day} · ${at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    }
+
     let { item, wide = false, timeOnArt = false }: { item: PosterItem; wide?: boolean; timeOnArt?: boolean } = $props();
 
     let loaded = $state(false);
@@ -29,7 +39,10 @@
 
     // Catalog items are full previews (addable to the library); library items aren't.
     const preview = $derived('posterShape' in item ? item : undefined);
-    const when = $derived(timeOnArt ? item.releaseInfo : null);
+    // An air time with its exact moment (Lightboxd sends it, UTC) is shown in
+    // this device's time zone; releaseInfo is the server's wording, kept for a
+    // date-only release and for other Stremio apps.
+    const when = $derived(timeOnArt ? (localAirTime((preview as MetaItemPreview | undefined)?.released) ?? item.releaseInfo) : null);
     const below = $derived(timeOnArt ? ((preview as MetaItemPreview | undefined)?.description ?? null) : item.releaseInfo);
     // What the Home banner shows while this card is hovered.
     const heroItem = $derived<MetaItemPreview>(
