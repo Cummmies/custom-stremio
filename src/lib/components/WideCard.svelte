@@ -9,6 +9,7 @@
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { canPlay } from '$lib/platform';
     import { playerPrefs } from '$lib/player/prefs.svelte';
+    import { lightboxd } from '$lib/lightboxd.svelte';
 
     let { item }: { item: LibraryItem } = $props();
 
@@ -16,8 +17,11 @@
     const art = $derived(isImdb ? `https://images.metahub.space/background/small/${item._id}/img` : item.poster);
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
     const detail = $derived(episodeLabel(item) ?? '');
-    // New episodes out since you last watched: "+N" in the corner.
-    const fresh = $derived(item.type === 'series' ? Math.max(0, item.notifications ?? 0) : 0);
+    // New episodes out since you last watched: "+N" in the corner. For anime,
+    // Lightboxd's count when it's connected (it knows when the dub is out, if
+    // that's what you watch); otherwise Stremio's own.
+    const lightboxdCount = $derived(lightboxd.ready ? lightboxd.newEpisodes[item._id] : undefined);
+    const fresh = $derived(item.type === 'series' ? Math.max(0, lightboxdCount ?? item.notifications ?? 0) : 0);
     const freshLabel = $derived(fresh ? `${fresh} new ${fresh === 1 ? 'episode' : 'episodes'}` : '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
     // Core remembers the stream you last used; if it has one, go straight back to it.

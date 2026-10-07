@@ -201,6 +201,13 @@ class Lightboxd {
     /** This profile's watch events not yet taken by Lightboxd, oldest first. */
     #queue: WatchEvent[] = [];
     #flushing = false;
+    /**
+     * New episodes for anime you're watching, by your sub/dub preference:
+     * {stremio id: N}, zeros included (Lightboxd has the say for those; the
+     * rest keep Stremio's count, which follows the Japanese release).
+     */
+    newEpisodes = $state<Record<string, number>>({});
+
     /** The last event Lightboxd applied (for the rating prompt, Phase 4). */
     lastResult = $state<{ event: WatchEvent; result: EventResult } | null>(null);
 
@@ -233,6 +240,7 @@ class Lightboxd {
         this.saved = uid ? this.#load(uid) : null;
         this.#queue = uid ? this.#loadQueue(uid) : [];
         this.lastResult = null;
+        this.newEpisodes = {};
         this.#rowsMoveTried = false;
         this.check();
     }
@@ -301,6 +309,7 @@ class Lightboxd {
             const shareable = shareableServer(saved.server);
             if (uid && shareable && !this.sharedServerFor(uid)) this.setSharedServer(uid, shareable);
             this.#setStatus('ok');
+            this.#loadNewEpisodes();
             // Just connected: the rows go on Home.
             if (this.saved?.rows === undefined) this.setRows(true);
             else if (uid) this.#moveRowsToShared(uid);
@@ -340,8 +349,15 @@ class Lightboxd {
         return this.saved?.server ?? (this.#uid ? this.sharedServerFor(this.#uid) : null);
     }
 
+    async #loadNewEpisodes() {
+        const uid = this.#uid;
+        const res = await this.request<{ counts: Record<string, number> }>('/new-episodes');
+        if (res && uid === this.#uid) this.newEpisodes = res.counts ?? {};
+    }
+
     /** Lightboxd removed this device: keep the address for reconnecting. */
     #forgetToken() {
+        this.newEpisodes = {};
         // Its addon link went with it.
         this.#uninstallRows();
         if (this.saved) this.#save({ server: this.saved.server, token: null, user: this.saved.user });
@@ -463,7 +479,11 @@ class Lightboxd {
                 // Taken, or refused as malformed (it never will be taken): either way it's done.
                 this.#queue.shift();
                 this.#saveQueue();
-                if (res.ok && res.data.result === 'applied') this.lastResult = { event, result: res.data };
+                if (res.ok && res.data.result === 'applied') {
+                    this.lastResult = { event, result: res.data };
+                    // Watched an episode: its show's +N goes down now, not at the next check.
+                    if (event.type === 'series' && event.kind === 'finished') this.#loadNewEpisodes();
+                }
             }
         } finally {
             this.#flushing = false;
@@ -554,6 +574,7 @@ class Lightboxd {
         const saved = this.saved;
         this.cancelPairing();
         this.#uninstallRows();
+        this.newEpisodes = {};
         this.#save(null);
         this.#setStatus('off');
         if (saved?.token) await call(saved.server, '/disconnect', { method: 'POST', token: saved.token });
