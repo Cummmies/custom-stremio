@@ -11,6 +11,7 @@ import { inTauri, isIOS } from '$lib/platform';
 import { playerPrefs, type Upscaler } from './prefs.svelte';
 import { langKey } from './lang';
 import type { PlayerBackend, PlayerEvent, PlayerFeatures, RawChapter, StartSettings, StartTracks, Track } from './backend';
+import { mpvSubtitleOptions, type SubStyle } from './subtitleStyle';
 
 export type { Track } from './backend';
 
@@ -301,6 +302,11 @@ class Mpv implements PlayerBackend {
         return { delay, scale };
     }
 
+    /** Settings > Subtitle Style changed: shown from the next line on. */
+    async setSubtitleStyle(style: SubStyle) {
+        for (const [k, v] of Object.entries(mpvSubtitleOptions(style, isIOS))) await this.set(k, v).catch(() => {});
+    }
+
     async setHdrPassthrough(on: boolean) {
         await this.set('target-colorspace-hint', on);
     }
@@ -376,10 +382,9 @@ function buildOptions(settings: StartSettings): Record<string, string> {
         volume: String(playerPrefs.volume),
         'volume-max': '130',
         'sub-auto': 'fuzzy',
-        'sub-font-size': '44',
-        'sub-border-size': '2.5',
-        'sub-shadow-offset': '1',
-        'sub-shadow-color': '#80000000',
+        // Plain subtitles in your style (Settings > Subtitle Style); styled
+        // ones (ASS) keep theirs, only scaled.
+        ...mpvSubtitleOptions(playerPrefs.subStyle, isIOS),
         'sub-ass-override': 'scale',
     };
     // Files tag tracks "en" or "eng" (or "fre"/"fra"): list every spelling.
@@ -408,8 +413,6 @@ function iosOptions(settings: StartSettings): Record<string, string> {
         'target-colorspace-hint': 'yes',
         'demuxer-max-bytes': '150MiB',
         'demuxer-max-back-bytes': '50MiB',
-        // Phone screens are small and close: a slightly smaller subtitle size reads better.
-        'sub-font-size': '40',
         // mpv's iOS audio otherwise mixes with other apps' (AVAudioSession's
         // mixWithOthers), and iOS leaves a mixing app out of Now Playing
         // (Control Center, the Lock Screen; MpvPlugin.swift). Like any video

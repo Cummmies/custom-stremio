@@ -34,6 +34,7 @@
     import { fade } from 'svelte/transition';
     import { cancelSilenceSkip, silenceSkipActive, startSilenceSkip } from '$lib/player/silenceSkip';
     import { fmtTime } from '$lib/player/format';
+    import { subtitleBottom, subtitleCss } from '$lib/player/subtitleStyle';
     import { titleHref } from '$lib/links';
     import { lightboxd } from '$lib/lightboxd.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
@@ -703,6 +704,14 @@
         skipNote = text;
         if (text) skipNoteTimer = setTimeout(() => (skipNote = null), ms);
     }
+
+    /** The picture's height, for the TV's subtitles (sized like mpv's, by 720 lines). */
+    let playerHeight = $state(0);
+    // Settings > Subtitle Style changed while playing (or synced from another device).
+    $effect(() => {
+        const style = playerPrefs.subStyle;
+        untrack(() => player.loaded && player.setSubtitleStyle?.(style));
+    });
 
     // Look them up once per video, as soon as its length is known (it isn't yet
     // when the file first opens, and the databases match on length).
@@ -1606,7 +1615,7 @@
     {onkeyup}
     onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
 
-<div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI}>
+<div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI} bind:clientHeight={playerHeight}>
     <!-- Transparent surface over the video that takes clicks. -->
     <button
         class="surface"
@@ -1620,7 +1629,12 @@
 
     {#if player.subtitleText}
         <!-- Players that leave subtitles to the app (AVPlay on TVs). -->
-        <div class="app-subs" class:raised={controlsVisible} aria-live="off">{player.subtitleText}</div>
+        <div
+            class="app-subs"
+            style:bottom={controlsVisible ? `max(22%, ${subtitleBottom(playerPrefs.subStyle)})` : subtitleBottom(playerPrefs.subStyle)}
+            aria-live="off">
+            <span style={subtitleCss(playerPrefs.subStyle, playerHeight || 720)}>{player.subtitleText}</span>
+        </div>
     {/if}
 
     {#if tapSkip}
@@ -1867,23 +1881,21 @@
     :global(html.player-active body) {
         background: transparent !important;
     }
+    /* The TV's subtitles, in Settings' Subtitle Style (subtitleStyle.ts). */
     .app-subs {
         position: absolute;
         left: 8%;
         right: 8%;
-        bottom: 7%;
         text-align: center;
         white-space: pre-line;
-        font-size: 34px;
-        line-height: 1.25;
-        font-weight: 600;
-        color: white;
-        text-shadow: 0 0 3px black, 0 0 3px black, 0 2px 6px rgb(0 0 0 / 0.8);
+        line-height: 1.3;
         pointer-events: none;
         transition: bottom 0.2s;
     }
-    .app-subs.raised {
-        bottom: 22%;
+    /* A background box goes behind each line, not the whole block. */
+    .app-subs span {
+        -webkit-box-decoration-break: clone;
+        box-decoration-break: clone;
     }
 
     :global(html.player-idle),

@@ -136,5 +136,7 @@ export interface PlayerBackend {
     nudgeSubtitles?(change: { delay?: number; scale?: number }): Promise<{ delay: number; scale: number }>;
     setUpscaler?(kind: Upscaler): Promise<void>;
     setHdrPassthrough?(on: boolean): Promise<void>;
+    /** Players that draw subtitles themselves (mpv); the TV's are drawn by the page. */
+    setSubtitleStyle?(style: import('./subtitleStyle').SubStyle): Promise<void>;
     setAudioPassthrough?(on: boolean): Promise<void>;
 }

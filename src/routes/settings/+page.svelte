@@ -12,6 +12,19 @@
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
+    import {
+        presetOf,
+        subtitleBottom,
+        subtitleCss,
+        SUB_COLORS,
+        SUB_EDGES,
+        SUB_FONTS,
+        SUB_POSITION_MAX,
+        SUB_PRESETS,
+        SUB_SIZES,
+        type SubPreset,
+        type SubStyle,
+    } from '$lib/player/subtitleStyle';
     import { profiles } from '$lib/profiles.svelte';
     import { cloudSync } from '$lib/cloudSync.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
@@ -87,6 +100,18 @@
         }
     }
     const canSetUpServer = $derived(isDesktop && (app.server.state === 'missing' || app.server.state === 'failed'));
+
+    // Subtitle Style: one change at a time, shown in the preview straight away.
+    const subStyle = $derived(playerPrefs.subStyle);
+    const subPreset = $derived(presetOf(subStyle) ?? 'custom');
+    const setSub = (patch: Partial<SubStyle>) => (playerPrefs.subStyle = { ...subStyle, ...patch });
+    const optionsOf = <T extends string>(labels: Record<T, string>) =>
+        (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }));
+    const presetOptions = $derived([
+        ...(Object.keys(SUB_PRESETS) as SubPreset[]).map((value) => ({ value: value as SubPreset | 'custom', label: SUB_PRESETS[value].label })),
+        ...(presetOf(playerPrefs.subStyle) ? [] : [{ value: 'custom' as const, label: 'Custom' }]),
+    ]);
+    let previewHeight = $state(0);
 
     function saveServerUrl(e: SubmitEvent) {
         e.preventDefault();
@@ -329,6 +354,65 @@
                     <Toggle label="Hardware-accelerated decoding" checked={settings.hardwareDecoding} onchange={(v) => update({ hardwareDecoding: v })} />
                 </div>
                 {/if}
+            </div>
+        </section>
+
+        <section>
+            <h2>Subtitle Style</h2>
+            <div class="group">
+                <div class="sub-preview" bind:clientHeight={previewHeight} aria-hidden="true">
+                    <div class="sub-line" style:bottom={subtitleBottom(subStyle)}>
+                        <span style={subtitleCss(subStyle, previewHeight || 200)}>I’ll meet you at the lighthouse at dawn.</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Style</div>
+                        <div class="sub">On every device. Styled subtitles, common in anime, keep their own look.</div>
+                    </div>
+                    <PopupButton
+                        label="Subtitle style"
+                        value={subPreset}
+                        options={presetOptions}
+                        onchange={(v) => v !== 'custom' && (playerPrefs.subStyle = SUB_PRESETS[v].style)}
+                    />
+                </div>
+                <div class="row compact">
+                    <div class="title">Size</div>
+                    <PopupButton label="Subtitle size" value={subStyle.size} options={optionsOf(SUB_SIZES)} onchange={(v) => setSub({ size: v })} />
+                </div>
+                <div class="row compact">
+                    <div class="title">Font</div>
+                    <PopupButton label="Subtitle font" value={subStyle.font} options={optionsOf(SUB_FONTS)} onchange={(v) => setSub({ font: v })} />
+                </div>
+                <div class="row compact">
+                    <div class="title">Color</div>
+                    <PopupButton label="Subtitle color" value={subStyle.color} options={optionsOf(SUB_COLORS)} onchange={(v) => setSub({ color: v })} />
+                </div>
+                <div class="row compact">
+                    <div class="title">Background</div>
+                    <Toggle label="Subtitle background" checked={subStyle.background} onchange={(v) => setSub({ background: v })} />
+                </div>
+                {#if !subStyle.background}
+                    <div class="row compact">
+                        <div class="title">Edges</div>
+                        <PopupButton label="Subtitle edges" value={subStyle.edge} options={optionsOf(SUB_EDGES)} onchange={(v) => setSub({ edge: v })} />
+                    </div>
+                {/if}
+                <div class="row compact">
+                    <label class="title" for="sub-position">Position</label>
+                    <input
+                        id="sub-position"
+                        class="sub-position"
+                        type="range"
+                        min="0"
+                        max={SUB_POSITION_MAX}
+                        step="1"
+                        value={subStyle.position}
+                        oninput={(e) => setSub({ position: Number(e.currentTarget.value) })}
+                        aria-valuetext={subStyle.position === 0 ? 'At the bottom' : `${subStyle.position}% up`}
+                    />
+                </div>
             </div>
         </section>
 
@@ -800,6 +884,34 @@
     }
     .title {
         font-weight: 500;
+    }
+    /* Subtitle Style's preview: a frame with a bright bottom, where subtitles
+       are hardest to read. Drawn the way the TV draws them (subtitleStyle.ts). */
+    .sub-preview {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        max-height: 260px;
+        width: 100%;
+        overflow: hidden;
+        border-bottom: 1px solid var(--separator);
+        background:
+            radial-gradient(ellipse 60% 40% at 70% 78%, rgb(255 236 200 / 0.9), transparent 70%),
+            linear-gradient(180deg, #0f1d2e 0%, #2b4563 38%, #8a7f78 66%, #d8c7ae 84%, #efe4d1 100%);
+    }
+    .sub-line {
+        position: absolute;
+        left: 6%;
+        right: 6%;
+        text-align: center;
+        line-height: 1.3;
+    }
+    .sub-line span {
+        -webkit-box-decoration-break: clone;
+        box-decoration-break: clone;
+    }
+    .sub-position {
+        width: min(240px, 50%);
+        accent-color: var(--accent);
     }
     .sub {
         margin-top: 2px;

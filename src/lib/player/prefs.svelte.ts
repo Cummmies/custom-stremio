@@ -1,4 +1,5 @@
 // Player preferences that only matter to this app (not synced to Stremio).
+import { DEFAULT_SUB_STYLE, normalizeSubStyle, type SubStyle } from './subtitleStyle';
 
 export type Upscaler = 'off' | 'high-quality' | 'rtx';
 
@@ -29,6 +30,8 @@ export type Prefs = {
     discordPresence: boolean;
     /** Hide HDR sources while the screen isn't showing HDR (hdr.svelte.ts). */
     hideHdrOnSdr: boolean;
+    /** How subtitles look (subtitleStyle.ts). */
+    subStyle: SubStyle;
 };
 
 const KEY = 'playerPrefs';
@@ -47,6 +50,7 @@ const defaults: Prefs = {
     askStillWatching: true,
     discordPresence: false,
     hideHdrOnSdr: true,
+    subStyle: DEFAULT_SUB_STYLE,
 };
 
 function read(key: string): Partial<Prefs> | null {
@@ -59,7 +63,8 @@ function read(key: string): Partial<Prefs> | null {
 
 /** This device's preferences; before profiles had their own, everything was here. */
 function load(): Prefs {
-    return { ...defaults, ...read(KEY) };
+    const p = { ...defaults, ...read(KEY) };
+    return { ...p, subStyle: normalizeSubStyle(p.subStyle) };
 }
 
 /**
@@ -169,6 +174,12 @@ class PlayerPrefs {
     set askStillWatching(v: boolean) {
         this.#save({ askStillWatching: v });
     }
+    get subStyle() {
+        return this.#p.subStyle;
+    }
+    set subStyle(v: SubStyle) {
+        this.#save({ subStyle: normalizeSubStyle(v) });
+    }
     get discordPresence() {
         return this.#p.discordPresence;
     }
@@ -201,6 +212,7 @@ class PlayerPrefs {
     }
 
     #save(patch: Partial<Prefs>) {
+        if (patch.subStyle) patch = { ...patch, subStyle: normalizeSubStyle(patch.subStyle) };
         this.#p = { ...this.#p, ...patch };
         try {
             localStorage.setItem(KEY, JSON.stringify(this.#p));
@@ -217,7 +229,7 @@ export const playerPrefs = new PlayerPrefs();
  * iPhone…) and only reach devices of that kind, since they're about its
  * screen, speakers and window.
  */
-export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence'] as const;
+export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence', 'subStyle'] as const;
 export type SyncedPrefs = Pick<Prefs, (typeof SYNCED_PREFS)[number]>;
 export const DEVICE_PREFS = ['upscaler', 'hdrPassthrough', 'audioPassthrough', 'volume', 'pauseOnMinimize', 'pauseOnLostFocus', 'hideHdrOnSdr'] as const;
 export type DevicePrefs = Pick<Prefs, (typeof DEVICE_PREFS)[number]>;
