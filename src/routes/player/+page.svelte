@@ -2444,13 +2444,14 @@
         letter-spacing: -0.02em;
         text-box: trim-both cap alphabetic;
     }
-    /* The skip badge, on the side you skipped toward. Keys and the remote: a
-       fifth in from the edge, near where you're looking; touch (below): out
-       at the edge, where the double-tap was. */
+    /* The skip badge: out at the edge on the side you skipped toward, out of
+       the way of the picture. On a phone that's about where the double-tap
+       was; on a wide window or TV a fixed way in, so it stays at the edge
+       (inside the TV's safe area: zoomed, 160 px is 11% of the screen). */
     .tap-skip {
         position: absolute;
         top: 50%;
-        left: 20%;
+        left: min(12%, 160px);
         translate: -50% -50%;
         display: flex;
         flex-direction: column;
@@ -2472,13 +2473,9 @@
         font-size: 16px;
     }
     .tap-skip.right {
-        left: 80%;
-    }
-    .touch .tap-skip {
-        left: 12%;
-    }
-    .touch .tap-skip.right {
-        left: 88%;
+        left: auto;
+        right: min(12%, 160px);
+        translate: 50% -50%;
     }
     .touch .top {
         padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left));
