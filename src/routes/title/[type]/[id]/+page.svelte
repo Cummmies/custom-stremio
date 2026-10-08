@@ -6,7 +6,7 @@
     import RelatedTab from '$lib/components/detail/RelatedTab.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import { LightboxdTitle } from '$lib/lightboxd/title.svelte';
-    import { STATUS_LABEL, day, score, today, type Status } from '$lib/lightboxd/api';
+    import { STATUS_LABEL, day, score, today, type Status, type Summary } from '$lib/lightboxd/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
@@ -243,8 +243,21 @@
     const main = $derived(lbOn ? lbt.main : null);
     const related = $derived(lbOn ? (lbt.related ?? []) : []);
     const watches = $derived(main?.log ?? []);
-    /** Your score: your latest watch's, or (a rewatch not scored yet) the one before. */
-    const myScore = $derived(main ? (main.rating ?? main.earlier_rating) : null);
+    /** An anime that's several Lightboxd titles: each season is scored on its own. */
+    const seasons = $derived(lbOn && (lbt.titles?.length ?? 0) > 1 ? lbt.titles! : []);
+    const scoreOf = (t: Summary) => t.rating ?? t.earlier_rating;
+    /** "Vinland Saga Season 2" → "Season 2", beside the first season's "Vinland Saga". */
+    function seasonName(t: Summary) {
+        const root = seasons[0]?.name ?? '';
+        const rest = root && t.name !== root && t.name.startsWith(root) ? t.name.slice(root.length).replace(/^[\s:–—-]+/, '') : '';
+        return rest || t.name;
+    }
+    /** Your score: your latest watch's, or (a rewatch not scored yet) the one before; for seasons, the one you rated last. */
+    const myScore = $derived.by(() => {
+        if (!seasons.length) return main ? scoreOf(main) : null;
+        const rated = seasons.filter((t) => scoreOf(t) != null).sort((a, b) => (b.last_watched ?? '').localeCompare(a.last_watched ?? ''));
+        return rated[0] ? scoreOf(rated[0]) : null;
+    });
     const myReview = $derived(main?.review ?? null);
     const STATUSES: Status[] = ['plan_to_watch', 'watching', 'completed', 'dropped'];
     const saved = $derived(lbOn ? !!main && (main.status !== null || main.lists.length > 0) : !!meta?.inLibrary);
@@ -326,28 +339,66 @@
     }
 
     // The rate / log dialog: ★, Log a Watch… and Edit Watch… all open it.
-    let log = $state<{ mode: LogMode; id: number | null; rewatch: boolean; initial: LogDraft } | null>(null);
-    function openRate() {
-        const w = watches[0];
+    // `titleId`: the season it's for (null: the title itself, added to Lightboxd if needed).
+    type Log = { mode: LogMode; id: number | null; rewatch: boolean; initial: LogDraft; titleId: number | null; name: string | null; earliest: string | null };
+    let log = $state<Log | null>(null);
+    /** Your score for this title, or for one of its seasons. */
+    function openRate(target: Summary | null = main) {
+        const w = target?.log[0];
+        const base = {
+            titleId: seasons.length ? (target?.title_id ?? null) : null,
+            name: seasons.length && target ? target.name : null,
+            earliest: target?.earliest_watch_date ?? null,
+        };
         // Lightboxd puts a score on your latest watch; with none yet, rating logs one.
         log = w
-            ? { mode: 'rate', id: w.id, rewatch: w.rewatch, initial: { score: w.rating ?? main?.earlier_rating ?? 5, date: w.date, review: w.review ?? '' } }
-            : { mode: 'watch', id: null, rewatch: false, initial: { score: 5, date: null, review: '' } };
+            ? { ...base, mode: 'rate', id: w.id, rewatch: w.rewatch, initial: { score: w.rating ?? target?.earlier_rating ?? 5, date: w.date, review: w.review ?? '' } }
+            : { ...base, mode: 'watch', id: null, rewatch: false, initial: { score: 5, date: null, review: '' } };
+    }
+    /** ★: straight to your score, or for an anime in seasons, which season first. */
+    function rateButton(e: MouseEvent) {
+        if (!seasons.length) return openRate();
+        menu.toggleFor(e.currentTarget as HTMLElement, [
+            { header: 'Score Which Season?' },
+            ...seasons.map((t) => {
+                const s = scoreOf(t);
+                return { label: `${seasonName(t)}${s != null ? ` · ${score(s)}` : ''}`, onselect: () => openRate(t) };
+            }),
+        ]);
     }
     function openLog() {
         // As Lightboxd: a first watch starts unscored; a rewatch from your last score (else IMDb's, else 8.5).
         const rewatch = watches.length > 0;
         const imdb = Number(main?.scores.imdb ?? rating);
-        log = { mode: 'watch', id: null, rewatch, initial: { score: rewatch ? (myScore ?? (imdb || 8.5)) : null, date: null, review: '' } };
+        log = {
+            mode: 'watch',
+            id: null,
+            rewatch,
+            initial: { score: rewatch ? (myScore ?? (imdb || 8.5)) : null, date: null, review: '' },
+            titleId: null,
+            name: null,
+            earliest: main?.earliest_watch_date ?? null,
+        };
     }
     function openEdit(watchId: number) {
-        const w = watches.find((x) => x.id === watchId);
-        if (w) log = { mode: 'edit', id: w.id, rewatch: w.rewatch, initial: { score: w.rating, date: w.date, review: w.review ?? '' } };
+        // The watch may be any season's.
+        const owner = lbt.titles?.find((t) => t.log.some((x) => x.id === watchId)) ?? main;
+        const w = owner?.log.find((x) => x.id === watchId);
+        if (w)
+            log = {
+                mode: 'edit',
+                id: w.id,
+                rewatch: w.rewatch,
+                initial: { score: w.rating, date: w.date, review: w.review ?? '' },
+                titleId: seasons.length ? (owner?.title_id ?? null) : null,
+                name: seasons.length && owner ? owner.name : null,
+                earliest: owner?.earliest_watch_date ?? null,
+            };
     }
     async function saveLog(d: LogDraft) {
         if (!log) return;
         const fields = { rating: d.score, review: d.review, watch_date: d.date };
-        const ok = log.id != null ? await lbt.editWatch(log.id, fields) : await lbt.addWatch(fields);
+        const ok = log.id != null ? await lbt.editWatch(log.id, fields) : await lbt.addWatch(fields, log.titleId ?? undefined);
         if (!ok) return;
         if (log.id == null) {
             addToStremio();
@@ -487,7 +538,8 @@
                         <button
                             class="round"
                             class:on={myScore != null}
-                            onclick={openRate}
+                            onclick={rateButton}
+                            aria-haspopup={seasons.length ? 'menu' : undefined}
                             aria-label={myScore != null ? `Your Score ${score(myScore)}, Edit` : 'Rate'}
                             title={myScore != null ? `Your score: ${score(myScore)}` : 'Rate'}
                         >
@@ -572,7 +624,17 @@
                         {#if tab === 'related'}
                             <RelatedTab groups={related} />
                         {:else if tab === 'reviews'}
-                            <ReviewsTab name={meta.name} scores={scoreRow} reviews={lbt.reviews} {myScore} {myReview} {watches} onrate={openRate} oneditwatch={openEdit} />
+                            <ReviewsTab
+                                name={meta.name}
+                                scores={scoreRow}
+                                reviews={lbt.reviews}
+                                {myScore}
+                                {myReview}
+                                {watches}
+                                seasons={seasons.map((t) => ({ titleId: t.title_id, name: seasonName(t), score: scoreOf(t), review: t.review, watches: t.log }))}
+                                onrate={(titleId) => openRate(lbt.titles?.find((t) => t.title_id === titleId) ?? main)}
+                                oneditwatch={openEdit}
+                            />
                         {:else if tab === 'details'}
                             <div class="details-tab"><DetailsPanel {meta} status={statusLine} lists={listNames} /></div>
                         {:else if isSeries && tab === 'episodes'}
@@ -643,10 +705,10 @@
     <LogDialog
         mode={log.mode}
         rewatch={log.rewatch}
-        name={meta.name}
-        year={meta.releaseInfo ?? null}
+        name={log.name ?? meta.name}
+        year={log.name ? null : (meta.releaseInfo ?? null)}
         poster={meta.poster ?? null}
-        earliest={main?.earliest_watch_date ?? null}
+        earliest={log.earliest}
         initial={log.initial}
         busy={lbt.busy}
         error={lbt.error}

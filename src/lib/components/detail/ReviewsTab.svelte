@@ -15,6 +15,7 @@
         myScore,
         myReview,
         watches,
+        seasons = [],
         onrate,
         oneditwatch,
     }: {
@@ -25,7 +26,10 @@
         myScore: number | null;
         myReview: string | null;
         watches: Watch[];
-        onrate: () => void;
+        /** An anime in seasons: each scored on its own (else empty). */
+        seasons?: { titleId: number; name: string; score: number | null; review: string | null; watches: Watch[] }[];
+        /** Rate this title, or (in seasons) the season with this id. */
+        onrate: (titleId?: number) => void;
         oneditwatch: (id: number) => void;
     } = $props();
 
@@ -61,7 +65,11 @@
 
     const tabs = ['Aggregate', 'Friends', 'You'] as const;
     let tab = $state<(typeof tabs)[number]>('Aggregate');
-    const counts = $derived({ Aggregate: aggregate.length, Friends: friendCards.length, You: watches.length });
+    const counts = $derived({
+        Aggregate: aggregate.length,
+        Friends: friendCards.length,
+        You: seasons.length ? seasons.reduce((n, s) => n + s.watches.length, 0) : watches.length,
+    });
 
     let sort = $state<'newest' | 'highest'>('newest');
     const sorted = $derived(
@@ -172,6 +180,37 @@
                 </div>
             {/if}
         {/if}
+    {:else if seasons.length}
+        <div class="you">
+            {#each seasons as s (s.titleId)}
+                <article class="review mine">
+                    <header>
+                        <div class="who">
+                            <p class="name">{s.name}</p>
+                            {#if s.watches[0]?.date}<p class="meta">{day(s.watches[0].date)}</p>{/if}
+                        </div>
+                        {#if s.score != null}<p class="score big">{score(s.score)}<span>/10</span></p>{/if}
+                    </header>
+                    {#if s.review}<p class="body open">{s.review}</p>{:else}<p class="body muted">{s.score != null ? 'Rated without a review.' : 'Not rated yet.'}</p>{/if}
+                    {#if s.watches.length}
+                        <ul class="season-watches">
+                            {#each s.watches as w (w.id)}
+                                <li>
+                                    <button class="watch" onclick={() => oneditwatch(w.id)} title="Edit Watch">
+                                        <span>{day(w.date) ?? 'Date unknown'}</span>
+                                        <span class="kind">{w.rewatch ? 'Rewatch' : 'Watch'}</span>
+                                        <strong>{w.rating != null ? score(w.rating) : '—'}</strong>
+                                    </button>
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    <div class="actions">
+                        <button class="btn" class:primary={s.score == null} onclick={() => onrate(s.titleId)}>{s.score != null ? 'Edit' : 'Rate'}</button>
+                    </div>
+                </article>
+            {/each}
+        </div>
     {:else}
         <div class="you">
             <article class="review mine">
@@ -184,11 +223,11 @@
                         <p class="score big">{score(myScore)}<span>/10</span></p>
                     </header>
                     {#if myReview}<p class="body open">{myReview}</p>{:else}<p class="body muted">Rated without a review.</p>{/if}
-                    <div class="actions"><button class="btn" onclick={onrate}>Edit</button></div>
+                    <div class="actions"><button class="btn" onclick={() => onrate()}>Edit</button></div>
                 {:else}
                     <p class="name">You haven’t rated {name} yet.</p>
                     <p class="body muted">Your score and review are saved to Lightboxd, and your friends see them as your sharing settings there allow.</p>
-                    <div class="actions"><button class="btn primary" onclick={onrate}>Rate</button></div>
+                    <div class="actions"><button class="btn primary" onclick={() => onrate()}>Rate</button></div>
                 {/if}
             </article>
 
@@ -471,6 +510,22 @@
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--label-2);
+    }
+    .season-watches {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid var(--separator);
+    }
+    .season-watches li + li {
+        border-top: 1px solid var(--separator);
+    }
+    .season-watches .kind {
+        flex: 1;
+        color: var(--label-2);
+    }
+    .season-watches strong {
+        font-variant-numeric: tabular-nums;
     }
     .watches ul {
         list-style: none;

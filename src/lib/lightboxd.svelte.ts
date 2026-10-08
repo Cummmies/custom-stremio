@@ -40,6 +40,8 @@ const DEVICE_NAME = isDesktop ? 'PC' : isIOS ? 'iPhone' : isTV ? 'TV' : 'Browser
 const CONNECTION_NAME = 'Custom Stremio';
 /** The Stremio account this device is signed in to (Lightboxd groups devices by it). */
 const stremioAccount = () => app.ctx?.profile.auth?.user.email ?? null;
+/** This profile's Stremio sign-in, for signing in to Lightboxd with it (never kept there). */
+const stremioKey = () => app.ctx?.profile.auth?.key ?? null;
 /**
  * Where Lightboxd usually is, tried in order when no address is given. Only
  * the PC can be running it itself; a phone or TV finds it on the network.
@@ -194,6 +196,8 @@ class Lightboxd {
     /** Why the last Connect didn't get a code. */
     error = $state<string | null>(null);
     connecting = $state(false);
+    /** Lightboxd was reached but has no one with this Stremio account connected: it took a code instead. */
+    stremioNotLinked = $state(false);
 
     /** Connected and reachable: Lightboxd features show. */
     ready = $derived(this.status === 'ok');
@@ -621,12 +625,15 @@ class Lightboxd {
     }
 
     /**
-     * Gets a pairing code from the server at `address`, or, if that's empty,
-     * from the first of the usual places that answers.
+     * Connects to the server at `address`, or, if that's empty, to the first
+     * of the usual places that answers: signed in with this profile's Stremio
+     * account when Lightboxd has that account connected (no code), else with a
+     * pairing code to approve there.
      */
     async connect(address: string) {
         this.cancelPairing();
         this.error = null;
+        this.stremioNotLinked = false;
         const given = address.trim();
         const server = given ? normalizeServer(given) : null;
         if (given && !server) {
@@ -639,6 +646,24 @@ class Lightboxd {
         let found: { server: string; start: Start } | null = null;
         let tooMany = false;
         for (const s of server ? [server] : DEFAULT_SERVERS) {
+            const key = stremioKey();
+            if (key) {
+                const signIn = await call<{ token: string }>(s, '/pair/stremio', {
+                    method: 'POST',
+                    body: { auth_key: key, name: DEVICE_NAME, platform: PLATFORM },
+                    timeout: 15_000,
+                });
+                if (run !== this.#pairRun) return;
+                if (signIn.ok) {
+                    this.connecting = false;
+                    // Signed in here: check() makes it the account's, for its other devices.
+                    this.#save({ server: s, token: signIn.data.token });
+                    await this.check();
+                    return;
+                }
+                if (signIn.status === null) continue; // not here: the next place
+                if (signIn.status === 404) this.stremioNotLinked = true;
+            }
             const res = await call<Start>(s, '/pair/start', { method: 'POST', body: { name: DEVICE_NAME, platform: PLATFORM, stremio_account: stremioAccount() } });
             if (run !== this.#pairRun) return;
             if (res.ok) {

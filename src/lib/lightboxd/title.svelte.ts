@@ -180,12 +180,15 @@ export class LightboxdTitle {
         }, 'Couldn’t remove it.');
     }
 
-    /** Log a watch (every one after your first is a rewatch, as Lightboxd counts them). */
-    addWatch(fields: WatchFields) {
+    /**
+     * Log a watch (every one after your first is a rewatch, as Lightboxd
+     * counts them): of this title, or of one of its seasons (`titleId`).
+     */
+    addWatch(fields: WatchFields, titleId?: number) {
         return this.#do(async () => {
-            const main = await this.#ensure();
-            if (!main) return null;
-            const res = await lb.addWatch(main.title_id, fields);
+            const target = titleId ?? (await this.#ensure())?.title_id;
+            if (target == null) return null;
+            const res = await lb.addWatch(target, fields);
             this.#put(res?.title);
             return res;
         }, 'Couldn’t log the watch.');

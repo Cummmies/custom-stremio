@@ -299,8 +299,26 @@ Stremio's + and eye buttons).
     lists your watches to edit or delete. The scores row in the tab bar: You, Friends, AniList
     (anime) and IMDb. Reviews (Aggregate / Friends / You) and Related are tabs; Details has
     Status and Lists rows, then a Reviews box that fills the rest of the column.
-  - An anime that's several Lightboxd titles: the first stands for the show, as Lightboxd's own
-    Add to Watchlist does.
+  - An anime that's several Lightboxd titles: the first stands for the show (status, lists),
+    as Lightboxd's own Add to Watchlist does, but each season is scored on its own: ★ asks
+    which season first, and Reviews > You has a card per season.
+
+## Signing in with Stremio — built
+
+Connect signs in with the profile's Stremio account first; a pairing code is the fallback.
+
+- **Lightboxd:** `POST /app-api/v1/pair/stremio` `{auth_key, name, platform}` (no sign-in
+  needed, rate-limited like pairing). It asks Stremio whose account the key is (`getUser`) and
+  finds the Lightboxd user who connected that account in Settings > Stremio
+  (`stremio_sync.user_for_stremio_account`: by Stremio's account ID, which a link now keeps,
+  migration 034; an older link is matched by its email once and the ID filled in). That user
+  gets this device's token (`devices.issue_token`, as an approved code would). The key is only
+  used for the question, never stored. 404 when no one connected the account, 401 when Stremio
+  refuses the key, 502 when Stremio can't be reached. `tests/test_stremio_signin.py`.
+- **App:** `lightboxd.connect` tries it at each address before asking for a code. Reached but
+  not connected (404): it takes a code, and Settings says to connect this Stremio account in
+  Lightboxd's Settings to skip the code next time.
+- The key travels to your own Lightboxd, so use HTTPS (or your home network) to reach it.
 
 ## iPhone and TV — built
 

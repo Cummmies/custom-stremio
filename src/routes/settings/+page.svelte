@@ -553,6 +553,9 @@
                                     {#if p.state === 'waiting'}
                                         <div class="title">Approve in Lightboxd</div>
                                         <div class="sub">Open Lightboxd, check the code matches, and approve. This page continues by itself.</div>
+                                        {#if lightboxd.stremioNotLinked}
+                                            <div class="sub">To skip the code next time, connect this Stremio account in Lightboxd’s Settings.</div>
+                                        {/if}
                                     {:else if p.state === 'denied'}
                                         <div class="title">Code Denied</div>
                                         <div class="sub">Lightboxd turned this code down. Get a new one to try again.</div>
@@ -627,9 +630,9 @@
                                     {:else if lightboxd.status === 'removed'}
                                         Lightboxd removed it. Connect again to keep using it with this profile.
                                     {:else if lightboxd.suggestedServer}
-                                        This profile already uses Lightboxd. Connect, then approve this {isTV ? 'TV' : isIOS ? 'iPhone' : 'PC'} too.
+                                        This profile already uses Lightboxd. Connect this {isTV ? 'TV' : isIOS ? 'iPhone' : 'PC'} too: your Stremio account signs it in.
                                     {:else}
-                                        Your watch history, scores and calendar from your Lightboxd server. Leave the address empty to look {isDesktop ? 'on this PC and ' : ''}at lightboxd.local.
+                                        Your watch history, scores and calendar from your Lightboxd server, signed in with this Stremio account. Leave the address empty to look {isDesktop ? 'on this PC and ' : ''}at lightboxd.local.
                                     {/if}
                                 </div>
                             </div>
