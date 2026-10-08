@@ -290,10 +290,17 @@ Stremio's + and eye buttons).
   page's state and actions):
   - **Library** (`routes/library`): a bar at the left in place of the title, All (grouped by
     status, the default) / Watching / Plan to Watch / Completed (by month of your last watch,
-    with its date, your score and "Watched 2×") / Dropped; at the right, Type (All / Movies /
-    Series) and Sort (Recent / Highest Rated, grouped by score), laid out like Lightboxd's;
+    with its date, your score and "Watched 2×") / Dropped; at the right, a second bar for Type
+    (All / Movies / Series / Anime; Movies and Series leave anime out, as Lightboxd does), Sort
+    and Edit, laid out like Lightboxd's. Sort has Lightboxd's sorts (Recently Watched, Recently
+    Added, Rating, Year, Title, Episodes, Rewatched); choosing the current one again reverses
+    it, and what's missing (no date, no score) always goes last. Headings show when they mean
+    something: status (All) or month (Completed) by Recently Watched, score bands by Rating.
+    Edit (PC and iPhone, not TV) selects titles; a toolbar then sets their status, adds them to
+    a list (or a new one) or removes them (asked once more; Stremio's copy goes too).
     `?status=…` opens one, as Continue Watching's See All does (Watching).
-    On phones the bar scrolls sideways, with Type and Sort under it. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
+    On phones the status bar scrolls sideways; Type, Sort (an icon) and Edit sit under it, and
+    the Edit toolbar sits on the tab bar. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
     without a watchlist entry, as Lightboxd's own status does.)
   - **Lists** (`routes/lists`), a tab in the nav: your lists as poster stacks; one opens in
     place (`?id=`); New List.

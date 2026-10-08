@@ -60,6 +60,11 @@ export type LibraryItem = {
     rewatch?: boolean;
     /** Titles: how many times you've watched it. */
     watches?: number;
+    /** Titles: when it went on your watchlist (or was first logged). */
+    added?: string | null;
+    /** Titles: every season's episodes, when known. */
+    episodes?: number | null;
+    anime?: boolean;
 };
 
 export type ListInfo = { id: number; name: string; description: string | null; count: number; posters: string[] };
