@@ -1766,18 +1766,18 @@
         <aside
             class="rate"
             class:typing={rateTyping}
-            aria-label="Rate in Lightboxd"
+            aria-label="Rate It"
             onfocusin={(e) => e.target instanceof HTMLTextAreaElement && (rateTyping = true)}
             onfocusout={(e) => !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null) && (rateTyping = false)}
             out:fade={{ duration: 200 }}>
             {#if ratePrompt.state === 'done'}
-                <span class="rate-note" role="status">Rated {ratePrompt.score?.toFixed(1)} out of 10 in Lightboxd</span>
+                <span class="rate-note" role="status">Rated {ratePrompt.score?.toFixed(1)} out of 10</span>
             {:else if ratePrompt.state === 'failed'}
-                <span class="rate-note" role="status">Couldn’t reach Lightboxd. It’s waiting on Lightboxd’s Home to rate.</span>
+                <span class="rate-note" role="status">Couldn’t save the score. Rate it from its page later.</span>
             {:else}
                 <div class="rate-head">
-                    <span class="next-eyebrow">Rate in Lightboxd{#if rateTyping} · {rateScore.toFixed(1)}{/if}</span>
-                    <button class="rate-close" onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not now. It waits on Lightboxd’s Home.">
+                    <span class="next-eyebrow">Rate It{#if rateTyping} · {rateScore.toFixed(1)}{/if}</span>
+                    <button class="rate-close" onclick={() => (ratePrompt = null)} aria-label="Not now" title="Not Now">
                         <Icon name="close" size={14} />
                     </button>
                 </div>

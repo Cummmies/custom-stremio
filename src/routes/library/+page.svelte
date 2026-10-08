@@ -92,7 +92,7 @@
         section === 'watchlist'
             ? { title: 'Nothing on your watchlist', body: 'Use the + button on any title to save it here.' }
             : section === 'watched'
-              ? { title: 'Nothing watched yet', body: 'What you finish here, or log in Lightboxd, shows up here.' }
+              ? { title: 'Nothing watched yet', body: 'What you finish watching shows up here.' }
               : { title: 'No ratings yet', body: 'Rate a title with the ★ button on its page.' }
     );
 </script>

@@ -154,7 +154,7 @@
             <div class="grid">
                 {#each sorted as r (r.key)}{@render card(r)}{/each}
             </div>
-            <p class="note">From TMDb, Trakt and AniList, gathered by Lightboxd.</p>
+            <p class="note">From TMDb, Trakt and AniList.</p>
         {/if}
     {:else if tab === 'Friends'}
         {#if !reviews}
@@ -226,7 +226,7 @@
                     <div class="actions"><button class="btn" onclick={() => onrate()}>Edit</button></div>
                 {:else}
                     <p class="name">You haven’t rated {name} yet.</p>
-                    <p class="body muted">Your score and review are saved to Lightboxd, and your friends see them as your sharing settings there allow.</p>
+                    <p class="body muted">Your friends see your score and review, as your sharing settings allow.</p>
                     <div class="actions"><button class="btn primary" onclick={() => onrate()}>Rate</button></div>
                 {/if}
             </article>

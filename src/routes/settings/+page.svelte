@@ -33,7 +33,7 @@
     import { titleTracks } from '$lib/player/titleTracks.svelte';
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
-    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { lightboxd, hasBuiltInServer } from '$lib/lightboxd.svelte';
     import { qrSvg } from '$lib/qr';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
@@ -532,7 +532,7 @@
 
         {#if app.user}
             <section>
-                <h2>Lightboxd</h2>
+                <h2>Watch History</h2>
                 <div class="group">
                     {#if lightboxd.pairing}
                         {@const p = lightboxd.pairing}
@@ -541,7 +541,7 @@
                             <div class="row pair-tv">
                                 <div class="qr" aria-hidden="true">{@html qrSvg(p.pairUrl)}</div>
                                 <div class="pair-steps">
-                                    <div class="title">Approve This TV in Lightboxd</div>
+                                    <div class="title">Approve This TV on Your Server</div>
                                     <p class="sub">Scan the code with your phone, or open <strong>{p.pairUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')}</strong> and enter</p>
                                     <div class="pair-code" aria-label={`Code ${p.code}`}>{p.code}</div>
                                     <p class="sub">This screen continues by itself.</p>
@@ -551,14 +551,14 @@
                             <div class="row stack">
                                 <div>
                                     {#if p.state === 'waiting'}
-                                        <div class="title">Approve in Lightboxd</div>
-                                        <div class="sub">Open Lightboxd, check the code matches, and approve. This page continues by itself.</div>
+                                        <div class="title">Approve on Your Server</div>
+                                        <div class="sub">Open your server’s website, check the code matches, and approve. This page continues by itself.</div>
                                         {#if lightboxd.stremioNotLinked}
-                                            <div class="sub">To skip the code next time, connect this Stremio account in Lightboxd’s Settings.</div>
+                                            <div class="sub">To skip the code next time, connect this Stremio account in your server’s Settings.</div>
                                         {/if}
                                     {:else if p.state === 'denied'}
                                         <div class="title">Code Denied</div>
-                                        <div class="sub">Lightboxd turned this code down. Get a new one to try again.</div>
+                                        <div class="sub">Your server turned this code down. Get a new one to try again.</div>
                                     {:else}
                                         <div class="title">Code Expired</div>
                                         <div class="sub">Codes last 10 minutes. Get a new one to try again.</div>
@@ -575,26 +575,27 @@
                                 {#if p.state !== 'waiting'}
                                     <button class="btn primary" onclick={() => lightboxd.connect(p.server)}>Get New Code</button>
                                 {:else if !isTV}
-                                    <button class="btn primary" onclick={() => openExternal(p.pairUrl)}>Open Lightboxd</button>
+                                    <button class="btn primary" onclick={() => openExternal(p.pairUrl)}>Open Website</button>
                                 {/if}
                             </div>
                         </div>
                     {:else if lightboxd.saved?.token}
                         <div class="row">
                             <div>
-                                <div class="title">{lightboxd.saved.user?.name ?? 'Lightboxd'}</div>
+                                <div class="title">Your watches, scores and lists</div>
                                 <div class="sub">
                                     {#if lightboxd.status === 'ok'}
-                                        {lightboxd.saved.user?.handle ? `${lightboxd.saved.user.handle} · ` : ''}{lightboxdHost}
+                                        {hasBuiltInServer ? 'Up to date on every device you log in to.' : `Kept on ${lightboxdHost}, for every device you log in to.`}
                                     {:else if lightboxd.status === 'unreachable'}
-                                        Can’t reach {lightboxdHost}. Lightboxd stays hidden until it’s back.
+                                        Can’t reach the server right now. Everything else keeps working, and this catches up when it’s back.
                                     {:else}
-                                        Checking {lightboxdHost}…
+                                        Updating…
                                     {/if}
                                 </div>
-                                <div class="sub">On every device signed in to this Stremio account.</div>
                             </div>
-                            <button class="btn" onclick={() => lightboxd.disconnect()} title="Disconnects every device signed in to this Stremio account">Disconnect</button>
+                            {#if !hasBuiltInServer}
+                                <button class="btn" onclick={() => lightboxd.disconnect()} title="Disconnects every device logged in to this account">Disconnect</button>
+                            {/if}
                         </div>
                         <div class="row">
                             <div>
@@ -604,11 +605,11 @@
                                 </div>
                             </div>
                             <Toggle
-                                label="Lightboxd rows on Home"
+                                label="Watch history rows on Home"
                                 checked={lightboxd.rowsInstalled}
                                 onchange={async (v) => {
                                     lightboxdRowsError = null;
-                                    if (!(await lightboxd.setRows(v))) lightboxdRowsError = 'Couldn’t reach Lightboxd. Try again when it’s running.';
+                                    if (!(await lightboxd.setRows(v))) lightboxdRowsError = 'Couldn’t reach the server. Try again in a moment.';
                                 }}
                             />
                         </div>
@@ -622,17 +623,17 @@
                         >
                             <div>
                                 <label class="title" for="lightboxd-url">
-                                    {lightboxd.status === 'removed' ? 'This Device Was Removed' : 'Connect Lightboxd'}
+                                    {lightboxd.status === 'removed' ? 'This Device Was Removed' : 'Connect Your Server'}
                                 </label>
                                 <div class="sub" class:sync-error={!!lightboxd.error}>
                                     {#if lightboxd.error}
                                         {lightboxd.error}
                                     {:else if lightboxd.status === 'removed'}
-                                        Lightboxd removed it. Connect again to keep using it with this profile.
+                                        Your server removed it. Connect again to keep using it with this account.
                                     {:else if lightboxd.suggestedServer}
-                                        This profile already uses Lightboxd. Connect this {isTV ? 'TV' : isIOS ? 'iPhone' : 'PC'} too: your Stremio account signs it in.
+                                        This account already uses a server. Connect this {isTV ? 'TV' : isIOS ? 'iPhone' : 'PC'} too: your account signs it in.
                                     {:else}
-                                        Your watch history, scores and calendar from your Lightboxd server, signed in with this Stremio account. Leave the address empty to look {isDesktop ? 'on this PC and ' : ''}at lightboxd.local.
+                                        Your watch history, scores, lists and calendar live on a server, signed in with this account. Leave the address empty to look {isDesktop ? 'on this PC and ' : ''}at lightboxd.local.
                                     {/if}
                                 </div>
                             </div>

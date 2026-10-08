@@ -5,6 +5,7 @@
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
     import { lightboxd } from '$lib/lightboxd.svelte';
+    import { app } from '$lib/app.svelte';
     import { lb, STATUS_SHORT, score, type ListDetail, type ListInfo } from '$lib/lightboxd/api';
     import PosterCard from '$lib/components/PosterCard.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -60,10 +61,16 @@
 <div class="page">
     {#if !lightboxd.ready}
         <header><h1>Lists</h1></header>
-        <EmptyState icon="list" title="Lists live in Lightboxd">
-            <p>Connect Lightboxd in Settings to make lists and see them here.</p>
-            <button onclick={() => goto('/settings')}>Open Settings</button>
-        </EmptyState>
+        {#if !app.user}
+            <EmptyState icon="list" title="Keep lists of what to watch">
+                <p>Log in to make lists and see them here.</p>
+                <button onclick={() => app.openLogin()}>Log In</button>
+            </EmptyState>
+        {:else}
+            <EmptyState icon="list" title="Lists aren’t available right now">
+                <p>Can’t reach the server. Your lists come back when it’s reachable.</p>
+            </EmptyState>
+        {/if}
     {:else if openId}
         <header class="detail">
             <button class="back" onclick={() => history.back()} aria-label="All Lists" title="All Lists"><Icon name="back" size={20} /></button>
@@ -78,7 +85,7 @@
             <p class="loading" role="status">Loading…</p>
         {:else if detail === null}
             <EmptyState icon="list" title="Couldn’t open this list">
-                <p>It may have been deleted, or Lightboxd can’t be reached right now.</p>
+                <p>It may have been deleted, or the server can’t be reached right now.</p>
             </EmptyState>
         {:else if detail.items.length === 0}
             <EmptyState icon="list" title="Nothing on this list yet">
@@ -97,7 +104,7 @@
             <button class="new" onclick={() => (creating = true)}><Icon name="plus" size={16} /> New List</button>
         </header>
         {#if lists === null}
-            <p class="loading" role="status">{failed ? 'Couldn’t reach Lightboxd.' : 'Loading…'}</p>
+            <p class="loading" role="status">{failed ? 'Couldn’t reach the server.' : 'Loading…'}</p>
         {:else if lists.length === 0}
             <EmptyState icon="list" title="No lists yet">
                 <p>Make one here, or from the + button on any title.</p>

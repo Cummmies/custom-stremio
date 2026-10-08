@@ -239,11 +239,11 @@
     const countLabel = (n: number) => (n === 1 ? '1 release' : `${n} releases`);
     const sourceNote = $derived(
         source === 'pending'
-            ? 'Checking Lightboxd…'
+            ? 'Updating…'
             : source === 'lightboxd'
-            ? 'From Lightboxd'
+            ? 'Shows you’re watching or plan to watch'
             : lightboxdDown
-              ? 'Lightboxd isn’t reachable. Showing shows in your library.'
+              ? 'Can’t reach the server right now. Showing shows in your library.'
               : 'Shows in your library'
     );
     const MAX_CHIPS = 3;
@@ -336,7 +336,7 @@
                 {#if source === 'stremio' && !app.user}
                     <p class="empty">Log in to see new episodes of the shows in your library.</p>
                 {:else if source === 'lightboxd' && lbFailed}
-                    <p class="empty">Couldn’t load Lightboxd’s calendar. <button class="link" onclick={refresh}>Try again</button></p>
+                    <p class="empty">Couldn’t load the calendar. <button class="link" onclick={refresh}>Try again</button></p>
                 {:else if !loading && view === 'day' && !selectedEvents.length}
                     <p class="empty">Nothing comes out on this day.</p>
                 {:else if !loading && view === 'month' && !monthCount}

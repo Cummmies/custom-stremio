@@ -341,6 +341,14 @@ back to Stremio alone whenever Lightboxd can't be reached.
   set at build time), the account's address, then this PC and lightboxd.local. Not after
   Disconnect here (until Connect) or after Lightboxd removed the device. Rows on Home turn on
   as soon as it's connected.
+- **First sign-in brings over the Stremio history** (`stremio_sync.import_once`): the
+  library and watch history, pulled once in the background with the key the app signed in
+  with. The key is never stored, so nothing syncs afterwards: the app sends what you watch
+  from then on. Stremio's library stays a backup (+ still saves there too).
+- **One sign-in, one app:** logging out of a Stremio account (or removing its profile) signs
+  it out of Lightboxd on that device (`lightboxd.signOut`). The app's wording never says
+  "Lightboxd": Settings calls it Watch History, and with a built-in server it shows no address
+  and no Disconnect. Commit subjects show in What's New, so they don't say it either.
 
 ## iPhone and TV — built
 
@@ -397,7 +405,6 @@ address comes from the profile's other devices (Settings sync).
   with a certificate (sign-in sends the Stremio key to Lightboxd).
 - **The Lightboxd website:** maybe retired for everyone but its admin, once its settings
   (profile, sharing, friends, deleting your account and data) are in the app.
-- **Signing out of Stremio** in the app could also end that device's Lightboxd sign-in.
 
 ---
 

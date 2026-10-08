@@ -94,7 +94,7 @@ export class LightboxdTitle {
         if (!t) return null;
         const res = await lb.addToWatchlist(t.id, t.type, t.name);
         if (!res?.titles.length) {
-            this.error = 'Couldn’t add it. Lightboxd may not know this title.';
+            this.error = 'Couldn’t add this title.';
             return null;
         }
         this.titles = res.titles;

@@ -53,6 +53,8 @@ const AUTO_SIGN_IN_MS = 5 * 60_000;
 const LOCAL_SERVERS = isDesktop ? ['http://localhost:8000', 'http://lightboxd.local:8000'] : ['http://lightboxd.local:8000'];
 /** The hosted Lightboxd this build signs in to, if it has one; then the local places. */
 const BUILT_IN_SERVER = (import.meta.env.VITE_LIGHTBOXD_SERVER || '').trim().replace(/\/+$/, '') || null;
+/** This build has its server built in: nothing about it shows (no address, no Disconnect); it's just the app. */
+export const hasBuiltInServer = !!BUILT_IN_SERVER;
 const DEFAULT_SERVERS = BUILT_IN_SERVER ? [BUILT_IN_SERVER, ...LOCAL_SERVERS] : LOCAL_SERVERS;
 const TIMEOUT_MS = 4000;
 const POLL_MS = 2000;
@@ -738,10 +740,10 @@ class Lightboxd {
             this.error = tooMany
                 ? 'Too many tries. Wait a few minutes and try again.'
                 : server
-                  ? `Couldn’t reach Lightboxd at ${server.replace(/^https?:\/\//, '')}. Check that it’s running and the address is right.`
+                  ? `Couldn’t reach a server at ${server.replace(/^https?:\/\//, '')}. Check that it’s running and the address is right.`
                   : isDesktop
-                  ? 'Couldn’t find Lightboxd on this PC or at lightboxd.local. Enter its address.'
-                  : 'Couldn’t find Lightboxd at lightboxd.local. Enter its address.';
+                  ? 'Couldn’t find a server on this PC or at lightboxd.local. Enter its address.'
+                  : 'Couldn’t find a server at lightboxd.local. Enter its address.';
             return;
         }
         const { server: at, start } = found;
@@ -781,6 +783,26 @@ class Lightboxd {
         clearTimeout(this.#poll);
         this.pairing = null;
         this.connecting = false;
+    }
+
+    /**
+     * Signing out of a Stremio account signs it out of Lightboxd on this
+     * device too: one sign-in. Its token goes from here (and ends at Lightboxd,
+     * unless it's the account's shared one, which its other devices use).
+     * Watches not sent yet wait for the next sign-in.
+     */
+    signOut(uid: string) {
+        const saved = this.#load(uid);
+        const shared = this.sharedFor(uid);
+        try {
+            localStorage.removeItem(storageKey(uid));
+        } catch {}
+        if (uid === this.#uid) {
+            this.cancelPairing();
+            this.saved = null;
+            this.#setStatus('off');
+        }
+        if (saved?.token && saved.token !== shared.token) call(saved.server, '/disconnect', { method: 'POST', token: saved.token });
     }
 
     /**

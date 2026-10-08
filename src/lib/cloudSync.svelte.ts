@@ -326,7 +326,7 @@ class CloudSync {
                         version: '1.0.0',
                         name: 'Stremio Sync',
                         description:
-                            'Added by this app to keep your profile picture, Home rows, app settings and Lightboxd connection the same on every device you log in to. It stores those in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
+                            'Added by this app to keep your profile picture, Home rows, app settings and watch-history sign-in the same on every device you log in to. It stores those in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
                         contactEmail: encode(payload),
                         types: [],
                         resources: [],
