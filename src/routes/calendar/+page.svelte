@@ -243,7 +243,7 @@
             : source === 'lightboxd'
             ? 'Shows you’re watching or plan to watch'
             : lightboxdDown
-              ? 'Can’t reach the server right now. Showing shows in your library.'
+              ? 'Couldn’t connect. Using backup.'
               : 'Shows in your library'
     );
     const MAX_CHIPS = 3;

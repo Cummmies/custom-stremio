@@ -79,6 +79,9 @@ export type RelatedItem = {
 };
 export type RelatedGroup = { title: string; items: RelatedItem[] };
 
+/** A title whose status or progress here differs from a backup's (from an import). */
+export type BackupConflict = { title_id: number; title_name: string; imported: Record<string, unknown> };
+
 /** A watch to log or change: only what's set is sent on an edit. */
 export type WatchFields = { rating?: number | null; review?: string; watch_date?: string | null };
 
@@ -108,6 +111,15 @@ export const lb = {
         lightboxd.request<{ title: Summary }>(`/lists/${listId}/titles`, { method: 'POST', body: { id, type, name }, timeout: 30_000 }),
     removeFromList: (listId: number, titleId: number) =>
         lightboxd.request<{ title: Summary }>(`/lists/${listId}/titles/${titleId}`, { method: 'DELETE' }),
+
+    /** Your data as a backup file's contents. */
+    backup: () => lightboxd.request<Record<string, unknown>>('/backup', { timeout: 60_000 }),
+    /** Adds what's in a backup; what clashes comes back, for resolveBackup. */
+    importBackup: (contents: unknown) =>
+        lightboxd.request<{ applied_count: number; conflicts: BackupConflict[] }>('/backup/import', { method: 'POST', body: contents, timeout: 120_000 }),
+    /** One choice for every clash: keep what's here, or use the backup's. */
+    resolveBackup: (decision: 'keep_local' | 'use_imported', conflicts: BackupConflict[]) =>
+        lightboxd.request<{ resolved_count: number }>('/backup/resolve', { method: 'POST', body: { decision, conflicts }, timeout: 120_000 }),
 };
 
 // --- Wording, shared by the screens ---------------------------------------------

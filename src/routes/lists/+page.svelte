@@ -67,8 +67,8 @@
                 <button onclick={() => app.openLogin()}>Log In</button>
             </EmptyState>
         {:else}
-            <EmptyState icon="list" title="Lists aren’t available right now">
-                <p>Can’t reach the server. Your lists come back when it’s reachable.</p>
+            <EmptyState icon="list" title="Couldn’t connect">
+                <p>Your lists come back as soon as it does.</p>
             </EmptyState>
         {/if}
     {:else if openId}
@@ -85,7 +85,7 @@
             <p class="loading" role="status">Loading…</p>
         {:else if detail === null}
             <EmptyState icon="list" title="Couldn’t open this list">
-                <p>It may have been deleted, or the server can’t be reached right now.</p>
+                <p>It may have been deleted, or the connection dropped. Try again in a moment.</p>
             </EmptyState>
         {:else if detail.items.length === 0}
             <EmptyState icon="list" title="Nothing on this list yet">
@@ -104,7 +104,7 @@
             <button class="new" onclick={() => (creating = true)}><Icon name="plus" size={16} /> New List</button>
         </header>
         {#if lists === null}
-            <p class="loading" role="status">{failed ? 'Couldn’t reach the server.' : 'Loading…'}</p>
+            <p class="loading" role="status">{failed ? 'Couldn’t connect. Try again in a moment.' : 'Loading…'}</p>
         {:else if lists.length === 0}
             <EmptyState icon="list" title="No lists yet">
                 <p>Make one here, or from the + button on any title.</p>

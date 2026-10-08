@@ -347,8 +347,16 @@ back to Stremio alone whenever Lightboxd can't be reached.
   from then on. Stremio's library stays a backup (+ still saves there too).
 - **One sign-in, one app:** logging out of a Stremio account (or removing its profile) signs
   it out of Lightboxd on that device (`lightboxd.signOut`). The app's wording never says
-  "Lightboxd": Settings calls it Watch History, and with a built-in server it shows no address
-  and no Disconnect. Commit subjects show in What's New, so they don't say it either.
+  "Lightboxd", and Settings has no section for it at all (no address, no Disconnect, no rows
+  switch: Home's rows are on, and the Home row organizer hides any). When it can't connect, the
+  screens say so plainly and use the backup (Stremio). Commit subjects show in What's New, so
+  they don't say it either.
+- **Settings > Data** (PC and iPhone; not the TV): Download a Backup (`GET /app-api/v1/backup`,
+  `core/backup.py`, the website's Export: the file on PC, the share sheet on iPhone) and
+  Import a Backup (`POST /backup/import`, the website's importer: what doesn't clash is added;
+  for the titles that differ, one choice for all: Keep What's Here or Use the Backup, `POST
+  /backup/resolve`). An import only ever restores list entries into lists it made or found for
+  you (a file's own list ids could be anyone's).
 
 ## iPhone and TV — built
 

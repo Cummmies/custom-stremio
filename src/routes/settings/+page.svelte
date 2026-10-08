@@ -33,8 +33,8 @@
     import { titleTracks } from '$lib/player/titleTracks.svelte';
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
-    import { lightboxd, hasBuiltInServer } from '$lib/lightboxd.svelte';
-    import { qrSvg } from '$lib/qr';
+    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { lb, today, type BackupConflict } from '$lib/lightboxd/api';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
@@ -122,14 +122,92 @@
         core.dispatch({ action: 'StreamingServer', args: { action: 'Reload' } });
     }
 
-    // Lightboxd ($lib/lightboxd.svelte.ts): the address to connect to, filled
-    // in with this device's last one, or the one this profile uses elsewhere.
-    let lightboxdAddress = $state('');
-    $effect(() => {
-        lightboxdAddress = lightboxd.suggestedServer?.replace(/^http:\/\//, '') ?? '';
-    });
-    let lightboxdRowsError = $state<string | null>(null);
-    const lightboxdHost = $derived(lightboxd.saved?.server.replace(/^https?:\/\//, '') ?? '');
+    // Data: your watchlist, watches, scores and lists as a backup file, and
+    // importing one (PC and iPhone; not the TV).
+    let dataBusy = $state<'download' | 'import' | 'resolve' | null>(null);
+    let dataNote = $state<string | null>(null);
+    let dataError = $state(false);
+    let pendingConflicts = $state<BackupConflict[] | null>(null);
+    let importInput = $state<HTMLInputElement>();
+
+    async function downloadBackup() {
+        dataBusy = 'download';
+        dataNote = null;
+        dataError = false;
+        const data = await lb.backup();
+        dataBusy = null;
+        if (!data) {
+            dataError = true;
+            dataNote = 'Couldn’t connect. Try again in a moment.';
+            return;
+        }
+        const name = `custom-stremio-backup-${today()}.json`;
+        const file = new File([JSON.stringify(data, null, 2)], name, { type: 'application/json' });
+        // iPhone: the share sheet, with Save to Files. PC: a download.
+        if (isIOS && navigator.canShare?.({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file] });
+            } catch {
+                // Closed without saving.
+            }
+            return;
+        }
+        const url = URL.createObjectURL(file);
+        const link = Object.assign(document.createElement('a'), { href: url, download: name });
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        dataNote = 'Backup downloaded.';
+    }
+
+    async function importBackup(e: Event) {
+        const input = e.currentTarget as HTMLInputElement;
+        const picked = input.files?.[0];
+        input.value = '';
+        if (!picked) return;
+        dataBusy = 'import';
+        dataNote = null;
+        dataError = false;
+        pendingConflicts = null;
+        let contents: unknown;
+        try {
+            contents = JSON.parse(await picked.text());
+        } catch {
+            dataBusy = null;
+            dataError = true;
+            dataNote = 'That isn’t a backup file.';
+            return;
+        }
+        const res = await lb.importBackup(contents);
+        dataBusy = null;
+        if (!res) {
+            dataError = true;
+            dataNote = 'Couldn’t import it. Check that it’s a backup file, then try again.';
+            return;
+        }
+        const n = res.applied_count;
+        dataNote = n ? `Imported ${n} ${n === 1 ? 'title' : 'titles'}.` : 'Nothing to import.';
+        if (res.conflicts.length) pendingConflicts = res.conflicts;
+    }
+
+    async function resolveConflicts(decision: 'keep_local' | 'use_imported') {
+        if (!pendingConflicts) return;
+        if (decision === 'keep_local') {
+            pendingConflicts = null;
+            return;
+        }
+        dataBusy = 'resolve';
+        const res = await lb.resolveBackup(decision, pendingConflicts);
+        dataBusy = null;
+        if (!res) {
+            dataError = true;
+            dataNote = 'Couldn’t connect. Try again in a moment.';
+            return;
+        }
+        dataNote = `Updated ${res.resolved_count} ${res.resolved_count === 1 ? 'title' : 'titles'} from the backup.`;
+        pendingConflicts = null;
+    }
 
     // Every shortcut in the app. Keep in step with the key handlers in
     // routes/+layout.svelte, routes/player/+page.svelte and SeekBar.svelte.
@@ -530,129 +608,48 @@
             </section>
         {/if}
 
-        {#if app.user}
+        {#if app.user && !isTV}<!-- a file to keep, where saving and opening files makes sense -->
             <section>
-                <h2>Watch History</h2>
+                <h2>Data</h2>
                 <div class="group">
-                    {#if lightboxd.pairing}
-                        {@const p = lightboxd.pairing}
-                        {#if p.state === 'waiting' && isTV}
-                            <!-- A TV can't open the approval page: it shows it, for a phone. -->
-                            <div class="row pair-tv">
-                                <div class="qr" aria-hidden="true">{@html qrSvg(p.pairUrl)}</div>
-                                <div class="pair-steps">
-                                    <div class="title">Approve This TV on Your Server</div>
-                                    <p class="sub">Scan the code with your phone, or open <strong>{p.pairUrl.replace(/^https?:\/\//, '').replace(/\?.*$/, '')}</strong> and enter</p>
-                                    <div class="pair-code" aria-label={`Code ${p.code}`}>{p.code}</div>
-                                    <p class="sub">This screen continues by itself.</p>
-                                </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Download a Backup</div>
+                            <div class="sub">Your watchlist, watches, scores and lists, as a file to keep.</div>
+                        </div>
+                        <button class="btn" onclick={downloadBackup} disabled={!!dataBusy || !lightboxd.ready}>
+                            {dataBusy === 'download' ? 'Preparing…' : 'Download'}
+                        </button>
+                    </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Import a Backup</div>
+                            <div class="sub">Adds what’s in a backup file. Nothing here is removed.</div>
+                        </div>
+                        <button class="btn" onclick={() => importInput?.click()} disabled={!!dataBusy || !lightboxd.ready}>
+                            {dataBusy === 'import' ? 'Importing…' : 'Import…'}
+                        </button>
+                        <input bind:this={importInput} type="file" accept="application/json,.json" onchange={importBackup} hidden />
+                    </div>
+                    {#if pendingConflicts}
+                        {@const n = pendingConflicts.length}
+                        <div class="row">
+                            <div>
+                                <div class="title">{n} {n === 1 ? 'title is' : 'titles are'} different here</div>
+                                <div class="sub">Their status or progress here isn’t the backup’s.</div>
                             </div>
-                        {:else}
-                            <div class="row stack">
-                                <div>
-                                    {#if p.state === 'waiting'}
-                                        <div class="title">Approve on Your Server</div>
-                                        <div class="sub">Open your server’s website, check the code matches, and approve. This page continues by itself.</div>
-                                        {#if lightboxd.stremioNotLinked}
-                                            <div class="sub">To skip the code next time, connect this Stremio account in your server’s Settings.</div>
-                                        {/if}
-                                    {:else if p.state === 'denied'}
-                                        <div class="title">Code Denied</div>
-                                        <div class="sub">Your server turned this code down. Get a new one to try again.</div>
-                                    {:else}
-                                        <div class="title">Code Expired</div>
-                                        <div class="sub">Codes last 10 minutes. Get a new one to try again.</div>
-                                    {/if}
-                                </div>
-                                {#if p.state === 'waiting'}<div class="pair-code" aria-label={`Code ${p.code}`}>{p.code}</div>{/if}
-                            </div>
-                        {/if}
-                        <div class="row compact">
-                            <span class="sub">{p.server.replace(/^https?:\/\//, '')}</span>
                             <div class="account-actions">
-                                <!-- TV: the Connect button that had focus is gone; focus goes to the way out. -->
-                                <button class="btn" {@attach (el) => void (isTV && setTimeout(() => el.focus()))} onclick={() => lightboxd.cancelPairing()}>Cancel</button>
-                                {#if p.state !== 'waiting'}
-                                    <button class="btn primary" onclick={() => lightboxd.connect(p.server)}>Get New Code</button>
-                                {:else if !isTV}
-                                    <button class="btn primary" onclick={() => openExternal(p.pairUrl)}>Open Website</button>
-                                {/if}
+                                <button class="btn" disabled={!!dataBusy} onclick={() => resolveConflicts('keep_local')}>Keep What’s Here</button>
+                                <button class="btn primary" disabled={!!dataBusy} onclick={() => resolveConflicts('use_imported')}>Use the Backup</button>
                             </div>
                         </div>
-                    {:else if lightboxd.saved?.token}
+                    {/if}
+                    {#if dataNote || !lightboxd.ready}
                         <div class="row">
-                            <div>
-                                <div class="title">Your watches, scores and lists</div>
-                                <div class="sub">
-                                    {#if lightboxd.status === 'ok'}
-                                        {hasBuiltInServer ? 'Up to date on every device you log in to.' : `Kept on ${lightboxdHost}, for every device you log in to.`}
-                                    {:else if lightboxd.status === 'unreachable'}
-                                        Can’t reach the server right now. Everything else keeps working, and this catches up when it’s back.
-                                    {:else}
-                                        Updating…
-                                    {/if}
-                                </div>
+                            <div class="sub" class:sync-error={dataError || !lightboxd.ready} role="status">
+                                {dataNote ?? 'Couldn’t connect. Try again in a moment.'}
                             </div>
-                            {#if !hasBuiltInServer}
-                                <button class="btn" onclick={() => lightboxd.disconnect()} title="Disconnects every device logged in to this account">Disconnect</button>
-                            {/if}
                         </div>
-                        <div class="row">
-                            <div>
-                                <div class="title">Rows on Home</div>
-                                <div class="sub" class:sync-error={!!lightboxdRowsError}>
-                                    {lightboxdRowsError ?? 'Recently Watched and Airing This Week.'}
-                                </div>
-                            </div>
-                            <Toggle
-                                label="Watch history rows on Home"
-                                checked={lightboxd.rowsInstalled}
-                                onchange={async (v) => {
-                                    lightboxdRowsError = null;
-                                    if (!(await lightboxd.setRows(v))) lightboxdRowsError = 'Couldn’t reach the server. Try again in a moment.';
-                                }}
-                            />
-                        </div>
-                    {:else}
-                        <form
-                            class="row stack"
-                            onsubmit={(e) => {
-                                e.preventDefault();
-                                lightboxd.connect(lightboxdAddress);
-                            }}
-                        >
-                            <div>
-                                <label class="title" for="lightboxd-url">
-                                    {lightboxd.status === 'removed' ? 'This Device Was Removed' : 'Connect Your Server'}
-                                </label>
-                                <div class="sub" class:sync-error={!!lightboxd.error}>
-                                    {#if lightboxd.error}
-                                        {lightboxd.error}
-                                    {:else if lightboxd.status === 'removed'}
-                                        Your server removed it. Connect again to keep using it with this account.
-                                    {:else if lightboxd.suggestedServer}
-                                        This account already uses a server. Connect this {isTV ? 'TV' : isIOS ? 'iPhone' : 'PC'} too: your account signs it in.
-                                    {:else}
-                                        Your watch history, scores, lists and calendar live on a server, signed in with this account. Leave the address empty to look {isDesktop ? 'on this PC and ' : ''}at lightboxd.local.
-                                    {/if}
-                                </div>
-                            </div>
-                            <div class="url">
-                                <input
-                                    id="lightboxd-url"
-                                    type="text"
-                                    inputmode="url"
-                                    autocapitalize="off"
-                                    autocorrect="off"
-                                    spellcheck="false"
-                                    autocomplete="off"
-                                    enterkeyhint="go"
-                                    placeholder="lightboxd.local:8000"
-                                    bind:value={lightboxdAddress}
-                                />
-                                <button class="btn primary" type="submit" disabled={lightboxd.connecting}>{lightboxd.connecting ? 'Connecting…' : 'Connect'}</button>
-                            </div>
-                        </form>
                     {/if}
                 </div>
             </section>
@@ -995,48 +992,6 @@
         outline: none;
         border-color: var(--accent-hover);
     }
-    .pair-code {
-        flex: none;
-        font-family: var(--font-display);
-        font-size: 28px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        font-variant-numeric: tabular-nums;
-        user-select: all;
-    }
-    /* TV pairing: the code to scan beside what to do, read from the sofa. */
-    .pair-tv {
-        justify-content: flex-start;
-        gap: 32px;
-        padding: 20px 18px;
-    }
-    .qr {
-        flex: none;
-        width: 200px;
-        height: 200px;
-        padding: 12px;
-        border-radius: var(--radius-l);
-        background: white;
-    }
-    .qr :global(svg) {
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
-    .pair-steps {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .pair-steps .sub {
-        margin: 8px 0;
-    }
-    .pair-steps strong {
-        color: var(--label);
-    }
-    .pair-steps .pair-code {
-        font-size: 44px;
-    }
     .subhead {
         margin: 14px 0 8px 4px;
         font-size: 12px;
@@ -1156,21 +1111,8 @@
             height: 40px;
             box-sizing: border-box;
         }
-        /* The Lightboxd address: the field across, Connect beside it, 44 pt. */
-        .row.stack .url input {
-            flex: 1;
-            min-width: 0;
-            width: auto;
-            height: 44px;
-            font-size: 16px; /* 16 px and up: iOS doesn't zoom into the field */
-        }
-        .row.stack .url .btn,
         .account-actions .btn {
             height: 44px;
-        }
-        .pair-tv {
-            flex-direction: column;
-            align-items: flex-start;
         }
     }
 </style>
