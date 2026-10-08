@@ -1,9 +1,10 @@
 <script lang="ts">
     // Library. With Lightboxd connected (docs/lightboxd.md): what you track by
     // status (Watching, Plan to Watch, Completed by month of your last watch,
-    // Dropped) and Ratings (by score). The address says which (?status=watching,
-    // which Continue Watching's See All opens; ?status=ratings). Without
-    // Lightboxd: your Stremio library.
+    // Dropped); the address says which (?status=watching, which Continue
+    // Watching's See All opens). The menu beside them: Movies or Series, and
+    // Recent or Highest Rated (by your score). Without Lightboxd: your Stremio
+    // library.
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
     import { app } from '$lib/app.svelte';
@@ -12,6 +13,7 @@
     import { lb, day, score, STATUS_LABEL, type LibraryItem, type Status } from '$lib/lightboxd/api';
     import PosterCard, { type PosterItem } from '$lib/components/PosterCard.svelte';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
+    import type { MenuEntry } from '$lib/menu.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
 
     const filters = [
@@ -28,14 +30,28 @@
 
     // --- Lightboxd ---
     const STATUSES: Status[] = ['watching', 'plan_to_watch', 'completed', 'dropped'];
-    const sections = [...STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] })), { id: 'ratings', label: 'Ratings' }];
+    const sections = STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] }));
     const ids = sections.map((x) => x.id);
     let section = $state<string>('watching');
+    let sort = $state<'recent' | 'rating'>('recent');
     // The address says which (a row's See All links straight to one).
     $effect(() => {
         const asked = appUrl(page.url).searchParams.get('status');
+        // An old link to Ratings: what you've completed, highest rated first.
+        if (asked === 'ratings') {
+            section = 'completed';
+            sort = 'rating';
+            return;
+        }
         section = asked && ids.includes(asked) ? asked : 'watching';
     });
+    const sortMenu = $derived<MenuEntry[]>([
+        { header: 'Sort' },
+        { label: 'Recent', checked: sort === 'recent', onselect: () => (sort = 'recent') },
+        { label: 'Highest Rated', checked: sort === 'rating', onselect: () => (sort = 'rating') },
+    ]);
+    const typeLabel = $derived(filters.find((f) => f.value === type)?.label ?? 'All');
+    const menuLabel = $derived(sort === 'rating' ? `${typeLabel} · Highest Rated` : typeLabel);
     function pick(next: string) {
         goto(next === 'watching' ? '/library' : `/library?status=${next}`, { replaceState: true, noScroll: true, keepFocus: true });
     }
@@ -46,11 +62,16 @@
         const k = section;
         if (!lightboxd.ready || loaded[k] !== undefined) return;
         loaded = { ...loaded, [k]: null };
-        (k === 'ratings' ? lb.library('ratings') : lb.library('titles', k as Status)).then((res) => {
+        lb.library('titles', k as Status).then((res) => {
             loaded = { ...loaded, [k]: res ? res.items : undefined };
         });
     });
-    const current = $derived((loaded[section] ?? null)?.filter((i) => keep(i.type)) ?? null);
+    // Highest Rated: your score, highest first (unscored last, as they were).
+    const current = $derived.by(() => {
+        const list = (loaded[section] ?? null)?.filter((i) => keep(i.type)) ?? null;
+        if (!list || sort !== 'rating') return list;
+        return [...list].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+    });
 
     const poster = (i: LibraryItem, below: string | null): PosterItem => ({
         id: i.id,
@@ -65,6 +86,18 @@
     const thisYear = String(new Date().getFullYear());
     const groups = $derived.by((): Group[] => {
         if (!current) return [];
+        if (sort === 'rating') {
+            // By score: 9 and up, 8, 7…; unscored ones last.
+            const out: Group[] = [];
+            for (const i of current) {
+                const band = i.rating == null ? 'Not Rated' : i.rating >= 9 ? '9 and Up' : String(Math.floor(i.rating));
+                let g = out.find((x) => x.title === band);
+                if (!g) out.push((g = { title: band, items: [], keys: [] }));
+                g.items.push(poster(i, i.rating != null ? score(i.rating) : i.year));
+                g.keys.push(String(i.title_id));
+            }
+            return out;
+        }
         if (section === 'completed') {
             const out: Group[] = [];
             for (const i of current) {
@@ -85,25 +118,11 @@
             }
             return out;
         }
-        if (section !== 'ratings') {
-            return [{ title: '', items: current.map((i) => poster(i, i.year)), keys: current.map((i) => String(i.title_id)) }];
-        }
-        const out: Group[] = [];
-        for (const i of current) {
-            const r = i.rating ?? 0;
-            const band = r >= 9 ? '9 and Up' : String(Math.floor(r));
-            let g = out.find((x) => x.title === band);
-            if (!g) out.push((g = { title: band, items: [], keys: [] }));
-            g.items.push(poster(i, score(r)));
-            g.keys.push(String(i.title_id));
-        }
-        return out;
+        return [{ title: '', items: current.map((i) => poster(i, i.year)), keys: current.map((i) => String(i.title_id)) }];
     });
 
     const emptyText = $derived(
-        section === 'ratings'
-            ? { title: 'No ratings yet', body: 'Rate a title with the ★ button on its page.' }
-            : section === 'completed'
+        section === 'completed'
               ? { title: 'Nothing completed yet', body: 'What you finish watching shows up here.' }
               : section === 'watching'
                 ? { title: 'Nothing you’re watching', body: 'Start something, or set a title to Watching with the + button on its page.' }
@@ -123,7 +142,9 @@
                 {/each}
             </div>
         {/if}
-        <div class="type"><PopupButton label="Show" bind:value={type} options={filters} /></div>
+        <div class="type">
+            <PopupButton label="Show and Sort" heading="Show" bind:value={type} options={filters} extra={lightboxd.ready ? sortMenu : []} display={menuLabel} />
+        </div>
     </header>
 
     {#if lightboxd.ready}

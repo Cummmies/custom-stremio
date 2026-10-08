@@ -1,7 +1,7 @@
 <script lang="ts" generics="T extends string | number | null">
     // A pop-up button: shows the current choice and opens the app menu to change it.
     // Replaces native <select>, whose dropdown can't be styled to match the app.
-    import { menu } from '$lib/menu.svelte';
+    import { menu, type MenuEntry } from '$lib/menu.svelte';
     import Icon from '../Icon.svelte';
     import { isTV } from '$lib/platform';
 
@@ -10,28 +10,38 @@
         options,
         label,
         onchange,
+        heading,
+        extra,
+        display,
     }: {
         value: T;
         options: { value: T; label: string }[];
         /** Accessible name, e.g. "Season". */
         label: string;
         onchange?: (value: T) => void;
+        /** A heading over the options, when the menu has more than them. */
+        heading?: string;
+        /** More of the menu, after a separator (another choice, e.g. a sort). */
+        extra?: MenuEntry[];
+        /** What the button says, instead of the chosen option alone. */
+        display?: string;
     } = $props();
 
-    const current = $derived(options.find((o) => o.value === value)?.label ?? 'Choose…');
+    const current = $derived(display ?? options.find((o) => o.value === value)?.label ?? 'Choose…');
 
     function open(el: HTMLElement) {
-        menu.toggleFor(
-            el,
-            options.map((o) => ({
+        menu.toggleFor(el, [
+            ...(heading ? [{ header: heading }] : []),
+            ...options.map((o) => ({
                 label: o.label,
                 checked: o.value === value,
                 onselect: () => {
                     value = o.value;
                     onchange?.(o.value);
                 },
-            }))
-        );
+            })),
+            ...(extra?.length ? [{ separator: true } as const, ...extra] : []),
+        ]);
     }
 
     function onkeydown(e: KeyboardEvent) {

@@ -289,8 +289,9 @@ Stremio's + and eye buttons).
 - **App** (`src/lib/lightboxd/api.ts` the calls, `src/lib/lightboxd/title.svelte.ts` a title
   page's state and actions):
   - **Library** (`routes/library`): Watching / Plan to Watch / Completed (by month of your
-    last watch, with its date, your score and "Watched 2×") / Dropped / Ratings (by score), with
-    All / Movies / Series; `?status=…` opens one, as Continue Watching's See All does (Watching).
+    last watch, with its date, your score and "Watched 2×") / Dropped; the menu beside them
+    has Show (All / Movies / Series) and Sort (Recent / Highest Rated, grouped by score);
+    `?status=…` opens one, as Continue Watching's See All does (Watching).
     On phones the sections scroll sideways, under the title. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
     without a watchlist entry, as Lightboxd's own status does.)
   - **Lists** (`routes/lists`), a tab in the nav: your lists as poster stacks; one opens in
@@ -412,8 +413,8 @@ address comes from the profile's other devices (Settings sync).
 - **Removing data for deleted Stremio accounts:** Stremio tells no one when an account is
   deleted, and Lightboxd can't ask without the account's key (not kept; and a key also stops
   working on a plain log-out, so a dead key doesn't mean a deleted account). So: an account
-  unused from every device for a long while (6 months?) is deleted with its data. Period not
-  decided yet.
+  unused from every device for a long while (6 months?) is deleted with its data.
+  **Pinned (2026-10-07): nothing deletes account data for now.**
 - **API keys and caching, before many people use it:** TMDb, OMDb and AniList keys are the
   server's, shared by everyone, and so are their rate limits. Only what Lightboxd itself fetches is
   in question (title details, scores, reviews, related titles, episodes and air dates,
