@@ -91,6 +91,8 @@ export type WatchEvent = {
 export type EventResult = {
     result: 'applied' | 'unchanged' | 'unmatched';
     title_id: number | null;
+    /** The Lightboxd title's own name (an anime's season); older Lightboxd leaves it out. */
+    title_name?: string | null;
     note: string;
     log_id: number | null;
     needs_rating: boolean;

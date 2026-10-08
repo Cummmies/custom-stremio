@@ -898,7 +898,8 @@
             rateScore = 5;
             rateReview = '';
             rateTyping = false;
-            ratePrompt = { logId, name: last.event.name ?? heading, state: 'ask' };
+            // The title Lightboxd logged: for an anime, the season just finished ("… Season 2").
+            ratePrompt = { logId, name: last.result.title_name ?? last.event.name ?? heading, state: 'ask' };
         });
     });
     // Another episode or movie: the prompt was about the last one.
