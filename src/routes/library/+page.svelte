@@ -1,10 +1,10 @@
 <script lang="ts">
-    // Library. With Lightboxd connected (docs/lightboxd.md): what you track by
-    // status (Watching, Plan to Watch, Completed by month of your last watch,
-    // Dropped); the address says which (?status=watching, which Continue
-    // Watching's See All opens). The menu beside them: Movies or Series, and
-    // Recent or Highest Rated (by your score). Without Lightboxd: your Stremio
-    // library.
+    // Library. With Lightboxd connected (docs/lightboxd.md): what you track,
+    // all of it (by status) or one status (Watching, Plan to Watch, Completed
+    // by month of your last watch, Dropped); the address says which
+    // (?status=watching, which Continue Watching's See All opens). At the
+    // right: Type (Movies or Series) and Sort (Recent or Highest Rated, by
+    // your score). Without Lightboxd: your Stremio library.
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
     import { app } from '$lib/app.svelte';
@@ -13,7 +13,6 @@
     import { lb, day, score, STATUS_LABEL, type LibraryItem, type Status } from '$lib/lightboxd/api';
     import PosterCard, { type PosterItem } from '$lib/components/PosterCard.svelte';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
-    import type { MenuEntry } from '$lib/menu.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
 
     const filters = [
@@ -30,9 +29,13 @@
 
     // --- Lightboxd ---
     const STATUSES: Status[] = ['watching', 'plan_to_watch', 'completed', 'dropped'];
-    const sections = STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] }));
+    const sections = [{ id: 'all', label: 'All' }, ...STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] }))];
     const ids = sections.map((x) => x.id);
-    let section = $state<string>('watching');
+    let section = $state<string>('all');
+    const sorts = [
+        { value: 'recent', label: 'Recent' },
+        { value: 'rating', label: 'Highest Rated' },
+    ] as const;
     let sort = $state<'recent' | 'rating'>('recent');
     // The address says which (a row's See All links straight to one).
     $effect(() => {
@@ -43,17 +46,12 @@
             sort = 'rating';
             return;
         }
-        section = asked && ids.includes(asked) ? asked : 'watching';
+        section = asked && ids.includes(asked) ? asked : 'all';
     });
-    const sortMenu = $derived<MenuEntry[]>([
-        { header: 'Sort' },
-        { label: 'Recent', checked: sort === 'recent', onselect: () => (sort = 'recent') },
-        { label: 'Highest Rated', checked: sort === 'rating', onselect: () => (sort = 'rating') },
-    ]);
     const typeLabel = $derived(filters.find((f) => f.value === type)?.label ?? 'All');
-    const menuLabel = $derived(sort === 'rating' ? `${typeLabel} · Highest Rated` : typeLabel);
+    const sortLabel = $derived(sorts.find((x) => x.value === sort)?.label ?? 'Recent');
     function pick(next: string) {
-        goto(next === 'watching' ? '/library' : `/library?status=${next}`, { replaceState: true, noScroll: true, keepFocus: true });
+        goto(next === 'all' ? '/library' : `/library?status=${next}`, { replaceState: true, noScroll: true, keepFocus: true });
     }
     let loaded = $state<Record<string, LibraryItem[] | null | undefined>>({});
 
@@ -62,7 +60,7 @@
         const k = section;
         if (!lightboxd.ready || loaded[k] !== undefined) return;
         loaded = { ...loaded, [k]: null };
-        lb.library('titles', k as Status).then((res) => {
+        lb.library('titles', k === 'all' ? null : (k as Status)).then((res) => {
             loaded = { ...loaded, [k]: res ? res.items : undefined };
         });
     });
@@ -118,11 +116,25 @@
             }
             return out;
         }
+        if (section === 'all') {
+            // By status, in the bar's order (the server sends them that way).
+            const out: Group[] = [];
+            for (const i of current) {
+                const title = i.status ? STATUS_LABEL[i.status] : 'Other';
+                let g = out.find((x) => x.title === title);
+                if (!g) out.push((g = { title, items: [], keys: [] }));
+                g.items.push(poster(i, i.year));
+                g.keys.push(String(i.title_id));
+            }
+            return out;
+        }
         return [{ title: '', items: current.map((i) => poster(i, i.year)), keys: current.map((i) => String(i.title_id)) }];
     });
 
     const emptyText = $derived(
-        section === 'completed'
+        section === 'all'
+            ? { title: 'Nothing here yet', body: 'Use the + button on any title to track it.' }
+            : section === 'completed'
               ? { title: 'Nothing completed yet', body: 'What you finish watching shows up here.' }
               : section === 'watching'
                 ? { title: 'Nothing you’re watching', body: 'Start something, or set a title to Watching with the + button on its page.' }
@@ -133,17 +145,21 @@
 <svelte:head><title>Library · Stremio</title></svelte:head>
 
 <div class="page">
+    <!-- The bar names the page; the title stays for screen readers. -->
     <header>
-        <h1>Library</h1>
+        <h1 class:sr-only={lightboxd.ready}>Library</h1>
         {#if lightboxd.ready}
-            <div class="segmented" role="radiogroup" aria-label="Section">
+            <div class="segmented" role="radiogroup" aria-label="Show">
                 {#each sections as s (s.id)}
                     <button role="radio" aria-checked={section === s.id} class:on={section === s.id} onclick={() => pick(s.id)}>{s.label}</button>
                 {/each}
             </div>
         {/if}
-        <div class="type">
-            <PopupButton label="Show and Sort" heading="Show" bind:value={type} options={filters} extra={lightboxd.ready ? sortMenu : []} display={menuLabel} />
+        <div class="menus">
+            <PopupButton label="Type" bind:value={type} options={filters} display="Type: {typeLabel}" />
+            {#if lightboxd.ready}
+                <PopupButton label="Sort" bind:value={sort} options={[...sorts]} display="Sort: {sortLabel}" />
+            {/if}
         </div>
     </header>
 
@@ -192,7 +208,7 @@
     .page {
         padding: calc(var(--nav-h) + 24px) var(--gutter) 56px;
     }
-    /* PC: the title, then the sections and Movies/Series at the right. */
+    /* PC: the bar at the left, Type and Sort at the right (no bar: the title). */
     header {
         display: flex;
         align-items: center;
@@ -200,8 +216,13 @@
         gap: 10px;
         margin-bottom: 24px;
     }
+    .menus {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
+    }
     h1 {
-        margin: 0 auto 0 0;
+        margin: 0;
         font-family: var(--font-display);
         font-size: var(--text-title2);
         font-weight: 600;
@@ -254,14 +275,13 @@
             height: 40px;
         }
     }
-    /* Phones: Movies/Series beside the title; the sections a row of their
-       own, scrolling sideways when they don't all fit. */
+    /* Phones: the bar a row of its own, scrolling sideways when it doesn't
+       all fit; Type and Sort under it. */
     @media (max-width: 600px) {
-        .type {
-            order: 1;
+        .menus {
+            margin-left: 0;
         }
         .segmented {
-            order: 2;
             flex: 1 1 100%;
             min-width: 0;
             overflow-x: auto;

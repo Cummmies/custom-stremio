@@ -288,11 +288,12 @@ Stremio's + and eye buttons).
   - The app API's CORS allows PUT now (editing a watch).
 - **App** (`src/lib/lightboxd/api.ts` the calls, `src/lib/lightboxd/title.svelte.ts` a title
   page's state and actions):
-  - **Library** (`routes/library`): Watching / Plan to Watch / Completed (by month of your
-    last watch, with its date, your score and "Watched 2×") / Dropped; the menu beside them
-    has Show (All / Movies / Series) and Sort (Recent / Highest Rated, grouped by score);
+  - **Library** (`routes/library`): a bar at the left in place of the title, All (grouped by
+    status, the default) / Watching / Plan to Watch / Completed (by month of your last watch,
+    with its date, your score and "Watched 2×") / Dropped; at the right, Type (All / Movies /
+    Series) and Sort (Recent / Highest Rated, grouped by score), laid out like Lightboxd's;
     `?status=…` opens one, as Continue Watching's See All does (Watching).
-    On phones the sections scroll sideways, under the title. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
+    On phones the bar scrolls sideways, with Type and Sort under it. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
     without a watchlist entry, as Lightboxd's own status does.)
   - **Lists** (`routes/lists`), a tab in the nav: your lists as poster stacks; one opens in
     place (`?id=`); New List.
