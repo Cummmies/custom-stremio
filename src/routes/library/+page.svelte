@@ -1,11 +1,14 @@
 <script lang="ts">
-    // Library. With Lightboxd connected (docs/lightboxd.md): your Watchlist
-    // (watching first), Watched (every watch, by month) and Ratings (by score),
-    // from Lightboxd. Without it: your Stremio library, as before.
+    // Library. With Lightboxd connected (docs/lightboxd.md): your Titles
+    // (everything you track, by status, or just one status: ?status=watching,
+    // which Continue Watching's See All opens), Watched (every watch, by month)
+    // and Ratings (by score), from Lightboxd. Without it: your Stremio library.
+    import { page } from '$app/state';
+    import { goto, appUrl } from '$lib/nav';
     import { app } from '$lib/app.svelte';
     import { libraryToPoster } from '$lib/library';
     import { lightboxd } from '$lib/lightboxd.svelte';
-    import { lb, day, score, STATUS_SHORT, type LibraryItem } from '$lib/lightboxd/api';
+    import { lb, day, score, STATUS_LABEL, STATUS_SHORT, type LibraryItem, type Status } from '$lib/lightboxd/api';
     import PosterCard, { type PosterItem } from '$lib/components/PosterCard.svelte';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -24,24 +27,41 @@
 
     // --- Lightboxd ---
     const sections = [
-        { id: 'watchlist', label: 'Watchlist' },
+        { id: 'titles', label: 'Titles' },
         { id: 'watched', label: 'Watched' },
         { id: 'ratings', label: 'Ratings' },
     ] as const;
     type Section = (typeof sections)[number]['id'];
-    let section = $state<Section>('watchlist');
-    let loaded = $state<Partial<Record<Section, LibraryItem[] | null>>>({});
-
-    // Each section loads when first shown (and again when Lightboxd comes back).
+    const STATUSES: Status[] = ['watching', 'plan_to_watch', 'completed', 'dropped'];
+    const statusOptions = [{ value: 'all', label: 'All' }, ...STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
+    let section = $state<Section>('titles');
+    let status = $state<string>('all');
+    // The address says which status (a row's See All links straight to one).
     $effect(() => {
+        const asked = appUrl(page.url).searchParams.get('status');
+        if (asked && (STATUSES as string[]).includes(asked)) {
+            section = 'titles';
+            status = asked;
+        } else status = 'all';
+    });
+    function pickStatus(next: string) {
+        goto(next === 'all' ? '/library' : `/library?status=${next}`, { replaceState: true, noScroll: true, keepFocus: true });
+    }
+    const key = $derived(section === 'titles' ? `titles:${status}` : section);
+    let loaded = $state<Record<string, LibraryItem[] | null | undefined>>({});
+
+    // Each section (and status) loads when first shown (and again when Lightboxd comes back).
+    $effect(() => {
+        const k = key;
         const s = section;
-        if (!lightboxd.ready || loaded[s] !== undefined) return;
-        loaded = { ...loaded, [s]: null };
-        lb.library(s).then((res) => {
-            loaded = { ...loaded, [s]: res ? res.items : undefined };
+        const st = status === 'all' ? null : (status as Status);
+        if (!lightboxd.ready || loaded[k] !== undefined) return;
+        loaded = { ...loaded, [k]: null };
+        lb.library(s, s === 'titles' ? st : null).then((res) => {
+            loaded = { ...loaded, [k]: res ? res.items : undefined };
         });
     });
-    const current = $derived((loaded[section] ?? null)?.filter((i) => keep(i.type)) ?? null);
+    const current = $derived((loaded[key] ?? null)?.filter((i) => keep(i.type)) ?? null);
 
     const poster = (i: LibraryItem, below: string | null): PosterItem => ({
         id: i.id,
@@ -56,8 +76,9 @@
     const thisYear = String(new Date().getFullYear());
     const groups = $derived.by((): Group[] => {
         if (!current) return [];
-        if (section === 'watchlist') {
-            const below = (i: LibraryItem) => (i.status === 'watching' ? STATUS_SHORT.watching : i.year);
+        if (section === 'titles') {
+            // All: each one's status under it; one status: its year.
+            const below = (i: LibraryItem) => (status === 'all' && i.status ? STATUS_SHORT[i.status] : i.year);
             return [{ title: '', items: current.map((i) => poster(i, below(i))), keys: current.map((i) => String(i.title_id)) }];
         }
         if (section === 'watched') {
@@ -89,8 +110,10 @@
     });
 
     const emptyText = $derived(
-        section === 'watchlist'
-            ? { title: 'Nothing on your watchlist', body: 'Use the + button on any title to save it here.' }
+        section === 'titles'
+            ? status === 'all'
+                ? { title: 'Nothing here yet', body: 'Use the + button on any title to save it here.' }
+                : { title: `Nothing ${STATUS_LABEL[status as Status].toLowerCase()}`, body: 'Set a title’s status with the + button on its page.' }
             : section === 'watched'
               ? { title: 'Nothing watched yet', body: 'What you finish watching shows up here.' }
               : { title: 'No ratings yet', body: 'Rate a title with the ★ button on its page.' }
@@ -109,6 +132,9 @@
                         <button role="radio" aria-checked={section === s.id} class:on={section === s.id} onclick={() => (section = s.id)}>{s.label}</button>
                     {/each}
                 </div>
+            {/if}
+            {#if lightboxd.ready && section === 'titles'}
+                <PopupButton label="Status" value={status} options={statusOptions} onchange={pickStatus} />
             {/if}
             <PopupButton label="Show" bind:value={type} options={filters} />
         </div>
@@ -184,6 +210,7 @@
     }
     .controls {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 10px;
     }

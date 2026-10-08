@@ -103,7 +103,9 @@ export const lb = {
     reviews: (titleId: number) => lightboxd.request<Reviews>(`/titles/${titleId}/reviews`, { timeout: 30_000 }),
     related: (titleId: number) => lightboxd.request<{ groups: RelatedGroup[] }>(`/titles/${titleId}/related`, { timeout: 30_000 }),
 
-    library: (section: 'watchlist' | 'watched' | 'ratings') => lightboxd.request<{ items: LibraryItem[] }>(`/library?section=${section}`),
+    /** A Library section; Titles can be just one status. */
+    library: (section: 'titles' | 'watched' | 'ratings', status?: Status | null) =>
+        lightboxd.request<{ items: LibraryItem[] }>(`/library?section=${section}${status ? `&status=${status}` : ''}`),
     lists: () => lightboxd.request<{ lists: ListInfo[] }>('/lists'),
     list: (listId: number) => lightboxd.request<ListDetail>(`/lists/${listId}`),
     newList: (name: string) => lightboxd.request<ListInfo>('/lists', { method: 'POST', body: { name } }),

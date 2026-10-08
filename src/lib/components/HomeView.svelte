@@ -148,7 +148,7 @@
         >
             {#snippet special(key)}
                 {#if key === 'cw' && cwItems.length > 0}
-                    <Shelf title={resolved.find((r) => r.key === 'cw')?.name ?? 'Continue Watching'} href="/library" itemWidth={cwWidth}>
+                    <Shelf title={resolved.find((r) => r.key === 'cw')?.name ?? 'Continue Watching'} href="/library?status=watching" itemWidth={cwWidth}>
                         {#each cwItems as item (item._id)}
                             <WideCard {item} />
                         {/each}
