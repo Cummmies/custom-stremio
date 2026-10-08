@@ -58,6 +58,8 @@ export type LibraryItem = {
     date?: string | null;
     rating?: number | null;
     rewatch?: boolean;
+    /** Titles: how many times you've watched it. */
+    watches?: number;
 };
 
 export type ListInfo = { id: number; name: string; description: string | null; count: number; posters: string[] };

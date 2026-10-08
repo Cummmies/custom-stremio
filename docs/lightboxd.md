@@ -288,10 +288,10 @@ Stremio's + and eye buttons).
   - The app API's CORS allows PUT now (editing a watch).
 - **App** (`src/lib/lightboxd/api.ts` the calls, `src/lib/lightboxd/title.svelte.ts` a title
   page's state and actions):
-  - **Library** (`routes/library`): Titles (everything you track, with a Status menu: All,
-    Watching, Plan to Watch, Completed, Dropped; `?status=watching` opens one, as Continue
-    Watching's See All does) / Watched (by month) / Ratings (by score), with All / Movies /
-    Series. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
+  - **Library** (`routes/library`): Watching / Plan to Watch / Completed (by month of your
+    last watch, with its date, your score and "Watched 2×") / Dropped / Ratings (by score), with
+    All / Movies / Series; `?status=…` opens one, as Continue Watching's See All does (Watching).
+    On phones the sections scroll sideways, under the title. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
     without a watchlist entry, as Lightboxd's own status does.)
   - **Lists** (`routes/lists`), a tab in the nav: your lists as poster stacks; one opens in
     place (`?id=`); New List.
@@ -410,8 +410,10 @@ address comes from the profile's other devices (Settings sync).
   already says).
 - **Open to anyone with a Stremio account** (decided 2026-10-07): sign-up stays on.
 - **Removing data for deleted Stremio accounts:** Stremio tells no one when an account is
-  deleted, so an account unused from every device for a long while (12 months?) should be
-  deleted with its data.
+  deleted, and Lightboxd can't ask without the account's key (not kept; and a key also stops
+  working on a plain log-out, so a dead key doesn't mean a deleted account). So: an account
+  unused from every device for a long while (6 months?) is deleted with its data. Period not
+  decided yet.
 - **API keys and caching, before many people use it:** TMDb, OMDb and AniList keys are the
   server's, shared by everyone, and so are their rate limits. Only what Lightboxd itself fetches is
   in question (title details, scores, reviews, related titles, episodes and air dates,

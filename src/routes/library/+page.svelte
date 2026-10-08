@@ -1,14 +1,15 @@
 <script lang="ts">
-    // Library. With Lightboxd connected (docs/lightboxd.md): your Titles
-    // (everything you track, by status, or just one status: ?status=watching,
-    // which Continue Watching's See All opens), Watched (every watch, by month)
-    // and Ratings (by score), from Lightboxd. Without it: your Stremio library.
+    // Library. With Lightboxd connected (docs/lightboxd.md): what you track by
+    // status (Watching, Plan to Watch, Completed by month of your last watch,
+    // Dropped) and Ratings (by score). The address says which (?status=watching,
+    // which Continue Watching's See All opens; ?status=ratings). Without
+    // Lightboxd: your Stremio library.
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
     import { app } from '$lib/app.svelte';
     import { libraryToPoster } from '$lib/library';
     import { lightboxd } from '$lib/lightboxd.svelte';
-    import { lb, day, score, STATUS_LABEL, STATUS_SHORT, type LibraryItem, type Status } from '$lib/lightboxd/api';
+    import { lb, day, score, STATUS_LABEL, type LibraryItem, type Status } from '$lib/lightboxd/api';
     import PosterCard, { type PosterItem } from '$lib/components/PosterCard.svelte';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -26,42 +27,30 @@
     const items = $derived((app.library?.catalog ?? []).filter((i) => keep(i.type)).map(libraryToPoster));
 
     // --- Lightboxd ---
-    const sections = [
-        { id: 'titles', label: 'Titles' },
-        { id: 'watched', label: 'Watched' },
-        { id: 'ratings', label: 'Ratings' },
-    ] as const;
-    type Section = (typeof sections)[number]['id'];
     const STATUSES: Status[] = ['watching', 'plan_to_watch', 'completed', 'dropped'];
-    const statusOptions = [{ value: 'all', label: 'All' }, ...STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
-    let section = $state<Section>('titles');
-    let status = $state<string>('all');
-    // The address says which status (a row's See All links straight to one).
+    const sections = [...STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] })), { id: 'ratings', label: 'Ratings' }];
+    const ids = sections.map((x) => x.id);
+    let section = $state<string>('watching');
+    // The address says which (a row's See All links straight to one).
     $effect(() => {
         const asked = appUrl(page.url).searchParams.get('status');
-        if (asked && (STATUSES as string[]).includes(asked)) {
-            section = 'titles';
-            status = asked;
-        } else status = 'all';
+        section = asked && ids.includes(asked) ? asked : 'watching';
     });
-    function pickStatus(next: string) {
-        goto(next === 'all' ? '/library' : `/library?status=${next}`, { replaceState: true, noScroll: true, keepFocus: true });
+    function pick(next: string) {
+        goto(next === 'watching' ? '/library' : `/library?status=${next}`, { replaceState: true, noScroll: true, keepFocus: true });
     }
-    const key = $derived(section === 'titles' ? `titles:${status}` : section);
     let loaded = $state<Record<string, LibraryItem[] | null | undefined>>({});
 
-    // Each section (and status) loads when first shown (and again when Lightboxd comes back).
+    // Each loads when first shown (and again when Lightboxd comes back).
     $effect(() => {
-        const k = key;
-        const s = section;
-        const st = status === 'all' ? null : (status as Status);
+        const k = section;
         if (!lightboxd.ready || loaded[k] !== undefined) return;
         loaded = { ...loaded, [k]: null };
-        lb.library(s, s === 'titles' ? st : null).then((res) => {
+        (k === 'ratings' ? lb.library('ratings') : lb.library('titles', k as Status)).then((res) => {
             loaded = { ...loaded, [k]: res ? res.items : undefined };
         });
     });
-    const current = $derived((loaded[key] ?? null)?.filter((i) => keep(i.type)) ?? null);
+    const current = $derived((loaded[section] ?? null)?.filter((i) => keep(i.type)) ?? null);
 
     const poster = (i: LibraryItem, below: string | null): PosterItem => ({
         id: i.id,
@@ -76,26 +65,28 @@
     const thisYear = String(new Date().getFullYear());
     const groups = $derived.by((): Group[] => {
         if (!current) return [];
-        if (section === 'titles') {
-            // All: each one's status under it; one status: its year.
-            const below = (i: LibraryItem) => (status === 'all' && i.status ? STATUS_SHORT[i.status] : i.year);
-            return [{ title: '', items: current.map((i) => poster(i, below(i))), keys: current.map((i) => String(i.title_id)) }];
-        }
-        if (section === 'watched') {
+        if (section === 'completed') {
             const out: Group[] = [];
             for (const i of current) {
                 const month = i.date
                     ? (day(i.date, { month: 'long', year: i.date.startsWith(thisYear) ? undefined : 'numeric' }) ?? 'Date Unknown')
                     : 'Date Unknown';
-                const below = [day(i.date, { month: 'short', day: 'numeric' }), i.rating != null ? score(i.rating) : null, i.rewatch ? 'Rewatch' : null]
+                const below = [
+                    day(i.date, { month: 'short', day: 'numeric' }),
+                    i.rating != null ? score(i.rating) : null,
+                    (i.watches ?? 0) > 1 ? `Watched ${i.watches}×` : null,
+                ]
                     .filter(Boolean)
                     .join(' · ');
                 let g = out.find((x) => x.title === month);
                 if (!g) out.push((g = { title: month, items: [], keys: [] }));
-                g.items.push(poster(i, below || null));
-                g.keys.push(String(i.log_id));
+                g.items.push(poster(i, below || i.year));
+                g.keys.push(String(i.title_id));
             }
             return out;
+        }
+        if (section !== 'ratings') {
+            return [{ title: '', items: current.map((i) => poster(i, i.year)), keys: current.map((i) => String(i.title_id)) }];
         }
         const out: Group[] = [];
         for (const i of current) {
@@ -110,13 +101,13 @@
     });
 
     const emptyText = $derived(
-        section === 'titles'
-            ? status === 'all'
-                ? { title: 'Nothing here yet', body: 'Use the + button on any title to save it here.' }
-                : { title: `Nothing ${STATUS_LABEL[status as Status].toLowerCase()}`, body: 'Set a title’s status with the + button on its page.' }
-            : section === 'watched'
-              ? { title: 'Nothing watched yet', body: 'What you finish watching shows up here.' }
-              : { title: 'No ratings yet', body: 'Rate a title with the ★ button on its page.' }
+        section === 'ratings'
+            ? { title: 'No ratings yet', body: 'Rate a title with the ★ button on its page.' }
+            : section === 'completed'
+              ? { title: 'Nothing completed yet', body: 'What you finish watching shows up here.' }
+              : section === 'watching'
+                ? { title: 'Nothing you’re watching', body: 'Start something, or set a title to Watching with the + button on its page.' }
+                : { title: `Nothing ${STATUS_LABEL[section as Status].toLowerCase()}`, body: 'Set a title’s status with the + button on its page.' }
     );
 </script>
 
@@ -125,19 +116,14 @@
 <div class="page">
     <header>
         <h1>Library</h1>
-        <div class="controls">
-            {#if lightboxd.ready}
-                <div class="segmented" role="radiogroup" aria-label="Section">
-                    {#each sections as s (s.id)}
-                        <button role="radio" aria-checked={section === s.id} class:on={section === s.id} onclick={() => (section = s.id)}>{s.label}</button>
-                    {/each}
-                </div>
-            {/if}
-            {#if lightboxd.ready && section === 'titles'}
-                <PopupButton label="Status" value={status} options={statusOptions} onchange={pickStatus} />
-            {/if}
-            <PopupButton label="Show" bind:value={type} options={filters} />
-        </div>
+        {#if lightboxd.ready}
+            <div class="segmented" role="radiogroup" aria-label="Section">
+                {#each sections as s (s.id)}
+                    <button role="radio" aria-checked={section === s.id} class:on={section === s.id} onclick={() => pick(s.id)}>{s.label}</button>
+                {/each}
+            </div>
+        {/if}
+        <div class="type"><PopupButton label="Show" bind:value={type} options={filters} /></div>
     </header>
 
     {#if lightboxd.ready}
@@ -185,16 +171,16 @@
     .page {
         padding: calc(var(--nav-h) + 24px) var(--gutter) 56px;
     }
+    /* PC: the title, then the sections and Movies/Series at the right. */
     header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         flex-wrap: wrap;
-        gap: 16px;
+        gap: 10px;
         margin-bottom: 24px;
     }
     h1 {
-        margin: 0;
+        margin: 0 auto 0 0;
         font-family: var(--font-display);
         font-size: var(--text-title2);
         font-weight: 600;
@@ -207,12 +193,6 @@
     }
     h2:first-of-type {
         margin-top: 0;
-    }
-    .controls {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 10px;
     }
     .segmented {
         display: flex;
@@ -253,16 +233,23 @@
             height: 40px;
         }
     }
+    /* Phones: Movies/Series beside the title; the sections a row of their
+       own, scrolling sideways when they don't all fit. */
     @media (max-width: 600px) {
-        .controls {
-            width: 100%;
+        .type {
+            order: 1;
         }
         .segmented {
-            flex: 1;
+            order: 2;
+            flex: 1 1 100%;
+            min-width: 0;
+            overflow-x: auto;
+            scrollbar-width: none;
         }
         .segmented button {
-            flex: 1;
-            padding: 0 6px;
+            flex: none;
+            padding: 0 12px;
+            white-space: nowrap;
         }
     }
 </style>
