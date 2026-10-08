@@ -288,8 +288,11 @@ Stremio's + and eye buttons).
   - The app API's CORS allows PUT now (editing a watch).
 - **App** (`src/lib/lightboxd/api.ts` the calls, `src/lib/lightboxd/title.svelte.ts` a title
   page's state and actions):
-  - **Library** (`routes/library`): Watchlist / Watched (by month) / Ratings (by score), with
-    All / Movies / Series.
+  - **Library** (`routes/library`): Titles (everything you track, with a Status menu: All,
+    Watching, Plan to Watch, Completed, Dropped; `?status=watching` opens one, as Continue
+    Watching's See All does) / Watched (by month) / Ratings (by score), with All / Movies /
+    Series. (`GET /library?section=titles&status=…`; Completed includes titles you've logged
+    without a watchlist entry, as Lightboxd's own status does.)
   - **Lists** (`routes/lists`), a tab in the nav: your lists as poster stacks; one opens in
     place (`?id=`); New List.
   - **Title page:** + is Status (Plan to Watch, Watching, Completed, Dropped), your lists, New
@@ -405,8 +408,14 @@ address comes from the profile's other devices (Settings sync).
   only. It's still the same server-first model.
 - **Lightboxd → Stremio** watched marks (one direction only, as `stremio_sync_plan.md`
   already says).
+- **Open to anyone with a Stremio account** (decided 2026-10-07): sign-up stays on.
+- **Removing data for deleted Stremio accounts:** Stremio tells no one when an account is
+  deleted, so an account unused from every device for a long while (12 months?) should be
+  deleted with its data.
 - **API keys and caching, before many people use it:** TMDb, OMDb and AniList keys are the
-  server's, shared by everyone, and so are their rate limits. Lean on the shared (canonical)
+  server's, shared by everyone, and so are their rate limits. Only what Lightboxd itself fetches is
+  in question (title details, scores, reviews, related titles, episodes and air dates,
+  stills); catalogs and streams come from addons to the app directly. Lean on the shared (canonical)
   title database as the cache, so most lookups never leave Lightboxd, and give heavy users or
   the server its own paid keys if needed.
 - **Hosting:** Postgres instead of SQLite (Lightboxd already supports it), backups, and HTTPS
