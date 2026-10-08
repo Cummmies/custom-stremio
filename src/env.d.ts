@@ -9,4 +9,10 @@ interface ImportMetaEnv {
     readonly BUILD_TIME: number;
     /** Recent commits' subjects, newest first, for What's New (vite.config.js). */
     readonly CHANGES: { at: number; text: string }[];
+    /**
+     * The hosted Lightboxd every profile signs in to with its Stremio account
+     * (docs/lightboxd.md), e.g. https://lightboxd.example.com. Unset: this PC,
+     * then lightboxd.local, as before.
+     */
+    readonly VITE_LIGHTBOXD_SERVER?: string;
 }

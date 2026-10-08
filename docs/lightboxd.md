@@ -320,6 +320,28 @@ Connect signs in with the profile's Stremio account first; a pairing code is the
   Lightboxd's Settings to skip the code next time.
 - The key travels to your own Lightboxd, so use HTTPS (or your home network) to reach it.
 
+## One login: the Stremio account — built
+
+Lightboxd is part of Custom Stremio: signing in to Stremio in the app is signing in to
+Lightboxd, and there's nothing else to set up. Everything Lightboxd does (Library, Lists, the
+title page, Calendar, the rows on Home, new-episode counts) is on by default, and the app falls
+back to Stremio alone whenever Lightboxd can't be reached.
+
+- **Lightboxd:** a Stremio account it has never seen gets a Lightboxd account the first time it
+  signs in (`stremio_sync.account_for_stremio`): no password, a friends-only profile, the
+  email's first part as its display name and a random `@user_…` handle (nothing public points
+  back to the email). Its Stremio connection is `signin` (just the login; no key kept, so the
+  hourly sync leaves it alone); linking Stremio in Lightboxd's Settings makes it a full,
+  synced connection. Another account that already has the email is not joined to it (Stremio
+  may not have verified the email): 409, and that account connects Stremio once from its own
+  Settings. `APP_STREMIO_SIGNUP=0` only lets in accounts already connected. The first account
+  on a new Lightboxd is its admin, so sign in yourself first.
+- **App:** with a Stremio account signed in, the app signs in to Lightboxd by itself
+  (`#autoSignIn`, at most every 5 minutes): at `VITE_LIGHTBOXD_SERVER` (the hosted Lightboxd,
+  set at build time), the account's address, then this PC and lightboxd.local. Not after
+  Disconnect here (until Connect) or after Lightboxd removed the device. Rows on Home turn on
+  as soon as it's connected.
+
 ## iPhone and TV — built
 
 Lightboxd now runs on every device, held to Apple's guidelines (iOS for the phone, tvOS's
@@ -367,6 +389,15 @@ address comes from the profile's other devices (Settings sync).
   only. It's still the same server-first model.
 - **Lightboxd → Stremio** watched marks (one direction only, as `stremio_sync_plan.md`
   already says).
+- **API keys and caching, before many people use it:** TMDb, OMDb and AniList keys are the
+  server's, shared by everyone, and so are their rate limits. Lean on the shared (canonical)
+  title database as the cache, so most lookups never leave Lightboxd, and give heavy users or
+  the server its own paid keys if needed.
+- **Hosting:** Postgres instead of SQLite (Lightboxd already supports it), backups, and HTTPS
+  with a certificate (sign-in sends the Stremio key to Lightboxd).
+- **The Lightboxd website:** maybe retired for everyone but its admin, once its settings
+  (profile, sharing, friends, deleting your account and data) are in the app.
+- **Signing out of Stremio** in the app could also end that device's Lightboxd sign-in.
 
 ---
 

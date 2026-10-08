@@ -42,11 +42,18 @@ const CONNECTION_NAME = 'Custom Stremio';
 const stremioAccount = () => app.ctx?.profile.auth?.user.email ?? null;
 /** This profile's Stremio sign-in, for signing in to Lightboxd with it (never kept there). */
 const stremioKey = () => app.ctx?.profile.auth?.key ?? null;
+/** Turned off here by Disconnect: no signing in by itself until Connect. */
+const offKey = (uid: string) => `lightboxd-off:${uid}`;
+/** Signing in by itself is tried at most this often (each focus re-checks). */
+const AUTO_SIGN_IN_MS = 5 * 60_000;
 /**
  * Where Lightboxd usually is, tried in order when no address is given. Only
  * the PC can be running it itself; a phone or TV finds it on the network.
  */
-const DEFAULT_SERVERS = isDesktop ? ['http://localhost:8000', 'http://lightboxd.local:8000'] : ['http://lightboxd.local:8000'];
+const LOCAL_SERVERS = isDesktop ? ['http://localhost:8000', 'http://lightboxd.local:8000'] : ['http://lightboxd.local:8000'];
+/** The hosted Lightboxd this build signs in to, if it has one; then the local places. */
+const BUILT_IN_SERVER = (import.meta.env.VITE_LIGHTBOXD_SERVER || '').trim().replace(/\/+$/, '') || null;
+const DEFAULT_SERVERS = BUILT_IN_SERVER ? [BUILT_IN_SERVER, ...LOCAL_SERVERS] : LOCAL_SERVERS;
 const TIMEOUT_MS = 4000;
 const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
@@ -385,7 +392,11 @@ class Lightboxd {
         if (!saved?.token) {
             this.#setStatus(saved ? 'removed' : 'off');
             // Connected on another device signed in to this account: so is this one.
-            this.#followShared();
+            // Else, the Stremio account is the Lightboxd login: sign in with it
+            // (not after Lightboxd removed this device, or Disconnect here).
+            this.#followShared().then(() => {
+                if (!saved && !this.saved?.token && uid === this.#uid) this.#autoSignIn();
+            });
             return;
         }
         if (this.status !== 'ok') this.status = 'checking';
@@ -626,6 +637,48 @@ class Lightboxd {
         }
     }
 
+    #autoAt = 0;
+    #autoSigningIn = false;
+
+    /**
+     * Signs this profile in to Lightboxd with its Stremio account, with no
+     * one asked anything: the account is the login (Lightboxd makes its side
+     * the first time). Tries the built-in Lightboxd, the account's address,
+     * then the usual places; stops at the first that answers. A Lightboxd that
+     * says no (another account has the email, or it only lets in connected
+     * accounts) leaves Connect, with its code, in Settings.
+     */
+    async #autoSignIn() {
+        const uid = this.#uid;
+        const key = stremioKey();
+        if (!uid || !key || this.#autoSigningIn || this.pairing || this.connecting) return;
+        if (Date.now() - this.#autoAt < AUTO_SIGN_IN_MS) return;
+        try {
+            if (localStorage.getItem(offKey(uid))) return;
+        } catch {}
+        this.#autoAt = Date.now();
+        this.#autoSigningIn = true;
+        try {
+            const candidates = [BUILT_IN_SERVER, this.sharedServerFor(uid), ...LOCAL_SERVERS].filter((s): s is string => !!s);
+            for (const server of new Set(candidates)) {
+                const res = await call<{ token: string }>(server, '/pair/stremio', {
+                    method: 'POST',
+                    body: { auth_key: key, name: DEVICE_NAME, platform: PLATFORM },
+                    timeout: 8_000,
+                });
+                if (uid !== this.#uid || this.saved?.token || this.pairing) return;
+                if (res.ok) {
+                    this.#save({ server, token: res.data.token });
+                    await this.check();
+                    return;
+                }
+                if (res.status !== null) return; // it answered, and said no
+            }
+        } finally {
+            this.#autoSigningIn = false;
+        }
+    }
+
     /**
      * Connects to the server at `address`, or, if that's empty, to the first
      * of the usual places that answers: signed in with this profile's Stremio
@@ -636,6 +689,11 @@ class Lightboxd {
         this.cancelPairing();
         this.error = null;
         this.stremioNotLinked = false;
+        if (this.#uid) {
+            try {
+                localStorage.removeItem(offKey(this.#uid));
+            } catch {}
+        }
         const given = address.trim();
         const server = given ? normalizeServer(given) : null;
         if (given && !server) {
@@ -664,7 +722,8 @@ class Lightboxd {
                     return;
                 }
                 if (signIn.status === null) continue; // not here: the next place
-                if (signIn.status === 404) this.stremioNotLinked = true;
+                // It doesn't let this account in by itself (409: another account has its email).
+                if (signIn.status === 404 || signIn.status === 409) this.stremioNotLinked = true;
             }
             const res = await call<Start>(s, '/pair/start', { method: 'POST', body: { name: DEVICE_NAME, platform: PLATFORM, stremio_account: stremioAccount() } });
             if (run !== this.#pairRun) return;
@@ -739,6 +798,12 @@ class Lightboxd {
         this.newEpisodes = {};
         this.#save(null);
         this.#setStatus('off');
+        // Off by choice: it stays off here (no signing in by itself) until Connect.
+        if (uid) {
+            try {
+                localStorage.setItem(offKey(uid), '1');
+            } catch {}
+        }
         if (saved?.token) await call(saved.server, '/disconnect', { method: 'POST', token: saved.token });
     }
 }
