@@ -251,8 +251,10 @@
         position: relative;
         z-index: 1;
     }
+    /* The labels stay light; the dark copy over them shows only under it. */
     .pill:global(.glides) a.active {
         background: transparent;
+        color: var(--label);
     }
     .pill :global(.glider) {
         position: absolute;
@@ -263,6 +265,11 @@
         background: var(--label);
         pointer-events: none;
         will-change: transform, width;
+    }
+    /* Labels under the white highlight read dark, even half under it. */
+    .pill :global(.glider-text a) {
+        /* Over the chosen label's own (light) color. */
+        color: var(--bg) !important;
     }
     .pill:global(.dragging),
     .pill:global(.dragging) a {

@@ -558,6 +558,10 @@
         pointer-events: none;
         will-change: transform, width;
     }
+    /* Labels under the highlight read as the chosen one's, even half under it. */
+    .segmented :global(.glider-text button) {
+        color: var(--label);
+    }
     .segmented:global(.dragging),
     .segmented:global(.dragging) button {
         cursor: grabbing;

@@ -9,6 +9,11 @@
 // the container has `.glides` (before the action runs, it looks as it did).
 // While dragging, `onhover` says which item the highlight is over (null when
 // done), so the screen can show that one as chosen.
+//
+// The labels' color under the highlight: a copy of the items (`.glider-text`,
+// over them, hidden from the remote and screen readers) cut to the
+// highlight's shape, so a label half under it is half recolored. The screen
+// colors that copy's items (`:global(.glider-text) a { color: … }`).
 
 import type { Action } from 'svelte/action';
 
@@ -34,6 +39,11 @@ export const slider: Action<HTMLElement, SliderParams> = (node, initial) => {
     glider.className = 'glider';
     glider.setAttribute('aria-hidden', 'true');
     node.prepend(glider);
+    const layer = document.createElement('div');
+    layer.className = 'glider-text';
+    layer.setAttribute('aria-hidden', 'true');
+    layer.inert = true;
+    node.append(layer);
     node.classList.add('glides');
     if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
 
@@ -42,18 +52,59 @@ export const slider: Action<HTMLElement, SliderParams> = (node, initial) => {
     // Offsets, not screen positions: right in a container that scrolls sideways.
     const box = (el: HTMLElement) => ({ left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight });
 
+    /** The copy of the items, laid out as they are (it's redone when they change). */
+    function copy() {
+        const cs = getComputedStyle(node);
+        Object.assign(layer.style, {
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            bottom: '0',
+            // A bar that scrolls: as wide as all of it.
+            width: `${node.scrollWidth}px`,
+            boxSizing: 'border-box',
+            display: cs.display,
+            alignItems: cs.alignItems,
+            justifyContent: cs.justifyContent,
+            gap: cs.gap,
+            padding: cs.padding,
+            zIndex: '2',
+            pointerEvents: 'none',
+        });
+        layer.replaceChildren(
+            ...items().map((el) => {
+                const c = el.cloneNode(true) as HTMLElement;
+                c.removeAttribute('href');
+                c.removeAttribute('id');
+                c.removeAttribute('aria-current');
+                c.tabIndex = -1;
+                return c;
+            })
+        );
+    }
+
+    let at = { left: 0, width: 0, top: 0, height: 0 };
     function place(left: number, width: number, animate: boolean, top?: number, height?: number) {
-        glider.style.transition = animate && !reduced.matches ? `transform ${MS}ms ${EASE}, width ${MS}ms ${EASE}` : 'none';
+        const motion = animate && !reduced.matches;
+        glider.style.transition = motion ? `transform ${MS}ms ${EASE}, width ${MS}ms ${EASE}` : 'none';
         glider.style.transform = `translate3d(${left}px, 0, 0)`;
         glider.style.width = `${width}px`;
         if (top != null) glider.style.top = `${top}px`;
         if (height != null) glider.style.height = `${height}px`;
+        at = { left, width, top: top ?? at.top, height: height ?? at.height };
+        // The recolored labels: only what's under the highlight, moving with it.
+        const radius = getComputedStyle(glider).borderTopLeftRadius;
+        const right = Math.max(0, layer.offsetWidth - left - width);
+        const bottom = Math.max(0, layer.offsetHeight - at.top - at.height);
+        layer.style.transition = motion ? `clip-path ${MS}ms ${EASE}` : 'none';
+        layer.style.clipPath = `inset(${at.top}px ${right}px ${bottom}px ${left}px round ${radius})`;
     }
 
     let shown = false;
     function update(animate: boolean) {
         const el = items()[params.active];
         glider.style.opacity = el ? '' : '0';
+        layer.style.opacity = el ? '' : '0';
         if (!el) return;
         const b = box(el);
         // The first placement (and one after being hidden) doesn't slide in from 0.
@@ -171,10 +222,19 @@ export const slider: Action<HTMLElement, SliderParams> = (node, initial) => {
     window.addEventListener('pointercancel', onpointercancel);
 
     // Sizes change (fonts load, the window resizes, labels change): follow without sliding.
-    const resize = new ResizeObserver(() => !dragging && update(false));
+    const resize = new ResizeObserver(() => {
+        copy();
+        if (!dragging) update(false);
+    });
     resize.observe(node);
     for (const el of items()) resize.observe(el);
+    // (Not the copy's own changes, nor the highlight's.)
+    const changes = new MutationObserver((list) => {
+        if (list.some((m) => (m.target === node ? m.type === 'childList' : !layer.contains(m.target) && m.target !== glider))) copy();
+    });
+    changes.observe(node, { subtree: true, attributes: true, attributeFilter: ['class'], characterData: true, childList: true });
 
+    copy();
     update(false);
 
     return {
@@ -185,6 +245,8 @@ export const slider: Action<HTMLElement, SliderParams> = (node, initial) => {
         },
         destroy() {
             resize.disconnect();
+            changes.disconnect();
+            layer.remove();
             node.removeEventListener('pointerdown', onpointerdown);
             node.removeEventListener('click', onclick, true);
             node.removeEventListener('dragstart', ondragstart);
