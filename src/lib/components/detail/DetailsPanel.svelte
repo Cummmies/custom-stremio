@@ -3,6 +3,7 @@
     // rows like any other. IMDb is in the scores above, genres and runtime in
     // the tags under the title: nothing here repeats them.
     import type { MetaItem } from '$lib/core/types';
+    import { releasedDate } from '$lib/released';
 
     let { meta, status = null, lists = [] }: { meta: MetaItem; status?: string | null; lists?: string[] } = $props();
 
@@ -11,9 +12,7 @@
     const directors = $derived(byCategory('Directors'));
     const writers = $derived(byCategory('Writers'));
     const cast = $derived(byCategory('Cast'));
-    const released = $derived(
-        meta.released ? new Date(meta.released).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null
-    );
+    const released = $derived(releasedDate(meta.released, { year: 'numeric', month: 'long', day: 'numeric' }));
 
     const seasonsLine = $derived.by(() => {
         const regular = meta.videos.filter((v) => (v.season ?? 0) > 0 && !v.upcoming);

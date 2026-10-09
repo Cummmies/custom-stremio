@@ -2,6 +2,7 @@
     import type { Video } from '$lib/core/types';
     import Icon from '../Icon.svelte';
     import PopupButton from '../menu/PopupButton.svelte';
+    import { releasedDate } from '$lib/released';
 
     let {
         videos,
@@ -48,8 +49,8 @@
         videos.filter((v) => (v.season ?? 0) === season).sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0))
     );
 
-    const fmtDate = (iso: string | null) =>
-        iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : null;
+    // Stremio's dates are calendar days (lib/released.ts).
+    const fmtDate = (iso: string | null) => releasedDate(iso);
 </script>
 
 <div class="head">
