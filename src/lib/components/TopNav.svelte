@@ -11,6 +11,7 @@
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { profiles } from '$lib/profiles.svelte';
     import Avatar from './Avatar.svelte';
+    import { slider } from '$lib/slider';
 
     let { scrolled }: { scrolled: boolean } = $props();
 
@@ -21,6 +22,11 @@
         { href: '/calendar', label: 'Calendar' },
     ];
     const isActive = (href: string) => (href === '/' ? appUrl(page.url).pathname === '/' || appUrl(page.url).pathname === '/customize' : appUrl(page.url).pathname.startsWith(href));
+    // The highlight slides between sections, and drags (lib/slider.ts):
+    // while dragging, the section under it reads as the chosen one.
+    const activeIndex = $derived(sections.findIndex((s) => isActive(s.href)));
+    let dragOver = $state<number | null>(null);
+    const shownActive = (i: number) => (dragOver != null ? dragOver === i : i === activeIndex);
 
     let input = $state<HTMLInputElement>();
     let query = $state('');
@@ -101,9 +107,13 @@
     <!-- TV: not a stop for the remote (Home is the first tab). -->
     <a class="brand" href="/" aria-label="Stremio home" tabindex={isTV ? -1 : undefined}><img src={logo} alt="" width="28" height="28" />Stremio</a>
 
-    <nav class="pill" aria-label="Sections">
-        {#each sections as s (s.href)}
-            <a href={s.href} class:active={isActive(s.href)} aria-current={isActive(s.href) ? 'page' : undefined}>{s.label}</a>
+    <nav
+        class="pill"
+        aria-label="Sections"
+        use:slider={{ active: activeIndex, onhover: (i) => (dragOver = i), onpick: (i) => goto(sections[i].href) }}
+    >
+        {#each sections as s, i (s.href)}
+            <a href={s.href} class:active={shownActive(i)} aria-current={isActive(s.href) ? 'page' : undefined}>{s.label}</a>
         {/each}
     </nav>
 
@@ -235,6 +245,29 @@
         background: var(--label);
         color: var(--bg);
         font-weight: 600;
+    }
+    /* The sliding highlight takes over the chosen section's background. */
+    .pill a {
+        position: relative;
+        z-index: 1;
+    }
+    .pill:global(.glides) a.active {
+        background: transparent;
+    }
+    .pill :global(.glider) {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 0;
+        border-radius: 999px;
+        background: var(--label);
+        pointer-events: none;
+        will-change: transform, width;
+    }
+    .pill:global(.dragging),
+    .pill:global(.dragging) a {
+        cursor: grabbing;
+        user-select: none;
     }
     .actions {
         justify-self: end;

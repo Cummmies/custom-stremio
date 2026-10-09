@@ -3,7 +3,7 @@
     // all of it (by status) or one status (Watching, Plan to Watch, Completed
     // by month of your last watch, Dropped); the address says which
     // (?status=watching, which Continue Watching's See All opens). At the
-    // right: Type (Movies, Series, Anime), Sort (Lightboxd's sorts; picking
+    // right: Type (a menu: Movies, Series, Anime), Sort (Lightboxd's sorts; picking
     // the current one again flips it) and Edit (select titles, then change
     // their status, add them to a list or remove them). Without Lightboxd:
     // your Stremio library.
@@ -21,6 +21,7 @@
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
+    import { slider } from '$lib/slider';
 
     // --- Type ---
     const types = $derived([
@@ -37,6 +38,14 @@
     // As Lightboxd does: Movies and Series leave anime out.
     const keep = (i: { type: string; anime?: boolean }) =>
         type === 'all' || (type === 'anime' ? !!i.anime : !i.anime && i.type === type);
+    const typeLabel = $derived(types.find((t) => t.value === type)?.label ?? 'All');
+    function openType(e: MouseEvent) {
+        menu.toggleFor(
+            e.currentTarget as HTMLElement,
+            types.map((t) => ({ label: t.label, checked: t.value === type, onselect: () => (type = t.value) })),
+            'end'
+        );
+    }
     const typeNoun = $derived(type === 'movie' ? 'movies' : type === 'series' ? 'series' : 'anime');
 
     // --- Stremio's library (no Lightboxd) ---
@@ -48,6 +57,8 @@
     const sections = [{ id: 'all', label: 'All' }, ...STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] }))];
     const ids = sections.map((x) => x.id);
     let section = $state<string>('all');
+    /** The section the bar's highlight is dragged over (lib/slider.ts). */
+    let statusOver = $state<number | null>(null);
 
     // Sort: Lightboxd's, newest / highest / most first; Title A to Z.
     type SortKey = 'recent' | 'added' | 'rating' | 'year' | 'title' | 'episodes' | 'rewatches';
@@ -360,18 +371,21 @@
     <header>
         <h1 class:sr-only={lightboxd.ready}>Library</h1>
         {#if lightboxd.ready}
-            <div class="segmented status" role="radiogroup" aria-label="Status">
-                {#each sections as s (s.id)}
-                    <button role="radio" aria-checked={section === s.id} class:on={section === s.id} onclick={() => pick(s.id)}>{s.label}</button>
+            <div
+                class="segmented status"
+                role="radiogroup"
+                aria-label="Status"
+                use:slider={{ active: ids.indexOf(section), onhover: (i) => (statusOver = i), onpick: (i) => pick(ids[i]) }}
+            >
+                {#each sections as s, i (s.id)}
+                    <button role="radio" aria-checked={section === s.id} class:on={statusOver != null ? statusOver === i : section === s.id} onclick={() => pick(s.id)}>
+                        {s.label}
+                    </button>
                 {/each}
             </div>
         {/if}
         <div class="tools">
-            <div class="segmented types" role="radiogroup" aria-label="Type">
-                {#each types as t (t.value)}
-                    <button role="radio" aria-checked={type === t.value} class:on={type === t.value} onclick={() => (type = t.value)}>{t.label}</button>
-                {/each}
-            </div>
+            <button class="pill" aria-haspopup="menu" aria-expanded="false" aria-label="Type: {typeLabel}" onclick={openType}>Type: {typeLabel}</button>
             {#if lightboxd.ready}
                 <button
                     class="pill sort"
@@ -523,6 +537,31 @@
         background: var(--elevated-2);
         color: var(--label);
         box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+    }
+    /* The status bar's highlight slides (and drags) between sections. */
+    .segmented button {
+        position: relative;
+        z-index: 1;
+    }
+    .segmented:global(.glides) button.on {
+        background: transparent;
+        box-shadow: none;
+    }
+    .segmented :global(.glider) {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 0;
+        border-radius: 7px;
+        background: var(--elevated-2);
+        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+        pointer-events: none;
+        will-change: transform, width;
+    }
+    .segmented:global(.dragging),
+    .segmented:global(.dragging) button {
+        cursor: grabbing;
+        user-select: none;
     }
     /* Sort and Edit: the same height as the bars beside them. */
     .pill {
@@ -701,13 +740,8 @@
             flex: 1 1 100%;
             margin-left: 0;
         }
-        .types {
-            flex: 1;
-            min-width: 0;
-        }
-        .types button {
-            flex: 1;
-            padding: 0 6px;
+        .tools > :first-child {
+            margin-right: auto;
         }
         .sort {
             width: 44px;
