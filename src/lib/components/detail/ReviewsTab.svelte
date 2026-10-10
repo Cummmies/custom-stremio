@@ -154,7 +154,7 @@
             <div class="grid">
                 {#each sorted as r (r.key)}{@render card(r)}{/each}
             </div>
-            <p class="note">From TMDb, Trakt and AniList.</p>
+            <p class="note">From aggregated sources.</p>
         {/if}
     {:else if tab === 'Friends'}
         {#if !reviews}
