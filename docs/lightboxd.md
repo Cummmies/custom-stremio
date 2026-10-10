@@ -391,6 +391,10 @@ Stremio ID and poster. `POST /notifications/read`, `POST /notifications/{id}/rea
     next two weeks, at its air time (a date-only release: 9 AM that day), redone whenever it looks;
     those aren't announced again when they reach the list. Tapping one opens the title.
   - The first look on a device announces nothing (what's there isn't news).
+- **Backup**: when Lightboxd can't be reached, the list is Stremio's new episodes for shows in your
+  Stremio library (what Continue Watching's +N counts; not ones you're on or past), with
+  "Couldn't connect. Using backup." under it. Read and removed are kept on the device; Clear All
+  also dismisses them in Stremio. New episodes only; the iPhone keeps what it had scheduled.
 - **Settings → Notifications**: Show Notifications (asks the iPhone's permission; the list's offer
   does too, once), and New Episodes and Movies / New Seasons / Replies to Your Reviews.
 - The native plugin ships with the installer / `.ipa`: an app updated only over the air shows the

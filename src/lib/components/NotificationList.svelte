@@ -24,11 +24,12 @@
         return Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
     }
     /** "Now", "5m", "3h" today; then "Yesterday", a weekday, a date. */
-    function when(iso: string | null) {
+    function when(iso: string | null, dayOnly = false) {
         const d = parse(iso);
         if (!d) return '';
         const mins = Math.floor((Date.now() - d.getTime()) / 60_000);
         const ago = daysAgo(d);
+        if (ago <= 0 && dayOnly) return 'Today';
         if (ago <= 0) return mins < 1 ? 'Now' : mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`;
         if (ago === 1) return 'Yesterday';
         if (ago < 7) return d.toLocaleDateString([], { weekday: 'long' });
@@ -110,7 +111,7 @@
         <div class="empty">
             <span class="empty-icon"><Icon name="bell" size={26} /></span>
             <strong>No Notifications</strong>
-            <span>New episodes and seasons of what you track show up here.</span>
+            <span>{notify.source === 'stremio' ? 'New episodes of shows in your library show up here.' : 'New episodes and seasons of what you track show up here.'}</span>
         </div>
     {:else}
         {#each groups as g (g.title)}
@@ -126,7 +127,7 @@
                             <span class="body">
                                 <span class="top">
                                     <span class="name">{n.title}</span>
-                                    <time datetime={parse(n.date)?.toISOString()}>{when(n.date)}</time>
+                                    <time datetime={parse(n.date)?.toISOString()}>{when(n.date, n.dayOnly)}</time>
                                 </span>
                                 <span class="text">{n.text}</span>
                             </span>
@@ -137,7 +138,11 @@
                 {/each}
             </ul>
         {/each}
-        {#if notify.failed}<p class="note">Couldn’t update. Showing what was here.</p>{/if}
+    {/if}
+    {#if notify.loaded && notify.source === 'stremio'}
+        <p class="note" role="status">Couldn’t connect. Using backup.</p>
+    {:else if notify.loaded && notify.failed}
+        <p class="note">Couldn’t update. Showing what was here.</p>
     {/if}
 </div>
 

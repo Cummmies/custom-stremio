@@ -10,6 +10,12 @@
 //   next two weeks, redone whenever it looks. Those then aren't announced
 //   again when they reach the list.
 //
+// When Lightboxd can't be reached, Stremio is the backup: the new episodes
+// it found for shows in your Stremio library (what Continue Watching's +N
+// counts), with read and removed kept on this device. New episodes only (no
+// seasons or replies), announced the same way; iPhone keeps what it had
+// scheduled.
+//
 // Everything is per account (the Stremio account signed in). Turning system
 // notifications on asks the system's permission (iPhone; Windows doesn't
 // ask). An app built before the notification plugin existed shows the list
@@ -20,6 +26,8 @@ import { untrack } from 'svelte';
 import { app } from '$lib/app.svelte';
 import { lightboxd } from '$lib/lightboxd.svelte';
 import { goto } from '$lib/nav';
+import { core } from '$lib/core';
+import { cleanVideoId } from '$lib/player/deeplink';
 import { titleHref } from '$lib/links';
 import { inTauri, isIOS, isTV } from '$lib/platform';
 
@@ -39,6 +47,10 @@ export type AppNotification = {
     season: number | null;
     episode: number | null;
     track: 'sub' | 'dub' | null;
+    /** Stremio's (the backup's): its key here, for read and removed. */
+    key?: string;
+    /** `date` is a calendar day (Stremio's), not a moment: "Today", not "3h". */
+    dayOnly?: boolean;
 };
 
 type CalendarEvent = {
@@ -119,8 +131,38 @@ function releaseText(e: CalendarEvent) {
     return `Season ${e.season}, Episode ${e.episode} is out.`;
 }
 
+/** A set of keys kept per account on this device (the backup's read and removed). */
+function keySet(name: string): Set<string> {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(name) ?? '[]'));
+    } catch {
+        return new Set();
+    }
+}
+function saveKeySet(name: string, set: Set<string>) {
+    write(name, [...set].slice(-500));
+}
+
+/** Stremio's release date (midnight UTC for a calendar day, lib/released.ts) as that day here. */
+function localDay(iso: string | null | undefined): string | null {
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d.getTime())) return null;
+    const [y, m, day] = d.getUTCHours() === 0 ? [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()] : [d.getFullYear(), d.getMonth(), d.getDate()];
+    return new Date(y, m, day).toISOString();
+}
+
+/** Season and episode of an episode id ("tt…:1:8"). */
+function seasonEpisode(videoId: string | null | undefined): [number, number] | null {
+    const parts = cleanVideoId(videoId)?.split(':');
+    if (!parts || parts.length < 3) return null;
+    const [se, ep] = parts.slice(-2).map(Number);
+    return Number.isFinite(se) && Number.isFinite(ep) ? [se, ep] : null;
+}
+
 class Notify {
     items = $state<AppNotification[]>([]);
+    /** Where the list is from: Lightboxd, or Stremio while Lightboxd can't be reached. */
+    source = $state<'lightboxd' | 'stremio'>('lightboxd');
     unread = $state(0);
     /** The list has come back at least once (for this account). */
     loaded = $state(false);
@@ -164,6 +206,14 @@ class Notify {
                     }
                     if (uid && ready) void this.refresh();
                 });
+            });
+            // The backup: Stremio's new episodes, kept up to date as Stremio finds them.
+            $effect(() => {
+                const uid = app.user?._id ?? null;
+                const down = !lightboxd.ready && lightboxd.status !== 'checking';
+                void app.ctx?.notifications;
+                void app.library;
+                if (uid && down) untrack(() => this.#fromStremio(uid));
             });
         });
         this.#timer = setInterval(() => document.visibilityState === 'visible' && this.refresh(), POLL_MS);
@@ -209,7 +259,11 @@ class Notify {
 
     async refresh() {
         const uid = this.#uid;
-        if (!uid || !lightboxd.ready) return;
+        if (!uid) return;
+        if (!lightboxd.ready) {
+            if (lightboxd.status !== 'checking') this.#fromStremio(uid);
+            return;
+        }
         if (this.#busy) {
             this.#again = true;
             return;
@@ -223,6 +277,7 @@ class Notify {
                 return;
             }
             this.failed = false;
+            this.source = 'lightboxd';
             this.items = res.notifications;
             this.unread = res.unread;
             this.loaded = true;
@@ -235,6 +290,76 @@ class Notify {
                 void this.refresh();
             }
         }
+    }
+
+    /** Stremio's new episodes, as the list (Lightboxd can't be reached). */
+    #fromStremio(uid: string) {
+        if (uid !== this.#uid || !app.library) return;
+        const found = app.ctx?.notifications?.items ?? {};
+        const library = new Map(app.library.catalog.map((i) => [i._id, i]));
+        const readKeys = keySet(`notify-read:${uid}`);
+        const removed = keySet(`notify-removed:${uid}`);
+        const items: AppNotification[] = [];
+        for (const [metaId, videos] of Object.entries(found)) {
+            const show = library.get(metaId);
+            if (!show) continue;
+            // Not one you're already on or past (as Continue Watching's +N).
+            const at = seasonEpisode(show.state?.videoId);
+            for (const [videoId, video] of Object.entries(videos)) {
+                const key = `stremio:${videoId}`;
+                if (removed.has(key)) continue;
+                const se = seasonEpisode(videoId);
+                if (at && se && (se[0] < at[0] || (se[0] === at[0] && se[1] <= at[1]))) continue;
+                items.push({
+                    id: -idFor(key),
+                    kind: 'episode',
+                    title: show.name,
+                    text: se ? `Season ${se[0]}, Episode ${se[1]} is out.` : 'A new episode is out.',
+                    date: localDay(video.videoReleased),
+                    dayOnly: true,
+                    unread: !readKeys.has(key),
+                    stremio_id: metaId,
+                    type: show.type === 'movie' ? 'movie' : 'series',
+                    poster: show.poster,
+                    season: se?.[0] ?? null,
+                    episode: se?.[1] ?? null,
+                    track: null,
+                    key,
+                });
+            }
+        }
+        items.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+        this.items = items;
+        this.unread = items.filter((n) => n.unread).length;
+        this.source = 'stremio';
+        this.loaded = true;
+        this.failed = false;
+        this.#announceStremio(uid, items);
+    }
+
+    /** The backup's new ones, as system notifications (keys, since they have no numbers). */
+    #announceStremio(uid: string, list: AppNotification[]) {
+        const name = `notify-stremio-seen:${uid}`;
+        let first = false;
+        try {
+            first = localStorage.getItem(name) == null;
+        } catch {
+            /* treated as seen before */
+        }
+        const seen = keySet(name);
+        const fresh = list.filter((n) => n.key && n.unread && !seen.has(n.key) && this.#allowed(n.kind));
+        for (const n of list) if (n.key) seen.add(n.key);
+        saveKeySet(name, seen);
+        // The first look on this device: what's there already isn't news.
+        if (first || !fresh.length || !this.systemOn) return;
+        // Not again what the iPhone already announced at its air time.
+        const scheduled = read<Delivery>(deliveryKey(uid), { seen: null, scheduled: {}, ids: [] }).scheduled;
+        const now = Date.now();
+        const news = fresh.filter((n) => {
+            const key = releaseKey(n.stremio_id, n.season, n.episode);
+            return !(key && scheduled[key] && scheduled[key] <= now);
+        });
+        if (news.length) void this.#show(news);
     }
 
     #allowed(kind: NotificationKind) {
@@ -290,17 +415,19 @@ class Notify {
         const state = read<Delivery>(deliveryKey(uid), { seen: null, scheduled: {}, ids: [] });
         const plugin = await import('@tauri-apps/plugin-notification').catch(() => null);
         if (!plugin) return;
-        // What was scheduled before goes: what's still coming is scheduled again below.
-        if (state.ids.length) await plugin.cancel(state.ids).catch(() => {});
         const now = Date.now();
         // Releases already announced stay remembered for a week (so the list doesn't announce them again).
         const kept = Object.fromEntries(Object.entries(state.scheduled).filter(([, at]) => at <= now && at > now - 7 * 86_400_000));
         if (!this.systemOn || !this.prefs.episodes) {
+            if (state.ids.length) await plugin.cancel(state.ids).catch(() => {});
             write(deliveryKey(uid), { ...state, scheduled: kept, ids: [] });
             return;
         }
+        // Can't look (Lightboxd unreachable): what's scheduled stays.
         const res = await lightboxd.request<{ events: CalendarEvent[] }>(`/calendar?days=${SCHEDULE_DAYS}`);
         if (!res || uid !== this.#uid) return;
+        // What was scheduled before goes: what's still coming is scheduled again below.
+        if (state.ids.length) await plugin.cancel(state.ids).catch(() => {});
         const upcoming = res.events
             .map((e) => {
                 const at = e.datetime ? new Date(e.datetime) : new Date(`${e.date}T${String(DATE_ONLY_HOUR).padStart(2, '0')}:00:00`);
@@ -342,28 +469,49 @@ class Notify {
 
     // --- The list ---
 
+    /** The backup's read and removed, on this device. */
+    #remember(list: string, keys: (string | undefined)[]) {
+        if (!this.#uid) return;
+        const name = `notify-${list}:${this.#uid}`;
+        const set = keySet(name);
+        for (const k of keys) if (k) set.add(k);
+        saveKeySet(name, set);
+    }
+
     async markRead(n: AppNotification) {
         if (!n.unread) return;
         n.unread = false;
         this.unread = Math.max(0, this.unread - 1);
-        await lightboxd.request(`/notifications/${n.id}/read`, { method: 'POST' });
+        if (n.key) this.#remember('read', [n.key]);
+        else await lightboxd.request(`/notifications/${n.id}/read`, { method: 'POST' });
     }
 
     async markAllRead() {
+        const backup = this.source === 'stremio';
+        if (backup) this.#remember('read', this.items.map((n) => n.key));
         for (const n of this.items) n.unread = false;
         this.unread = 0;
-        await lightboxd.request('/notifications/read', { method: 'POST' });
+        if (!backup) await lightboxd.request('/notifications/read', { method: 'POST' });
     }
 
     async dismiss(n: AppNotification) {
         this.items = this.items.filter((x) => x.id !== n.id);
         if (n.unread) this.unread = Math.max(0, this.unread - 1);
-        await lightboxd.request(`/notifications/${n.id}`, { method: 'DELETE' });
+        if (n.key) this.#remember('removed', [n.key]);
+        else await lightboxd.request(`/notifications/${n.id}`, { method: 'DELETE' });
     }
 
     async clear() {
+        const list = this.items;
         this.items = [];
         this.unread = 0;
+        if (this.source === 'stremio') {
+            // Stremio forgets them too (as dismissing a show's +N does).
+            this.#remember('removed', list.map((n) => n.key));
+            for (const metaId of new Set(list.map((n) => n.stremio_id).filter(Boolean)))
+                core.dispatch({ action: 'Ctx', args: { action: 'DismissNotificationItem', args: metaId } });
+            return;
+        }
         await lightboxd.request('/notifications', { method: 'DELETE' });
     }
 
