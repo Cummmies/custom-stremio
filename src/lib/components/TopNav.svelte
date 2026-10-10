@@ -394,12 +394,15 @@
         overflow-y: auto;
         overscroll-behavior: contain;
         padding: 14px 8px 8px;
-        border: 1px solid var(--separator);
+        /* The same glass as the app's menus (MenuList.svelte). */
+        border: 1px solid rgb(255 255 255 / 0.1);
         border-radius: var(--radius-l);
-        background: rgb(22 22 29 / 0.92);
-        backdrop-filter: blur(24px) saturate(1.5);
-        -webkit-backdrop-filter: blur(24px) saturate(1.5);
-        box-shadow: 0 18px 48px rgb(0 0 0 / 0.55);
+        background: rgb(31 31 40 / 0.86);
+        backdrop-filter: blur(28px) saturate(1.5);
+        -webkit-backdrop-filter: blur(28px) saturate(1.5);
+        box-shadow:
+            0 0 0 0.5px rgb(0 0 0 / 0.6),
+            0 18px 48px rgb(0 0 0 / 0.55);
         animation: pop var(--fast) var(--ease);
         transform-origin: top right;
     }
@@ -411,7 +414,9 @@
     }
     @media (prefers-reduced-transparency: reduce) {
         .popover {
-            background: var(--elevated);
+            background: var(--elevated-2);
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
         }
     }
     /* The picture fills the button; hover adds a ring instead of a tint. */
