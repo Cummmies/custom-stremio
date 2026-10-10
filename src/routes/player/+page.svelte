@@ -676,7 +676,10 @@
     $effect(() => {
         const t = player.time;
         // Not while an addon's error clip plays: it would overwrite where you left off.
-        if (!player.loaded || !player.duration || player.duration < ERROR_CLIP_MAX_S || Math.abs(t - lastReported) < 1) return;
+        // Only this video's own file (fileReady): moving to the next episode changes
+        // the address before the last one's file stops, and its time reported then
+        // was saved as the next episode's, which then started from there.
+        if (!fileReady || !player.duration || player.duration < ERROR_CLIP_MAX_S || Math.abs(t - lastReported) < 1) return;
         lastReported = t;
         core.dispatch(
             {
@@ -689,7 +692,7 @@
 
     $effect(() => {
         const paused = player.paused;
-        if (player.loaded) core.dispatch({ action: 'Player', args: { action: 'PausedChanged', args: { paused } } }, 'player');
+        if (fileReady) core.dispatch({ action: 'Player', args: { action: 'PausedChanged', args: { paused } } }, 'player');
     });
 
     // --- skip intro / recap / credits ---------------------------------------
@@ -843,7 +846,8 @@
         const d = player.duration;
         const inCredits = currentSegment?.kind === 'credits';
         untrack(() => {
-            if (!lightboxd.saved?.token || !firstFrameSeen || !id) return;
+            // This video's own file: not the last episode's, still playing as the next one opens.
+            if (!lightboxd.saved?.token || !firstFrameSeen || !fileReady || !id) return;
             if (type !== 'movie' && type !== 'series') return;
             if (!/^(tt\d+|kitsu:\d+)$/.test(id) || (type === 'series' && !videoId)) return;
             if (d != null && d < ERROR_CLIP_MAX_S) return; // an addon's error clip
