@@ -9,6 +9,7 @@
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { isDesktop, isIOS, isTV } from '$lib/platform';
+    import { notify } from '$lib/notify.svelte';
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
@@ -603,6 +604,48 @@
                             <div class="sub">Your Discord profile shows the title, episode and time left while something plays. Needs the Discord app running.</div>
                         </div>
                         <Toggle label="Show what you’re watching on Discord" checked={playerPrefs.discordPresence} onchange={(v) => (playerPrefs.discordPresence = v)} />
+                    </div>
+                </div>
+            </section>
+        {/if}
+
+        {#if app.user && !isTV}
+            <section id="notifications">
+                <h2>Notifications</h2>
+                <div class="group">
+                    <div class="row">
+                        <div>
+                            <div class="title">Show Notifications</div>
+                            <div class="sub">
+                                {#if notify.systemAvailable === false}
+                                    New episodes show under the bell. Notifications on this device need the latest version of the app.
+                                {:else if notify.permission === 'denied'}
+                                    Notifications are turned off for this app in {isIOS ? 'the iPhone’s Settings' : 'Windows Settings'}. Turn them on there to get them.
+                                {:else if isIOS}
+                                    When something you track airs, even with the app closed.
+                                {:else}
+                                    When something you track comes out, while the app is open.
+                                {/if}
+                            </div>
+                        </div>
+                        {#if notify.systemAvailable}
+                            <Toggle label="Show Notifications" checked={notify.prefs.system && notify.permission !== 'denied'} onchange={(v) => notify.setPrefs({ system: v })} />
+                        {/if}
+                    </div>
+                    <div class="row">
+                        <div class="title">New Episodes and Movies</div>
+                        <Toggle label="New Episodes and Movies" checked={notify.prefs.episodes} onchange={(v) => notify.setPrefs({ episodes: v })} />
+                    </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">New Seasons</div>
+                            <div class="sub">When a show you track gets a new season, or a date for one.</div>
+                        </div>
+                        <Toggle label="New Seasons" checked={notify.prefs.seasons} onchange={(v) => notify.setPrefs({ seasons: v })} />
+                    </div>
+                    <div class="row">
+                        <div class="title">Replies to Your Reviews</div>
+                        <Toggle label="Replies to Your Reviews" checked={notify.prefs.replies} onchange={(v) => notify.setPrefs({ replies: v })} />
                     </div>
                 </div>
             </section>

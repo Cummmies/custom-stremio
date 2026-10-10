@@ -12,6 +12,9 @@
     import { profiles } from '$lib/profiles.svelte';
     import Avatar from './Avatar.svelte';
     import { slider } from '$lib/slider';
+    import { notify } from '$lib/notify.svelte';
+    import NotificationList from './NotificationList.svelte';
+    import { afterNavigate } from '$app/navigation';
 
     let { scrolled }: { scrolled: boolean } = $props();
 
@@ -95,6 +98,40 @@
         ];
     }
 
+    // The bell: the notifications in a popover under it; on a phone, their own page.
+    let bellOpen = $state(false);
+    let bellWrap = $state<HTMLElement>();
+    function toggleBell() {
+        if (matchMedia('(max-width: 700px)').matches) {
+            goto('/notifications');
+            return;
+        }
+        bellOpen = !bellOpen;
+        if (bellOpen) void notify.refresh();
+    }
+    $effect(() => {
+        if (!bellOpen) return;
+        // A click outside it (not in a menu it opened) or Escape closes it.
+        const onpointerdown = (e: PointerEvent) => {
+            const t = e.target as Element;
+            if (!bellWrap?.contains(t) && !t.closest?.('[data-menu]')) bellOpen = false;
+        };
+        const onkeydown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !menu.open) {
+                e.preventDefault();
+                bellOpen = false;
+                bellWrap?.querySelector<HTMLElement>('.bell')?.focus();
+            }
+        };
+        window.addEventListener('pointerdown', onpointerdown, true);
+        window.addEventListener('keydown', onkeydown);
+        return () => {
+            window.removeEventListener('pointerdown', onpointerdown, true);
+            window.removeEventListener('keydown', onkeydown);
+        };
+    });
+    afterNavigate(() => (bellOpen = false));
+
     export async function focusSearch() {
         searchOpen = true;
         await Promise.resolve();
@@ -141,6 +178,27 @@
                 data-tv-focus={onSearchPage && !query ? '' : undefined}
             />
         </div>
+
+        {#if app.user && !isTV}
+            <div class="bell-wrap" bind:this={bellWrap}>
+                <button
+                    class="circle bell"
+                    aria-label={notify.unread ? `Notifications, ${notify.unread} unread` : 'Notifications'}
+                    title="Notifications"
+                    aria-haspopup="dialog"
+                    aria-expanded={bellOpen}
+                    onclick={toggleBell}
+                >
+                    <Icon name="bell" size={18} />
+                    {#if notify.unread}<span class="badge" aria-hidden="true">{notify.unread > 9 ? '9+' : notify.unread}</span>{/if}
+                </button>
+                {#if bellOpen}
+                    <div class="popover" role="dialog" aria-labelledby="notifications-heading">
+                        <NotificationList onnavigate={() => (bellOpen = false)} />
+                    </div>
+                {/if}
+            </div>
+        {/if}
 
         <button
             class="circle"
@@ -297,6 +355,64 @@
     }
     .circle:hover {
         background: rgb(60 60 72 / 0.7);
+    }
+    /* The bell, its count of unread, and the list under it. */
+    .bell-wrap {
+        position: relative;
+    }
+    .bell {
+        position: relative;
+    }
+    .bell[aria-expanded='true'] {
+        background: var(--label);
+        color: var(--bg);
+    }
+    .badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        display: grid;
+        place-items: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--bad);
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 0 0 2px var(--bg);
+    }
+    .popover {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: -46px;
+        z-index: 40;
+        width: min(400px, calc(100vw - 32px));
+        max-height: min(70vh, 640px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 14px 8px 8px;
+        border: 1px solid var(--separator);
+        border-radius: var(--radius-l);
+        background: rgb(22 22 29 / 0.92);
+        backdrop-filter: blur(24px) saturate(1.5);
+        -webkit-backdrop-filter: blur(24px) saturate(1.5);
+        box-shadow: 0 18px 48px rgb(0 0 0 / 0.55);
+        animation: pop var(--fast) var(--ease);
+        transform-origin: top right;
+    }
+    @keyframes pop {
+        from {
+            opacity: 0;
+            transform: scale(0.97) translateY(-4px);
+        }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+        .popover {
+            background: var(--elevated);
+        }
     }
     /* The picture fills the button; hover adds a ring instead of a tint. */
     .avatar {

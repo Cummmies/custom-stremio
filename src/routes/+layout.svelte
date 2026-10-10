@@ -20,6 +20,7 @@
     import { isIOS, isTV } from '$lib/platform';
     import { focusPrimary, startRemote } from '$lib/tv/remote';
     import { afterNavigate } from '$app/navigation';
+    import { notify } from '$lib/notify.svelte';
     import '$lib/styles/tv.css';
 
     let { children } = $props();
@@ -37,6 +38,8 @@
             focusPrimary();
         }
         app.start();
+        // New episodes and the like: the bell, and the system's notifications.
+        notify.start();
         // Opened for the first time since an update: what changed.
         whatsNew.start();
         // A reload skips the player's cleanup; make sure no video keeps playing unseen.

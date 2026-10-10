@@ -372,6 +372,30 @@ back to Stremio alone whenever Lightboxd can't be reached.
   /backup/resolve`). An import only ever restores list entries into lists it made or found for
   you (a file's own list ids could be anyone's).
 
+## Notifications — built
+
+Lightboxd's notifications (new episodes and movies once they're out, new seasons, replies to your
+reviews; friend requests stay on the website for now) come to the app through
+`GET /app-api/v1/notifications` (core/app_notifications.py), worded for the app, with the title's
+Stremio ID and poster. `POST /notifications/read`, `POST /notifications/{id}/read`,
+`DELETE /notifications` and `DELETE /notifications/{id}` mark them read or remove them.
+
+- **The bell** (top bar, PC and iPhone; not TV): a red count of unread. PC opens a popover; iPhone
+  opens `/notifications`. Grouped Today / Yesterday / Earlier, each with the poster; tapping one
+  opens the title and marks it read; ⋯ has Mark All as Read, Notification Settings and Clear All.
+- **System notifications** (`src/lib/notify.svelte.ts`, Tauri's notification plugin):
+  - PC: a Windows notification for each new one while the app is open (it looks every 5 minutes
+    and when the window comes back); more than 3 at once become one.
+  - iPhone: the app is sideloaded with a free Apple ID, so a server can't wake it (push needs a paid
+    developer account). Instead it schedules a local notification for each tracked release in the
+    next two weeks, at its air time (a date-only release: 9 AM that day), redone whenever it looks;
+    those aren't announced again when they reach the list. Tapping one opens the title.
+  - The first look on a device announces nothing (what's there isn't news).
+- **Settings → Notifications**: Show Notifications (asks the iPhone's permission; the list's offer
+  does too, once), and New Episodes and Movies / New Seasons / Replies to Your Reviews.
+- The native plugin ships with the installer / `.ipa`: an app updated only over the air shows the
+  list, and Settings says notifications need the latest version.
+
 ## iPhone and TV — built
 
 Lightboxd now runs on every device, held to Apple's guidelines (iOS for the phone, tvOS's

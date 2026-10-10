@@ -55,6 +55,7 @@ fn run_mobile() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_mpv::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(storage::Storage::default())
         .manage(web)
         .invoke_handler(tauri::generate_handler![
@@ -104,6 +105,7 @@ fn run_desktop() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Arc::new(StreamingServer::new()))
         .manage(storage::Storage::default())
         .manage(Player::default())

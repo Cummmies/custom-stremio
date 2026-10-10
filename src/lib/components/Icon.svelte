@@ -60,6 +60,7 @@
         next: 'M6 5.5v13l9.5-6.5zM18 5v14',
         close: 'M6 6l12 12M18 6 6 18',
         minus: 'M5 12h14',
+        bell: 'M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14zM10 20.5a2.1 2.1 0 0 0 4 0',
         sort: 'M8 4v16M4.5 7.5 8 4l3.5 3.5M16 20V4M12.5 16.5 16 20l3.5-3.5',
     } as const;
     export type IconName = keyof typeof paths;
