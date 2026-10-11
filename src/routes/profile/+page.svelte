@@ -21,12 +21,16 @@
         });
     });
 
-    /** No picture in the app yet: the profile's (one profile, one picture). */
+    /** One name and picture: the app takes the profile's name, and its picture when it has none. */
     function adoptPicture(p: Profile) {
         const uid = app.user?._id;
         const saved = profiles.get(uid);
+        if (!uid || !saved) return;
+        const patch: { name?: string; avatar?: string } = {};
+        if (p.name && p.name !== saved.name) patch.name = p.name;
         // (A video picture stays on the profile; the app's small picture is a still.)
-        if (uid && saved && !saved.avatar && p.avatar && !/\.(mp4|webm|mov)$/i.test(p.avatar)) profiles.update(uid, { avatar: p.avatar });
+        if (!saved.avatar && p.avatar && !/\.(mp4|webm|mov)$/i.test(p.avatar)) patch.avatar = p.avatar;
+        if (Object.keys(patch).length) profiles.update(uid, patch);
     }
 
     let busy = $state(false);

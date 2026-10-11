@@ -335,18 +335,20 @@
             {#if myProfile}
                 <div class="row stack">
                     <div>
-                        <div class="title">Profile name</div>
-                        <div class="sub">How this profile appears in the app.</div>
+                        <div class="title">Name</div>
+                        <div class="sub">Shown on your profile and in the app.</div>
                     </div>
                     <input
                         class="name-input"
                         value={myProfile.name}
-                        maxlength="24"
-                        aria-label="Profile name"
+                        maxlength="40"
+                        aria-label="Name"
                         onchange={(e) => {
                             const v = e.currentTarget.value.trim();
-                            if (v) profiles.update(myProfile.uid, { name: v });
-                            else e.currentTarget.value = myProfile.name;
+                            if (!v) return void (e.currentTarget.value = myProfile.name);
+                            profiles.update(myProfile.uid, { name: v });
+                            // One name: your profile's too.
+                            if (tracker.ready) void lb.updateProfile({ name: v });
                         }}
                         onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                     />
@@ -354,12 +356,21 @@
                 {#if !isTV}<!-- a TV has no files to choose a picture from -->
                 <div class="row">
                     <div>
-                        <div class="title">Profile picture</div>
-                        <div class="sub">Syncs with your Stremio account.</div>
+                        <div class="title">Picture</div>
+                        <div class="sub">Shown on your profile and in the app.</div>
                     </div>
                     <PhotoControls uid={myProfile.uid} />
                 </div>
                 {/if}
+            {/if}
+            {#if app.user && tracker.ready}
+                <a class="row link" href="/profile">
+                    <div>
+                        <div class="title">Your Profile</div>
+                        <div class="sub">Your username, bio, banner and favorites, and who can see them.</div>
+                    </div>
+                    <Icon name="chevronRight" size={16} />
+                </a>
             {/if}
             {#if app.user}
                 <div class="row">

@@ -493,16 +493,22 @@ at `/u/<handle>` (friends' names and "Also Rated" on the title page link there).
   (`core/media_links.py`), because uploads need a website sign-in and their names hold
   the email. Five favorites, as the website.
 - **Layout:** the banner in the website's shape (1120 by 220, full width), the picture across
-  its edge. Who you are and four numbers on the left, Favorites beside them (one column when
-  narrow). Then Lists (yours) and Recently Watched, one row each of as many as fit, with
-  See All.
-- **Editing works as on the website: in place.** Name, handle and bio become grouped fields,
-  with who can see your profile under them. The banner and picture say how to change them;
-  Favorites shows five slots (tap to choose, drag or arrow keys to reorder, × to remove).
-  Cancel and Save take Edit Profile's place, and Escape cancels. Banners keep the whole
-  picture (at most 2560 wide), as the website does. Not on the TV.
-- The name and picture are also the app's for that account: saving updates them, and an
-  account with no picture takes the profile's (unless it's a video).
+  its edge, and four numbers in its bottom-right corner, as a title's scores sit (phones: under
+  the bio). Edit Profile is right under them, below the banner. Then the name, @username and
+  bio; Favorites, a centred row of five (yours keeps empty places that add one). Then Lists
+  (yours) and Recently Watched, one row each of as many as fit, with See All.
+- **Editing works as on the website: in place.** Name, username and bio become grouped
+  fields beside who can see your profile. The banner and picture say how to change them, and
+  a new one is moved and scaled first (Move and Scale: a circle for the picture, the banner's
+  own shape for a banner). Favorites shows five slots: tap to choose, drag or arrow keys to
+  reorder, × to remove. Cancel and Save take Edit Profile's place, and Escape cancels.
+  Not on the TV.
+- **One name, one picture.** The Stremio account is only how you sign in (Settings shows its
+  email). Your *name* shows on your profile and in the app, and Settings' Name and Picture
+  are the same ones as the profile's: changing either place changes both, and the app takes
+  the profile's name when it loads. Your *@username* is how friends find you and your
+  profile's link; Settings links to Your Profile to change it.
+- An account with no picture in the app takes the profile's (unless it's a video).
 
 ## Later, maybe
 

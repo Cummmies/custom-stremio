@@ -1,10 +1,14 @@
 <script lang="ts">
     // One button for a profile picture: "Upload…" when there's none, otherwise
-    // "Change…" with Upload New Photo / Remove Photo in the app menu. The picture
-    // is cropped to a square and shrunk before it's saved, so it stays small.
-    import { imageToAvatar, profiles } from '$lib/profiles.svelte';
+    // "Change…" with Upload New Photo / Remove Photo in the app menu. A new
+    // picture is moved and scaled into its circle first (ImageCropper). It's
+    // one picture: your profile's too.
+    import { profiles } from '$lib/profiles.svelte';
     import { menu } from '$lib/menu.svelte';
+    import { tracker } from '$lib/tracker.svelte';
+    import { lb } from '$lib/tracker/api';
     import Icon from './Icon.svelte';
+    import ImageCropper from './ImageCropper.svelte';
 
     let { uid }: { uid: string } = $props();
 
@@ -12,16 +16,16 @@
     let error = $state<string | null>(null);
     const hasPhoto = $derived(!!profiles.get(uid)?.avatar);
 
-    async function onchange() {
+    let cropping = $state<File | null>(null);
+    function onchange() {
         const file = input?.files?.[0];
         if (input) input.value = '';
-        if (!file) return;
         error = null;
-        try {
-            profiles.update(uid, { avatar: await imageToAvatar(file) });
-        } catch {
-            error = 'That file couldn’t be used. Try a JPG or PNG.';
-        }
+        if (file) cropping = file;
+    }
+    function setPicture(avatar: string | undefined) {
+        profiles.update(uid, { avatar });
+        if (tracker.ready) void lb.updateProfile({ avatar: avatar ?? '' });
     }
 
     function onclick(e: MouseEvent) {
@@ -30,7 +34,7 @@
             e.currentTarget as HTMLElement,
             [
                 { label: 'Upload New Photo…', onselect: () => input?.click() },
-                { label: 'Remove Photo', destructive: true, onselect: () => profiles.update(uid, { avatar: undefined }) },
+                { label: 'Remove Photo', destructive: true, onselect: () => setPicture(undefined) },
             ],
             'end'
         );
@@ -45,6 +49,14 @@
     </button>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
 </div>
+{#if cropping}
+    <ImageCropper
+        file={cropping}
+        shape="circle"
+        onchoose={(url) => ((cropping = null), setPicture(url))}
+        oncancel={() => (cropping = null)}
+    />
+{/if}
 
 <style>
     .photo {

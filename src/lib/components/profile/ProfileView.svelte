@@ -1,17 +1,18 @@
 <script lang="ts">
     // A profile (docs/design.md): the banner as artwork in the website's shape
-    // (a wide strip, 1120 by 220) with the picture across its edge. Under it,
-    // who you are (name, @handle, bio, four plain numbers) beside Favorites;
-    // then Lists (yours) and Recently Watched, each one row of as many as fit.
-    // Edit Profile works as the website's does: in place. Who you are becomes
-    // grouped fields (as Settings) with who can see what under them, the banner
-    // and picture say how to change them, and Favorites shows its five slots
-    // (tap one to choose, drag or arrow keys to reorder). Cancel and Save take
-    // Edit Profile's place.
+    // (a wide strip, 1120 by 220) with the picture across its edge and four
+    // numbers in its bottom-right corner, as a title's scores; Edit Profile
+    // right under them. Then the name, @username and bio; Favorites, a centred
+    // row of five (yours keeps empty places to add to); then Lists (yours) and
+    // Recently Watched, each one row of as many as fit.
+    // Edit Profile works as the website's does: in place. The name, username
+    // and bio become grouped fields (as Settings) beside who can see what, the
+    // banner and picture say how to change them (moved and scaled first, in
+    // ImageCropper), and Favorites shows its five slots (tap one to choose,
+    // drag or arrow keys to reorder). Cancel and Save take Edit Profile's place.
     import { tick, untrack } from 'svelte';
     import type { Profile, ProfileFields, Visibility } from '$lib/tracker/api';
     import { day, score, type LibraryItem } from '$lib/tracker/api';
-    import { imageToAvatar } from '$lib/profiles.svelte';
     import PosterCard from '$lib/components/PosterCard.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
@@ -19,6 +20,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import ProfileMedia from './ProfileMedia.svelte';
     import FavoritePicker from './FavoritePicker.svelte';
+    import ImageCropper from '$lib/components/ImageCropper.svelte';
     import { isTV } from '$lib/platform';
 
     let {
@@ -70,6 +72,12 @@
     function cancel() {
         editing = false;
         picking = null;
+        cropping = null;
+    }
+    /** An empty favorite slot outside editing: start editing, choosing for it. */
+    function addFavorite() {
+        begin();
+        picking = slots.length;
     }
 
     const shownBanner = $derived(editing && banner !== undefined ? banner || null : profile.banner);
@@ -99,27 +107,18 @@
         if (!Object.keys(fields).length || (await onsave(fields))) editing = false;
     }
 
-    // ---- Picture and banner ----
-    /** A banner as the website keeps one: the whole picture, at most 2560 wide. */
-    async function imageToBanner(file: File): Promise<string> {
-        const bitmap = await createImageBitmap(file);
-        const scale = Math.min(1, 2560 / bitmap.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(bitmap.width * scale);
-        canvas.height = Math.round(bitmap.height * scale);
-        const ctx = canvas.getContext('2d')!;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        bitmap.close();
-        return canvas.toDataURL('image/jpeg', 0.86);
-    }
-    async function pickImage(e: Event, kind: 'avatar' | 'banner') {
+    // ---- Picture and banner: chosen, then moved and scaled (ImageCropper) ----
+    let cropping = $state<{ file: File; kind: 'avatar' | 'banner' } | null>(null);
+    function pickImage(e: Event, kind: 'avatar' | 'banner') {
         const input = e.currentTarget as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        if (!file) return;
-        if (kind === 'avatar') avatar = await imageToAvatar(file, 400);
-        else banner = await imageToBanner(file);
+        if (file) cropping = { file, kind };
+    }
+    function cropped(dataUrl: string) {
+        if (cropping?.kind === 'avatar') avatar = dataUrl;
+        else banner = dataUrl;
+        cropping = null;
     }
     let avatarInput = $state<HTMLInputElement>();
     let bannerInput = $state<HTMLInputElement>();
@@ -185,7 +184,7 @@
     }
 
     function onkeydown(e: KeyboardEvent) {
-        if (editing && picking === null && e.key === 'Escape' && !e.defaultPrevented) {
+        if (editing && picking === null && !cropping && e.key === 'Escape' && !e.defaultPrevented) {
             e.preventDefault();
             cancel();
         }
@@ -236,146 +235,106 @@
         <input bind:this={bannerInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'banner')} />
     {/if}
 
-    <div class="top" class:alone={profile.is_private}>
-        <div class="identity">
-            <!-- The picture across the banner's edge; beside it Edit Profile, or Cancel and Save, in one place. -->
-            <div class="avatar-row">
-                <div class="avatar-wrap">
-                    {#if editing}
-                        <button class="avatar" onclick={() => avatarInput?.click()} aria-label={shownAvatar ? 'Change Picture' : 'Add Picture'}>
-                            {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
-                            <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /></span>
-                        </button>
-                        {#if shownAvatar}
-                            <button class="remove" onclick={() => (avatar = '')} aria-label="Remove Picture"><Icon name="close" size={12} /></button>
-                        {/if}
-                    {:else}
-                        <div class="avatar" aria-hidden="true">
-                            {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
-                        </div>
-                    {/if}
-                </div>
+    <div class="top">
+        <!-- The picture across the banner's edge; on the right, under the numbers, Edit Profile (or Cancel and Save). -->
+        <div class="avatar-row">
+            <div class="avatar-wrap">
                 {#if editing}
-                    <div class="actions">
-                        <button class="glass-pill" onclick={cancel}>Cancel</button>
-                        <button class="primary-pill" disabled={busy || !valid} onclick={save}>{busy ? 'Saving…' : 'Save'}</button>
-                    </div>
-                {:else if canEdit}
-                    <div class="actions">
-                        <button class="glass-pill" onclick={begin}><Icon name="pencil" size={14} /> Edit Profile</button>
+                    <button class="avatar" onclick={() => avatarInput?.click()} aria-label={shownAvatar ? 'Change Picture' : 'Add Picture'}>
+                        {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
+                        <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /></span>
+                    </button>
+                    {#if shownAvatar}
+                        <button class="remove" onclick={() => (avatar = '')} aria-label="Remove Picture"><Icon name="close" size={12} /></button>
+                    {/if}
+                {:else}
+                    <div class="avatar" aria-hidden="true">
+                        {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
                     </div>
                 {/if}
             </div>
-
             {#if editing}
-                {#if error}<p class="error" role="alert">{error}</p>{/if}
-                <div class="group">
-                    <label class="row">
-                        <span class="label">Name</span>
-                        <input bind:value={name} maxlength={NAME_MAX} placeholder="Your name" autocomplete="nickname" />
-                    </label>
-                    <label class="row">
-                        <span class="label">Handle</span>
-                        <span class="handle-input">
-                            <span aria-hidden="true">@</span>
-                            <input
-                                bind:value={handle}
-                                maxlength="24"
-                                placeholder="handle"
-                                autocomplete="off"
-                                spellcheck="false"
-                                oninput={() => (handle = handle.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                            />
-                        </span>
-                    </label>
-                    <label class="row bio-row">
-                        <span class="label">Bio</span>
-                        <textarea bind:value={bio} maxlength={BIO_MAX} rows="3" placeholder="A line about you"></textarea>
-                    </label>
+                <div class="actions">
+                    <button class="glass-pill" onclick={cancel}>Cancel</button>
+                    <button class="primary-pill" disabled={busy || !valid} onclick={save}>{busy ? 'Saving…' : 'Save'}</button>
                 </div>
-                {#if handle && !handleValid}
-                    <p class="note bad">A handle is 3 to 24 letters, numbers or underscores.</p>
-                {:else if bio.length > BIO_MAX - 40}
-                    <p class="note">{BIO_MAX - bio.length} characters left</p>
-                {/if}
-
-                <h3>Who Can See Your Profile</h3>
-                <Segmented
-                    label="Who can see your profile"
-                    fill
-                    options={[
-                        { value: 'public', label: 'Everyone' },
-                        { value: 'friends', label: 'Friends' },
-                        { value: 'private', label: 'Only Me' },
-                    ]}
-                    bind:value={visibility}
-                />
-                <div class="group">
-                    <div class="row"><span>Show Scores</span><Toggle label="Show scores" bind:checked={shareScores} /></div>
-                    <div class="row"><span>Show Reviews</span><Toggle label="Show reviews" bind:checked={shareReviews} /></div>
-                    <div class="row"><span>Show Watch Dates</span><Toggle label="Show watch dates" bind:checked={shareDates} /></div>
+            {:else if canEdit}
+                <div class="actions">
+                    <button class="glass-pill" onclick={begin}><Icon name="pencil" size={14} /> Edit Profile</button>
                 </div>
-                <p class="note">To people who can see your profile, and on titles your friends look at.</p>
-            {:else}
-                <div class="who">
-                    <h1>{profile.name || profile.handle}</h1>
-                    {#if profile.handle}<p class="handle">{profile.handle}</p>{/if}
-                    {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
-                </div>
-                {#if stats.length && !profile.is_private}
-                    <dl class="stats">
-                        {#each stats as s (s.label)}
-                            <div><dt>{s.label}</dt><dd>{s.value}</dd></div>
-                        {/each}
-                    </dl>
-                {/if}
             {/if}
         </div>
 
-        {#if !profile.is_private}
-            <!-- Favorites: beside who you are, at a size five fill. -->
-            <section class="showcase">
-                <div class="head">
-                    <h2>Favorites</h2>
-                    {#if editing}<span class="hint">{slots.length > 1 ? 'Drag to reorder' : `Up to ${SLOTS}`}</span>{/if}
-                </div>
-                {#if editing}
-                    <ol class="favorites slots">
-                        {#each Array.from({ length: SLOTS }, (_, i) => i) as i (slots[i]?.id ?? `empty-${i}`)}
-                            {@const item = slots[i]}
-                            <li data-slot={i} class:dragging={dragging === i}>
-                                {#if item}
-                                    <button
-                                        class="slot-card"
-                                        aria-label={`${item.name}, favorite ${i + 1}. Choose another; arrow keys move it.`}
-                                        onpointerdown={(e) => slotDown(e, i)}
-                                        onpointermove={slotMove}
-                                        onpointerup={slotUp}
-                                        onpointercancel={slotUp}
-                                        onclick={() => slotClick(i)}
-                                        onkeydown={(e) => slotKey(e, i)}
-                                    >
-                                        {#if item.poster}<img src={item.poster} alt="" draggable="false" />{:else}<span class="slot-name">{item.name}</span>{/if}
-                                    </button>
-                                    <button class="remove" onclick={() => removeSlot(i)} aria-label={`Remove ${item.name}`}><Icon name="close" size={12} /></button>
-                                {:else}
-                                    <button class="slot-empty" onclick={() => (picking = slots.length)} disabled={i > slots.length} aria-label="Add a favorite">
-                                        <Icon name="plus" size={22} />
-                                    </button>
-                                {/if}
-                            </li>
-                        {/each}
-                    </ol>
-                {:else if profile.favorites?.length}
-                    <div class="favorites">
-                        {#each profile.favorites as f (f.id)}<PosterCard item={poster(f, f.year)} />{/each}
+        <!-- Four numbers in the banner's corner, as a title's scores sit (phones: under the bio). -->
+        {#if stats.length && !profile.is_private}
+            <dl class="stats" aria-label="Stats">
+                {#each stats as s (s.label)}
+                    <div><dd>{s.value}</dd><dt>{s.label}</dt></div>
+                {/each}
+            </dl>
+        {/if}
+
+        {#if editing}
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
+            <div class="edit-grid">
+                <div class="edit-col">
+                    <h3>Profile</h3>
+                    <div class="group">
+                        <label class="row">
+                            <span class="label">Name</span>
+                            <input bind:value={name} maxlength={NAME_MAX} placeholder="Your name" autocomplete="name" />
+                        </label>
+                        <label class="row">
+                            <span class="label">Username</span>
+                            <span class="handle-input">
+                                <span aria-hidden="true">@</span>
+                                <input
+                                    bind:value={handle}
+                                    maxlength="24"
+                                    placeholder="username"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                    oninput={() => (handle = handle.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                                />
+                            </span>
+                        </label>
+                        <label class="row bio-row">
+                            <span class="label">Bio</span>
+                            <textarea bind:value={bio} maxlength={BIO_MAX} rows="3" placeholder="A line about you"></textarea>
+                        </label>
                     </div>
-                {:else if canEdit}
-                    <p class="prompt">Show up to five titles you love. <button class="text" onclick={begin}>Choose</button></p>
-                {:else}
-                    <p class="prompt">No favorites yet.</p>
-                {/if}
-            </section>
+                    {#if handle && !handleValid}
+                        <p class="note bad">A username is 3 to 24 letters, numbers or underscores.</p>
+                    {:else}
+                        <p class="note">Your name shows here and in the app. Your username is how friends find you, and your profile’s link.</p>
+                    {/if}
+                </div>
+                <div class="edit-col">
+                    <h3>Who Can See Your Profile</h3>
+                    <Segmented
+                        label="Who can see your profile"
+                        fill
+                        options={[
+                            { value: 'public', label: 'Everyone' },
+                            { value: 'friends', label: 'Friends' },
+                            { value: 'private', label: 'Only Me' },
+                        ]}
+                        bind:value={visibility}
+                    />
+                    <div class="group">
+                        <div class="row"><span>Show Scores</span><Toggle label="Show scores" bind:checked={shareScores} /></div>
+                        <div class="row"><span>Show Reviews</span><Toggle label="Show reviews" bind:checked={shareReviews} /></div>
+                        <div class="row"><span>Show Watch Dates</span><Toggle label="Show watch dates" bind:checked={shareDates} /></div>
+                    </div>
+                    <p class="note">To people who can see your profile, and on titles your friends look at.</p>
+                </div>
+            </div>
+        {:else}
+            <div class="who">
+                <h1>{profile.name || profile.handle}</h1>
+                {#if profile.handle}<p class="handle">{profile.handle}</p>{/if}
+                {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
+            </div>
         {/if}
     </div>
 
@@ -383,47 +342,104 @@
         <EmptyState icon="eyeOff" title="This profile is private">
             <p>{profile.name || 'They'} chose who can see it.</p>
         </EmptyState>
-    {:else if !editing}
-        <!-- One row each, as many as the width holds. -->
-        <div class="rows" bind:clientWidth={rowW}>
-            <span class="probe" aria-hidden="true" bind:clientWidth={posterW}></span>
-            {#if profile.is_owner && profile.lists?.length}
-                <section>
-                    <div class="head">
-                        <h2>Lists</h2>
-                        {#if profile.lists.length > listCols}<a class="see-all" href="/lists">See All</a>{/if}
-                    </div>
-                    <div class="lists" style="--cols: {listCols}">
-                        {#each profile.lists.slice(0, listCols) as l (l.id)}
-                            <a class="list" href={`/lists?id=${l.id}`}>
-                                <span class="stack" aria-hidden="true">
-                                    {#each l.posters.slice(0, 3) as src, i (i)}<img {src} alt="" loading="lazy" style="--i: {i}" />{:else}<span class="blank"><Icon name="list" size={22} /></span>{/each}
-                                </span>
-                                <span class="name">{l.name}</span>
-                                <span class="meta">{l.count} {l.count === 1 ? 'title' : 'titles'}</span>
-                            </a>
+    {:else}
+        <!-- Favorites: a row of their own, centred, five across. -->
+        <section class="showcase">
+            <div class="head">
+                <h2>Favorites</h2>
+                {#if editing}<span class="hint">{slots.length > 1 ? 'Drag to reorder' : `Up to ${SLOTS}`}</span>{/if}
+            </div>
+            {#if editing}
+                <ol class="favorites slots">
+                    {#each Array.from({ length: SLOTS }, (_, i) => i) as i (slots[i]?.id ?? `empty-${i}`)}
+                        {@const item = slots[i]}
+                        <li data-slot={i} class:dragging={dragging === i}>
+                            {#if item}
+                                <button
+                                    class="slot-card"
+                                    aria-label={`${item.name}, favorite ${i + 1}. Choose another; arrow keys move it.`}
+                                    onpointerdown={(e) => slotDown(e, i)}
+                                    onpointermove={slotMove}
+                                    onpointerup={slotUp}
+                                    onpointercancel={slotUp}
+                                    onclick={() => slotClick(i)}
+                                    onkeydown={(e) => slotKey(e, i)}
+                                >
+                                    {#if item.poster}<img src={item.poster} alt="" draggable="false" />{:else}<span class="slot-name">{item.name}</span>{/if}
+                                </button>
+                                <button class="remove" onclick={() => removeSlot(i)} aria-label={`Remove ${item.name}`}><Icon name="close" size={12} /></button>
+                            {:else}
+                                <button class="slot-empty" onclick={() => (picking = slots.length)} disabled={i > slots.length} aria-label="Add a favorite">
+                                    <Icon name="plus" size={22} />
+                                </button>
+                            {/if}
+                        </li>
+                    {/each}
+                </ol>
+            {:else if profile.favorites?.length || canEdit}
+                <!-- Yours keeps room for five: an empty place adds one. -->
+                <ol class="favorites" style="--n: {canEdit ? SLOTS : profile.favorites?.length}">
+                    {#each profile.favorites ?? [] as f (f.id)}<li><PosterCard item={poster(f, f.year)} /></li>{/each}
+                    {#if canEdit}
+                        {#each Array.from({ length: SLOTS - (profile.favorites?.length ?? 0) }, (_, i) => i) as i (i)}
+                            <li class="slot-wrap">
+                                <button class="slot-empty" class:quiet={i > 0} onclick={addFavorite} aria-label="Add a favorite">
+                                    <Icon name="plus" size={22} />
+                                </button>
+                            </li>
                         {/each}
-                    </div>
-                </section>
+                    {/if}
+                </ol>
+            {:else}
+                <p class="prompt">No favorites yet.</p>
             {/if}
+        </section>
 
-            {#if profile.recent?.length}
-                <section>
-                    <div class="head">
-                        <h2>Recently Watched</h2>
-                        {#if profile.is_owner && profile.recent.length > cols}<a class="see-all" href="/library">See All</a>{/if}
-                    </div>
-                    <div class="shelf" style="--cols: {cols}">
-                        {#each profile.recent.slice(0, cols) as r (r.id)}<PosterCard item={poster(r, recentLine(r))} />{/each}
-                    </div>
-                </section>
-            {/if}
-        </div>
+        {#if !editing}
+            <!-- One row each, as many as the width holds. -->
+            <div class="rows" bind:clientWidth={rowW}>
+                <span class="probe" aria-hidden="true" bind:clientWidth={posterW}></span>
+                {#if profile.is_owner && profile.lists?.length}
+                    <section>
+                        <div class="head">
+                            <h2>Lists</h2>
+                            {#if profile.lists.length > listCols}<a class="see-all" href="/lists">See All</a>{/if}
+                        </div>
+                        <div class="lists" style="--cols: {listCols}">
+                            {#each profile.lists.slice(0, listCols) as l (l.id)}
+                                <a class="list" href={`/lists?id=${l.id}`}>
+                                    <span class="stack" aria-hidden="true">
+                                        {#each l.posters.slice(0, 3) as src, i (i)}<img {src} alt="" loading="lazy" style="--i: {i}" />{:else}<span class="blank"><Icon name="list" size={22} /></span>{/each}
+                                    </span>
+                                    <span class="name">{l.name}</span>
+                                    <span class="meta">{l.count} {l.count === 1 ? 'title' : 'titles'}</span>
+                                </a>
+                            {/each}
+                        </div>
+                    </section>
+                {/if}
+
+                {#if profile.recent?.length}
+                    <section>
+                        <div class="head">
+                            <h2>Recently Watched</h2>
+                            {#if profile.is_owner && profile.recent.length > cols}<a class="see-all" href="/library">See All</a>{/if}
+                        </div>
+                        <div class="shelf" style="--cols: {cols}">
+                            {#each profile.recent.slice(0, cols) as r (r.id)}<PosterCard item={poster(r, recentLine(r))} />{/each}
+                        </div>
+                    </section>
+                {/if}
+            </div>
+        {/if}
     {/if}
 </div>
 
 {#if picking !== null}
     <FavoritePicker slot={picking} taken={slots.map((s) => s.id)} onpick={chose} onclose={() => (picking = null)} />
+{/if}
+{#if cropping}
+    <ImageCropper file={cropping.file} shape={cropping.kind === 'avatar' ? 'circle' : 'banner'} onchoose={cropped} oncancel={() => (cropping = null)} />
 {/if}
 
 <style>
@@ -432,6 +448,8 @@
            phone it keeps a usable height under the bar. */
         --cover-h: clamp(calc(var(--nav-h) + 100px), 19.643vw, 440px);
         --avatar: 120px;
+        --fav-w: clamp(120px, 12.5vw, 200px);
+        --fav-gap: clamp(16px, 2.6vw, 40px);
         position: relative;
         padding: 0 var(--gutter) 64px;
     }
@@ -447,7 +465,7 @@
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(to bottom, var(--scrim) 0%, transparent 38%, transparent 72%, var(--bg) 100%);
+        background: linear-gradient(to bottom, var(--scrim) 0%, transparent 38%, transparent 62%, var(--bg) 100%);
         pointer-events: none;
     }
     .cover-edit {
@@ -459,25 +477,14 @@
         gap: 8px;
     }
 
-    /* Who you are on the left, Favorites on the right; one column when narrow. */
     .top {
         position: relative;
         z-index: 1;
-        display: grid;
-        grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
-        gap: 28px 64px;
-        align-items: start;
-        padding-top: calc(var(--cover-h) - var(--avatar) / 2);
-        margin-bottom: 44px;
-    }
-    .top.alone {
-        grid-template-columns: minmax(0, 560px);
-    }
-    .identity {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        min-width: 0;
+        padding-top: calc(var(--cover-h) - var(--avatar) / 2);
+        margin-bottom: 40px;
     }
     .avatar-row {
         display: flex;
@@ -546,6 +553,29 @@
         gap: 8px;
         padding-bottom: 6px;
     }
+    /* In the banner's bottom-right corner, right above Edit Profile: as a title's scores. */
+    .stats {
+        position: absolute;
+        right: 0;
+        top: calc(var(--cover-h) - 76px);
+        display: flex;
+        gap: 36px;
+        margin: 0;
+        text-align: right;
+        text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+    }
+    .stats dd {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: var(--text-title3);
+        font-weight: 700;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+    }
+    .stats dt {
+        font-size: 11px;
+        color: var(--label-2);
+    }
     h1 {
         margin: 0;
         font-family: var(--font-display);
@@ -558,6 +588,7 @@
         color: var(--label-2);
     }
     .bio {
+        max-width: 60ch;
         margin: 10px 0 0;
         color: var(--label-2);
         white-space: pre-line;
@@ -594,7 +625,20 @@
         cursor: default;
     }
 
-    /* Editing: grouped rows, as Settings. */
+    /* Editing: two groups side by side, as Settings' rows. */
+    .edit-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px 40px;
+        max-width: 1040px;
+        margin-top: 8px;
+    }
+    .edit-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+    }
     .group {
         border: 1px solid var(--separator);
         border-radius: var(--radius);
@@ -618,7 +662,7 @@
     }
     .label {
         flex: none;
-        width: 64px;
+        width: 80px;
         color: var(--label-2);
     }
     .row input,
@@ -640,7 +684,7 @@
         color: var(--label-2);
     }
     h3 {
-        margin: 12px 0 0;
+        margin: 0;
         font-size: var(--text-caption);
         font-weight: 600;
         letter-spacing: 0.06em;
@@ -648,7 +692,7 @@
         color: var(--label-2);
     }
     .note {
-        margin: -4px 0 0;
+        margin: 0;
         font-size: 12px;
         color: var(--label-2);
     }
@@ -660,36 +704,8 @@
         margin: 0;
     }
 
-    /* Four plain numbers. */
-    .stats {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px 36px;
-        margin: 8px 0 0;
-    }
-    .stats div {
-        display: flex;
-        flex-direction: column-reverse;
-    }
-    .stats dd {
-        margin: 0;
-        font-family: var(--font-display);
-        font-size: var(--text-title2);
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-    .stats dt {
-        color: var(--label-2);
-        font-size: var(--text-caption);
-    }
-
     section {
         margin-bottom: 40px;
-    }
-    /* Its title lines up with your name. */
-    .showcase {
-        margin: 0;
-        padding-top: calc(var(--avatar) / 2 + 22px);
     }
     .head {
         display: flex;
@@ -715,35 +731,40 @@
     .see-all:hover {
         text-decoration: underline;
     }
-    .text {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: var(--accent-text);
-        font-weight: 600;
-        cursor: pointer;
-    }
     .prompt {
         margin: 0;
         color: var(--label-2);
     }
+    /* Centred as one block, so its title lines up with the first poster. */
+    .showcase {
+        width: fit-content;
+        min-width: min(100%, 520px);
+        margin-inline: auto;
+    }
+    /* Five across, with room between. */
     .favorites {
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 16px;
-        max-width: 960px;
-    }
-    .slots {
+        grid-template-columns: repeat(var(--n, 5), var(--fav-w));
+        justify-content: center;
+        gap: var(--fav-gap);
         margin: 0;
         padding: 0;
         list-style: none;
     }
-    .slots li {
+    .slots li,
+    .slot-wrap {
         position: relative;
+    }
+    .slots li {
         aspect-ratio: 2 / 3;
         transition:
             transform var(--fast) var(--ease),
             opacity var(--fast);
+    }
+    /* An empty place beside real posters: poster-shaped, the title line's room under it. */
+    .slot-wrap .slot-empty {
+        height: auto;
+        aspect-ratio: 2 / 3;
     }
     .slots li.dragging {
         z-index: 1;
@@ -796,6 +817,10 @@
         transition:
             background var(--fast),
             color var(--fast);
+    }
+    .slot-empty.quiet {
+        background: transparent;
+        color: var(--label-3);
     }
     .slot-empty:hover:not(:disabled) {
         background: var(--fill-hover);
@@ -874,18 +899,12 @@
             height: 32px;
         }
     }
-    /* Narrower: one column, Favorites under who you are. */
-    @media (max-width: 980px) {
-        .top {
+    @media (max-width: 800px) {
+        .edit-grid {
             grid-template-columns: minmax(0, 1fr);
         }
-        .identity {
-            max-width: 560px;
-        }
-        .showcase {
-            padding-top: 4px;
-        }
     }
+    /* Phones: the numbers under the bio, spread across; five favorites fill the width. */
     @media (max-width: 600px) {
         .profile {
             --avatar: 88px;
@@ -893,17 +912,28 @@
         .top {
             margin-bottom: 32px;
         }
-        .identity {
-            max-width: none;
-        }
         .stats {
+            position: static;
+            order: 3;
             justify-content: space-between;
             gap: 12px;
+            margin-top: 8px;
+            text-align: left;
+            text-shadow: none;
+        }
+        .stats dd {
+            font-size: var(--text-title2);
+        }
+        .stats dt {
+            font-size: var(--text-caption);
+        }
+        .showcase {
+            width: auto;
         }
         .favorites {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 8px;
         }
-        /* Small, so they stay clear of the picture. */
         .cover-edit {
             top: calc(var(--nav-h) + 8px);
             right: 16px;
