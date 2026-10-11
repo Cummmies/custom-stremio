@@ -117,6 +117,8 @@ export const lb = {
     editWatch: (logId: number, fields: WatchFields) =>
         lightboxd.request<{ title: Summary }>(`/watches/${logId}`, { method: 'PUT', body: fields }),
     deleteWatch: (logId: number) => lightboxd.request<{ title: Summary }>(`/watches/${logId}`, { method: 'DELETE' }),
+    /** What you're watching and what's next, and what you've finished (for Continue Watching). */
+    continueWatching: () => lightboxd.request<import('$lib/continueWatching').TrackerContinue>('/continue'),
     /** A show's episodes you've marked watched or scored. */
     episodes: (id: string) => lightboxd.request<{ episodes: EpisodeLog[] }>(`/episodes?id=${enc(id)}`),
     /** Marks an episode watched (counting it) and sets what's in `fields`. */

@@ -426,6 +426,20 @@ Stremio ID and poster. `POST /notifications/read`, `POST /notifications/{id}/rea
 - **Privacy Policy and Terms of Use**: `/privacy`, `/terms`, from Settings → Privacy. Who runs it, a
   contact and the date go in `src/lib/legal.ts` (brackets until filled in).
 - **What's New** leaves out subjects starting with "Notes" and any that name the tracker.
+- **Continue Watching** (src/lib/continueWatching.ts, `GET /app-api/v1/continue`,
+  core/app_continue.py): Completed or Dropped titles leave the row; a show the tracker has you
+  further along in moves on to your next episode (from its start); shows you're Watching that
+  Stremio doesn't have (the last 120 days, next episode out) join after Stremio's own. An anime
+  whose seasons share one IMDb ID can't be numbered as Stremio does: no next episode for it.
+- **The tracker's rows** show by name only ("Recently Watched", not "· Lightboxd"); Customize Home
+  says what each is; the Addons page leaves out the app's own addons (rows, settings sync).
+- **New Seasons**: an announcement (its event_date is when it was announced) reads "Announced", or
+  the month given ("Season 4 · Jul 2027"); anime sequels "New Season" / "New Movie". Only
+  announcements from the last 60 days.
+- **Banner**: First Row (was Automatic) is the first row on Home after Continue Watching.
+- **Calmer UI**: empty states are a plain symbol, title and line (no circle); the combine suggestion
+  and the notifications offer are one line with a text button and ✕; Settings rows that open a page
+  are whole rows with a chevron.
 
 ## iPhone and TV — built
 
@@ -470,6 +484,10 @@ address comes from the profile's other devices (Settings sync).
 
 ## Later, maybe
 
+- **Brand name and email (pinned 2026-10-10):** the Privacy Policy and Terms say "Custom Stremio"
+  and `support@customstremio.example` (src/lib/legal.ts) as placeholders. Before a public release:
+  the app's own name (not "Stremio": it would look like the official app), a domain, and a real
+  support address.
 - **Windows:** "Start Lightboxd for me" if it's installed on the same PC, as a convenience
   only. It's still the same server-first model.
 - **Lightboxd → Stremio** watched marks (one direction only, as `stremio_sync_plan.md`

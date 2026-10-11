@@ -42,10 +42,17 @@ export function episodeLabel(item: LibraryItem): string | null {
     return `S${parts[parts.length - 2]} · E${parts[parts.length - 1]}`;
 }
 
-/** Season and episode from an episode id ("tt…:1:8"); null when it isn't one. */
-function seasonEpisode(videoId: string | null | undefined): [number, number] | null {
+/**
+ * Season and episode from an episode id ("tt…:1:8"; a Kitsu anime's "kitsu:…:8"
+ * is its one season's); null when it isn't one.
+ */
+export function seasonEpisode(videoId: string | null | undefined): [number, number] | null {
     const parts = cleanVideoId(videoId)?.split(':');
     if (!parts || parts.length < 3) return null;
+    if (parts[0] === 'kitsu' && parts.length === 3) {
+        const e = Number(parts[2]);
+        return Number.isFinite(e) ? [1, e] : null;
+    }
     const [s, e] = parts.slice(-2).map(Number);
     return Number.isFinite(s) && Number.isFinite(e) ? [s, e] : null;
 }

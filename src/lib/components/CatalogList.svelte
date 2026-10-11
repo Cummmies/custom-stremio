@@ -1,9 +1,14 @@
 <script lang="ts" module>
     import type { Catalog } from '$lib/core/types';
+    import { TRACKER_ROW_TYPE } from '$lib/internalAddons';
 
     export const isEmptyCatalog = (c: Catalog) => c.content?.type === 'Err';
+    // The tracker's rows are one mixed type: just their names (lib/internalAddons.ts).
     export const catalogTitle = (c: Catalog) =>
-        [c.name, c.type].filter(Boolean).map((s) => s!.charAt(0).toUpperCase() + s!.slice(1)).join(' · ');
+        [c.name, c.type === TRACKER_ROW_TYPE ? null : c.type]
+            .filter(Boolean)
+            .map((s) => s!.charAt(0).toUpperCase() + s!.slice(1))
+            .join(' · ');
     export const catalogAnchor = (index: number) => `row-${index}`;
     /** Anchor for a customized Home row (for the category tiles to jump to). */
     export const rowAnchor = (key: string) => `row-${key.replace(/[^a-z0-9]+/gi, '-')}`;

@@ -93,15 +93,11 @@
     </header>
 
     {#if offer}
+        <!-- One quiet line, not a card: what it does, Turn On, and ✕ for not now. -->
         <div class="offer">
-            <div class="offer-text">
-                <strong>Know when new episodes are out</strong>
-                <span>Get a notification when something you track airs, even with the app closed.</span>
-            </div>
-            <div class="offer-actions">
-                <button class="plain" onclick={later}>Not Now</button>
-                <button class="primary" onclick={() => notify.askPermission()}>Turn On</button>
-            </div>
+            <span>Get notified when new episodes air.</span>
+            <button class="turn-on" onclick={() => notify.askPermission()}>Turn On</button>
+            <button class="later" aria-label="Not now" title="Not Now" onclick={later}><Icon name="close" size={12} /></button>
         </div>
     {/if}
 
@@ -109,7 +105,7 @@
         <p class="note" role="status">{lightboxd.ready || lightboxd.status === 'checking' ? 'Loading…' : 'Couldn’t connect. Try again in a moment.'}</p>
     {:else if !notify.items.length}
         <div class="empty">
-            <span class="empty-icon"><Icon name="bell" size={26} /></span>
+            <span class="empty-icon"><Icon name="bell" size={34} /></span>
             <strong>No Notifications</strong>
             <span>{notify.source === 'stremio' ? 'New episodes of shows in your library show up here.' : 'New episodes and seasons of what you track show up here.'}</span>
         </div>
@@ -325,42 +321,40 @@
     }
     .offer {
         display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin: 0 4px 8px;
-        padding: 12px 14px;
-        border-radius: var(--radius);
-        background: var(--fill);
-    }
-    .offer-text {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-    .offer-text span {
+        align-items: center;
+        gap: 4px;
+        margin: 0 4px 6px 8px;
         color: var(--label-2);
         font-size: 13px;
     }
-    .offer-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
+    .offer span {
+        flex: 1;
+        min-width: 0;
     }
     .offer button {
-        height: 32px;
-        padding: 0 14px;
+        height: 30px;
         border: 0;
         border-radius: 999px;
-        font-weight: 600;
+        background: transparent;
         cursor: pointer;
     }
-    .offer .plain {
-        background: transparent;
-        color: var(--label-2);
+    .turn-on {
+        padding: 0 10px;
+        color: var(--accent-text);
+        font-weight: 600;
     }
-    .offer .primary {
-        background: var(--accent);
-        color: white;
+    .turn-on:hover {
+        background: var(--fill);
+    }
+    .later {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        color: var(--label-3);
+    }
+    .later:hover {
+        background: var(--fill);
+        color: var(--label);
     }
     .note {
         margin: 8px;
@@ -380,18 +374,15 @@
         font-size: 13px;
     }
     .empty-icon {
-        display: grid;
-        place-items: center;
-        width: 56px;
-        height: 56px;
-        margin-bottom: 4px;
-        border-radius: 50%;
-        background: var(--fill);
-        color: var(--label-2);
+        margin-bottom: 2px;
+        color: var(--label-3);
     }
     @media (pointer: coarse) {
         .offer button {
-            height: 40px;
+            height: 44px;
+        }
+        .later {
+            width: 44px;
         }
     }
 </style>

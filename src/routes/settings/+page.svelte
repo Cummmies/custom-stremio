@@ -6,6 +6,7 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import { getTvSize, setTvSize, tvSizes, type TvSize } from '$lib/tv/size';
     import Toggle from '$lib/components/Toggle.svelte';
+    import Icon from '$lib/components/Icon.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
     import { isDesktop, isIOS, isTV } from '$lib/platform';
@@ -810,13 +811,13 @@
     <section>
         <h2>Home</h2>
         <div class="group">
-            <div class="row">
+            <a class="row link" href="/customize">
                 <div>
                     <div class="title">Customize Home</div>
-                    <div class="sub">Reorder, rename, merge or hide Home’s rows, including Continue Watching.</div>
+                    <div class="sub">Reorder, rename, combine or hide Home’s rows, and choose the banner.</div>
                 </div>
-                <a class="btn" href="/customize">Customize…</a>
-            </div>
+                <Icon name="chevronRight" size={16} />
+            </a>
         </div>
     </section>
 
@@ -920,14 +921,14 @@
                 </div>
                 <Toggle label="Send Error Reports" checked={sendErrors} onchange={(v) => (setErrorReports(v), (sendErrors = v))} />
             </div>
-            <div class="row">
+            <a class="row link compact" href="/privacy">
                 <div class="title">Privacy Policy</div>
-                <a class="btn" href="/privacy">Read…</a>
-            </div>
-            <div class="row">
+                <Icon name="chevronRight" size={16} />
+            </a>
+            <a class="row link compact" href="/terms">
                 <div class="title">Terms of Use</div>
-                <a class="btn" href="/terms">Read…</a>
-            </div>
+                <Icon name="chevronRight" size={16} />
+            </a>
         </div>
     </section>
 
@@ -976,6 +977,24 @@
     }
     .row.compact {
         min-height: 44px;
+    }
+    /* A whole row that opens another page, with a chevron, as in native settings. */
+    a.row.link {
+        color: inherit;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background var(--fast);
+    }
+    a.row.link:hover {
+        background: var(--fill);
+    }
+    a.row.link:focus-visible {
+        outline: 2px solid var(--accent-hover);
+        outline-offset: -2px;
+    }
+    a.row.link > :global(svg) {
+        flex: none;
+        color: var(--label-3);
     }
     /* A whole row that's a single action (Log Out), like native settings lists. */
     .row.action {
@@ -1073,12 +1092,6 @@
         font-weight: 600;
         cursor: pointer;
         white-space: nowrap;
-    }
-    a.btn {
-        display: inline-flex;
-        align-items: center;
-        color: var(--label);
-        text-decoration: none;
     }
     .btn:hover {
         background: var(--fill-hover);

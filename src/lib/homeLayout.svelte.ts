@@ -264,7 +264,7 @@ class HomeLayout {
     /** The banner shows this row's titles (null: the first row that has any). */
     setBanner(rows: ResolvedRow[], key: string | null) {
         const row = key ? rows.find((r) => r.key === key) : null;
-        this.#change(row ? `The banner shows “${row.name}”` : 'The banner chooses by itself', (l) => {
+        this.#change(row ? `The banner shows “${row.name}”` : 'The banner shows the first row', (l) => {
             l.banner = key;
         });
     }

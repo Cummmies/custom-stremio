@@ -17,6 +17,7 @@
     import Icon from '$lib/components/Icon.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
+    import { TRACKER_ROWS_ADDON, TRACKER_ROW_DETAIL } from '$lib/internalAddons';
 
     let board = $state<Board | null>(null);
     let cw = $state<ContinueWatchingPreview | null>(null);
@@ -67,15 +68,18 @@
         if (r.kind === 'special') return 'Shows and movies you haven’t finished';
         if (r.kind === 'merge') return `Combined from ${r.parts.length} rows`;
         const c = byKey.get(r.parts[0]);
+        // The app's own rows (from your history): what they are, not where from.
+        if (c?.addon?.manifest?.id === TRACKER_ROWS_ADDON) return TRACKER_ROW_DETAIL[c.id ?? ''] ?? 'From your watch history';
         return [typeLabel(c?.type), c?.addon?.manifest?.name && `from ${c.addon.manifest.name}`].filter(Boolean).join(' · ');
     }
     const canCombine = (r: ResolvedRow) => r.kind !== 'special';
 
-    // --- Banner: Automatic (the first row with titles) or one of the rows on Home ---
+    // --- Banner: First Row (the first row on Home with titles) or one of the rows ---
     const AUTO = '';
     const bannerKey = $derived(homeLayout.layout.banner && rows.some((r) => r.key === homeLayout.layout.banner) ? homeLayout.layout.banner : AUTO);
-    const bannerOptions = $derived([{ value: AUTO, label: 'Automatic' }, ...onHome.map((r) => ({ value: r.key, label: r.name }))]);
-    const bannerRow = $derived(rows.find((r) => r.key === bannerKey));
+    const bannerOptions = $derived([{ value: AUTO, label: 'First Row' }, ...onHome.map((r) => ({ value: r.key, label: r.name }))]);
+    /** The row it shows: the chosen one, or (First Row) the first on Home after Continue Watching. */
+    const bannerRow = $derived(rows.find((r) => r.key === bannerKey) ?? onHome.find((r) => r.kind !== 'special'));
 
     // --- Suggestions: rows that belong together ("Popular · Movie" + "Popular · Series") ---
     const suggestion = $derived.by(() => {
@@ -265,14 +269,15 @@
     <p class="tip">Switch rows on or off, drag to reorder, and drop one row onto another to combine them.</p>
 
     {#if suggestion}
+        <!-- One quiet line: the idea, Combine, and ✕ for not now. -->
         <div class="suggest" role="region" aria-label="Suggestion">
-            <span class="suggest-icon" aria-hidden="true"><Icon name="merge" size={20} /></span>
-            <div class="suggest-text">
-                <strong>Combine “{suggestion.name}” into one row?</strong>
-                <span>{suggestion.rows.map((r) => typeLabel(byKey.get(r.parts[0])?.type)).join(' and ')} together, taking turns.</span>
-            </div>
-            <button class="pill" onclick={() => homeLayout.dismissSuggestion(suggestion.id)}>Not Now</button>
-            <button class="pill primary" onclick={() => openCombine(suggestion.rows)}>Combine</button>
+            <span class="suggest-text">
+                Show “{suggestion.name}” {suggestion.rows.map((r) => typeLabel(byKey.get(r.parts[0])?.type)).join(' and ')} as one row?
+            </span>
+            <button class="suggest-go" onclick={() => openCombine(suggestion.rows)}>Combine</button>
+            <button class="suggest-later" aria-label="Not now" title="Not Now" onclick={() => homeLayout.dismissSuggestion(suggestion.id)}>
+                <Icon name="close" size={12} />
+            </button>
         </div>
     {/if}
 
@@ -287,7 +292,7 @@
                 </div>
                 <div class="text">
                     <span class="name">Shows</span>
-                    <span class="detail">The large picture at the top of Home, from one of its rows.</span>
+                    <span class="detail">The large picture at the top of Home. First Row uses the first row after Continue Watching.</span>
                 </div>
                 <PopupButton label="Banner shows" value={bannerKey} options={bannerOptions} onchange={(v) => homeLayout.setBanner(rows, v || null)} />
             </div>
@@ -447,33 +452,44 @@
     .suggest {
         display: flex;
         align-items: center;
-        gap: 14px;
-        margin-bottom: 28px;
-        padding: 14px 14px 14px 16px;
-        border-radius: var(--radius-l);
-        background: linear-gradient(135deg, rgb(109 74 240 / 0.22), rgb(45 140 240 / 0.12));
-        border: 1px solid rgb(109 74 240 / 0.35);
-    }
-    .suggest-icon {
-        display: grid;
-        place-items: center;
-        flex: none;
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        background: rgb(109 74 240 / 0.35);
-        color: white;
+        gap: 4px;
+        margin: -8px 0 24px 4px;
+        color: var(--label-2);
+        font-size: 14px;
     }
     .suggest-text {
         flex: 1;
         min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
     }
-    .suggest-text span {
-        font-size: 13px;
-        color: var(--label-2);
+    .suggest button {
+        height: 32px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        cursor: pointer;
+    }
+    .suggest-go {
+        padding: 0 12px;
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+    .suggest-later {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        color: var(--label-3);
+    }
+    .suggest button:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
+    @media (pointer: coarse) {
+        .suggest button {
+            height: 44px;
+        }
+        .suggest-later {
+            width: 44px;
+        }
     }
 
     /* Sections */
@@ -855,9 +871,6 @@
         .art {
             display: none;
         }
-        .suggest {
-            flex-wrap: wrap;
-        }
     }
     @media (prefers-reduced-motion: reduce) {
         .row,
@@ -871,19 +884,8 @@
             animation: none;
         }
     }
-    /* Phones: the suggestion stacks (icon and text, then its buttons); the
-       tab bar replaces the back link. */
+    /* Phones: the tab bar replaces the back link. */
     @media (max-width: 700px) {
-        .suggest {
-            flex-wrap: wrap;
-        }
-        .suggest-text {
-            flex: 1 1 calc(100% - 60px);
-        }
-        .suggest .pill {
-            flex: 1;
-            justify-content: center;
-        }
         .back {
             display: none;
         }

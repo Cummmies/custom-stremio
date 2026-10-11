@@ -3,6 +3,9 @@
     import { onMount } from 'svelte';
     import { app } from '$lib/app.svelte';
     import { libraryItemPreview } from '$lib/library';
+    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { lb } from '$lib/lightboxd/api';
+    import { mergeContinueWatching, type TrackerContinue } from '$lib/continueWatching';
     import { isTV } from '$lib/platform';
     import { core } from '$lib/core';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
@@ -47,7 +50,23 @@
         return c?.content?.type === 'Ready' ? c.content.content : [];
     };
 
-    const cwItems = $derived((continueWatching?.items ?? []).filter((i) => !type || i.type === type));
+    // Continue Watching: Stremio's, with what the tracker knows folded in
+    // (lib/continueWatching.ts). Looked up again when the app comes back.
+    let trackerContinue = $state<TrackerContinue | null>(null);
+    $effect(() => {
+        if (!lightboxd.ready) {
+            trackerContinue = null;
+            return;
+        }
+        const load = () => lb.continueWatching().then((res) => res && (trackerContinue = res));
+        void load();
+        const onVisible = () => document.visibilityState === 'visible' && load();
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    });
+    const cwItems = $derived(
+        mergeContinueWatching(continueWatching?.items ?? [], trackerContinue).filter((i) => !type || i.type === type)
+    );
 
     // Rows in the order set in Customize Home (per profile): hidden ones left out,
     // renamed and merged ones as set. Movies / Series keep only their own catalogs.
@@ -70,9 +89,10 @@
             .filter((r) => r.special || r.indices.length > 0)
     );
 
-    // Hero: the titles of the row chosen in Customize Home, else the first
-    // loaded catalog's (for Home, favor movies then series). Only titles with
-    // a picture wide enough for it.
+    // Hero: the titles of the row chosen in Customize Home, else (First Row)
+    // the first row on Home, in its order, that has any: not Continue Watching,
+    // which is right below it (it can be chosen). Only titles with a picture
+    // wide enough for it.
     const bannerRow = $derived(homeLayout.layout.banner ? resolved.find((r) => r.key === homeLayout.layout.banner) : undefined);
     const bannerParts = $derived(bannerRow && bannerRow.kind !== 'special' ? bannerRow.parts.join('\n') : '');
     /** The chosen row's titles, fetched from its addon (it may be far down, not loaded yet). */
@@ -110,8 +130,12 @@
             bannerRow?.kind === 'special' ? cwItems.map((i) => libraryItemPreview(i) as MetaItemPreview) : bannerFetched
         ).filter((m) => (!type || m.type === type) && backgroundOf(m));
         if (chosen.length) return chosen.slice(0, 6);
-        const first = ofType.find(({ index }) => readyItems(index).length > 0);
-        return first ? readyItems(first.index).filter((m) => backgroundOf(m)).slice(0, 6) : [];
+        for (const r of rows) {
+            if (r.special) continue;
+            const items = interleave(r.indices.map(readyItems)).filter((m) => backgroundOf(m));
+            if (items.length) return items.slice(0, 6);
+        }
+        return [];
     });
 
     const tiles = $derived(

@@ -1,4 +1,6 @@
 <script lang="ts">
+    // Nothing to show yet: a plain symbol, a title and a line of what to do,
+    // as Apple's "content unavailable" view (no badge or card around it).
     import type { Snippet } from 'svelte';
     import Icon, { type IconName } from './Icon.svelte';
 
@@ -6,7 +8,7 @@
 </script>
 
 <div class="empty">
-    <div class="icon"><Icon name={icon} size={28} /></div>
+    <div class="icon"><Icon name={icon} size={40} /></div>
     <h2>{title}</h2>
     {#if children}<div class="body">{@render children()}</div>{/if}
 </div>
@@ -21,19 +23,13 @@
         padding: 12vh var(--gutter);
     }
     .icon {
-        display: grid;
-        place-items: center;
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: var(--fill);
-        color: var(--label-2);
-        margin-bottom: 6px;
+        color: var(--label-3);
+        margin-bottom: 4px;
     }
     h2 {
         margin: 0;
         font-family: var(--font-display);
-        font-size: var(--text-title2);
+        font-size: var(--text-title3);
         font-weight: 600;
     }
     .body {

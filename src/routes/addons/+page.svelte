@@ -7,6 +7,7 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
+    import { isInternalAddon } from '$lib/internalAddons';
 
     type Source = 'installed' | 'official' | 'community';
     const sources: { id: Source; label: string }[] = [
@@ -43,7 +44,8 @@
     });
     $effect(() => () => core.dispatch({ action: 'Unload' }, 'remote_addons'));
 
-    const installedList = $derived(app.ctx?.profile.addons ?? []);
+    // The app's own (its Home rows, settings sync) aren't addons to manage.
+    const installedList = $derived((app.ctx?.profile.addons ?? []).filter((a) => !isInternalAddon(a.manifest.id)));
     const installedUrls = $derived(new Set(installedList.map((a) => a.transportUrl)));
 
     const remoteContent = $derived(remote?.catalog?.content ?? null);
