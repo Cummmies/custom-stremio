@@ -40,6 +40,7 @@
     import { lb, today, type BackupConflict } from '$lib/tracker/api';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
+    import type { IconName } from '$lib/components/Icon.svelte';
 
     const settings = $derived(app.ctx?.profile.settings ?? null);
     const myProfile = $derived(profiles.get(app.user?._id));
@@ -303,12 +304,109 @@
         const problem = hotkeys.reset(action);
         hotkeyError = problem ? { action: action ?? null, text: problem } : null;
     }
+
+    // --- PC and TV: a sidebar of sections, one shown at a time (as macOS's
+    // System Settings and tvOS's Settings). The sidebar is read from the
+    // sections showing on this device, so each keeps its own rules. On a TV,
+    // moving through the sidebar shows each section without a press. Phones:
+    // one page, as iOS Settings. ---
+    const ICONS: Record<string, IconName> = {
+        Account: 'user',
+        Playback: 'play',
+        'Subtitle Style': 'captions',
+        Video: 'film',
+        'Easy Mode': 'star',
+        Integrations: 'puzzle',
+        Anime: 'tv',
+        Notifications: 'bell',
+        Data: 'sort',
+        'Streaming Server': 'link',
+        Display: 'tv',
+        Home: 'home',
+        'Keyboard Shortcuts': 'grip',
+        Updates: 'replay',
+        Privacy: 'eyeOff',
+    };
+    const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const wideQuery = typeof matchMedia !== 'undefined' ? matchMedia('(min-width: 980px)') : null;
+    let wide = $state(wideQuery?.matches ?? false);
+    $effect(() => {
+        const on = () => (wide = wideQuery?.matches ?? false);
+        wideQuery?.addEventListener('change', on);
+        return () => wideQuery?.removeEventListener('change', on);
+    });
+    const twoPane = $derived(isTV || wide);
+
+    let panesEl = $state<HTMLElement>();
+    let paneList = $state<{ key: string; title: string }[]>([]);
+    const PANE_KEY = 'settings:pane';
+    function firstPane() {
+        const hash = typeof location !== 'undefined' ? location.hash.slice(1) : '';
+        if (hash) return hash;
+        try {
+            return sessionStorage.getItem(PANE_KEY) ?? '';
+        } catch {
+            return '';
+        }
+    }
+    let pane = $state(firstPane());
+    $effect(() => {
+        const el = panesEl;
+        if (!el) return;
+        const read = () => {
+            const found = [...el.querySelectorAll<HTMLElement>(':scope > section')].map((sec) => {
+                const title = sec.querySelector('h2')?.textContent?.trim() ?? '';
+                sec.dataset.pane = sec.id || slug(title);
+                return { key: sec.dataset.pane, title };
+            });
+            if (found.map((f) => f.key).join() !== paneList.map((f) => f.key).join()) paneList = found;
+        };
+        read();
+        const watch = new MutationObserver(read);
+        watch.observe(el, { childList: true });
+        return () => watch.disconnect();
+    });
+    /** The section showing: the one chosen, else the first there is. */
+    const shownPane = $derived(paneList.some((p) => p.key === pane) ? pane : (paneList[0]?.key ?? ''));
+    $effect(() => {
+        const el = panesEl;
+        void paneList;
+        if (!el) return;
+        for (const sec of el.querySelectorAll<HTMLElement>(':scope > section')) sec.hidden = twoPane && sec.dataset.pane !== shownPane;
+    });
+    function choose(key: string) {
+        pane = key;
+        try {
+            sessionStorage.setItem(PANE_KEY, key);
+        } catch {
+            /* remembered for this visit only */
+        }
+    }
 </script>
 
 <svelte:head><title>Settings · Stremio</title></svelte:head>
 
-<div class="page">
+<div class="page" class:two-pane={twoPane}>
     <h1>Settings</h1>
+
+    {#if twoPane}
+        <nav class="sidebar" aria-label="Settings sections">
+            {#each paneList as p (p.key)}
+                <button
+                    class="side-item"
+                    class:on={p.key === shownPane}
+                    aria-current={p.key === shownPane ? 'page' : undefined}
+                    onclick={() => choose(p.key)}
+                    onfocus={() => isTV && choose(p.key)}
+                >
+                    <Icon name={ICONS[p.title] ?? 'gear'} size={18} />
+                    <span>{p.title}</span>
+                </button>
+            {/each}
+        </nav>
+    {/if}
+
+    <div class="panes" bind:this={panesEl}>
 
     <section>
         <h2>Account</h2>
@@ -444,7 +542,7 @@
                 <div class="row">
                     <div>
                         <div class="title">Skip intros and recaps automatically</div>
-                        <div class="sub">When their timing is known. Otherwise a Skip button appears, and S skips anytime.</div>
+                        <div class="sub">When their timing is known. Otherwise a Skip button appears{isDesktop ? ', and S skips anytime' : ''}.</div>
                     </div>
                     <Toggle label="Skip intros and recaps automatically" checked={playerPrefs.autoSkip} onchange={(v) => (playerPrefs.autoSkip = v)} />
                 </div>
@@ -846,7 +944,7 @@
                     </span>
                     <span class="keys">
                         {#if !hotkeys.isDefault(action)}
-                            <button class="link" onclick={() => resetHotkey(action)} title="Back to the original key">Reset</button>
+                            <button class="text-link" onclick={() => resetHotkey(action)} title="Back to the original key">Reset</button>
                         {/if}
                         <button
                             class="key-button"
@@ -943,6 +1041,8 @@
         </div>
     </section>
 
+    </div>
+
     <p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>
 </div>
 
@@ -951,6 +1051,72 @@
         max-width: 760px;
         margin: 0 auto;
         padding: calc(var(--nav-h) + 28px) var(--gutter) 64px;
+    }
+    /* PC and TV: the sidebar beside the section it shows. */
+    .page.two-pane {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        column-gap: 48px;
+        max-width: 1180px;
+    }
+    .two-pane h1 {
+        grid-column: 1 / -1;
+    }
+    .two-pane .panes,
+    .two-pane .about {
+        grid-column: 2;
+        min-width: 0;
+    }
+    .sidebar {
+        position: sticky;
+        top: calc(var(--nav-h) + 20px);
+        align-self: start;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .side-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: var(--radius);
+        background: transparent;
+        color: var(--label-2);
+        font: inherit;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+        transition:
+            background var(--fast),
+            color var(--fast);
+    }
+    .side-item:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
+    /* The section showing: as the top bar's chosen tab. */
+    .side-item.on {
+        background: var(--label);
+        color: var(--bg);
+    }
+    .side-item:focus-visible {
+        outline: 2px solid var(--accent-hover);
+        outline-offset: 2px;
+    }
+    /* The section's name heads its page. */
+    .two-pane section h2 {
+        margin: 0 0 16px 2px;
+        font-family: var(--font-display);
+        font-size: var(--text-title2);
+        font-weight: 700;
+        color: var(--label);
+    }
+    :global(html.tv) .side-item {
+        min-height: 52px;
+        font-size: 18px;
     }
     h1 {
         margin: 0 0 28px;
@@ -1177,13 +1343,13 @@
         border: 1px dashed var(--accent);
         color: var(--label);
     }
-    .link {
+    .text-link {
         all: unset;
         font-size: 12px;
         color: var(--label-3);
         cursor: pointer;
     }
-    .link:hover {
+    .text-link:hover {
         color: var(--label);
     }
     .hotkey-error {
