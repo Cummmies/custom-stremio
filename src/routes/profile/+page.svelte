@@ -6,7 +6,7 @@
     import { app } from '$lib/app.svelte';
     import { tracker } from '$lib/tracker.svelte';
     import { profiles } from '$lib/profiles.svelte';
-    import { lb, type Profile, type ProfileFields } from '$lib/tracker/api';
+    import { lb, type MediaCrop, type Profile, type ProfileFields } from '$lib/tracker/api';
     import ProfileView from '$lib/components/profile/ProfileView.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
 
@@ -26,10 +26,13 @@
         const uid = app.user?._id;
         const saved = profiles.get(uid);
         if (!uid || !saved) return;
-        const patch: { name?: string; avatar?: string } = {};
+        const patch: { name?: string; avatar?: string; avatarCrop?: MediaCrop } = {};
         if (p.name && p.name !== saved.name) patch.name = p.name;
         // (A video picture stays on the profile; the app's small picture is a still.)
         if (!saved.avatar && p.avatar && !/\.(mp4|webm|mov)$/i.test(p.avatar)) patch.avatar = p.avatar;
+        // The same picture: its crop as the profile has it (set on another device, or the website).
+        if ((patch.avatar ?? saved.avatar) === p.avatar && JSON.stringify(saved.avatarCrop ?? null) !== JSON.stringify(p.avatar_crop ?? null))
+            patch.avatarCrop = p.avatar_crop ?? undefined;
         if (Object.keys(patch).length) profiles.update(uid, patch);
     }
 
@@ -54,10 +57,13 @@
         // The app's own copy of the name and picture follows.
         const uid = app.user?._id;
         if (uid && profiles.get(uid)) {
-            const patch: { name?: string; avatar?: string } = {};
+            const patch: { name?: string; avatar?: string; avatarCrop?: MediaCrop } = {};
             if (fields.name !== undefined) patch.name = res.data.name;
             // The saved picture's link, not the file: a moving one can be megabytes.
-            if (fields.avatar !== undefined) patch.avatar = (fields.avatar && res.data.avatar) || undefined;
+            if (fields.avatar !== undefined) {
+                patch.avatar = (fields.avatar && res.data.avatar) || undefined;
+                patch.avatarCrop = (fields.avatar && res.data.avatar_crop) || undefined;
+            }
             if (Object.keys(patch).length) profiles.update(uid, patch);
         }
         return true;

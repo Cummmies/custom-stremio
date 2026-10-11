@@ -23,6 +23,7 @@ import { homeLayout, type Layout } from '$lib/homeLayout.svelte';
 import { playerPrefs, type DevicePrefs, type SyncedPrefs } from '$lib/player/prefs.svelte';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
 import { tracker } from '$lib/tracker.svelte';
+import type { MediaCrop } from '$lib/tracker/api';
 import { NAME_BEFORE } from '$lib/serverIds';
 
 /** Which kind of device this is, for device settings. */
@@ -46,7 +47,7 @@ type Payload = {
      * `updated` stands for all of them).
      */
     stamps?: Partial<Record<Part, number>>;
-    profile?: { name: string; color: string; avatar?: string };
+    profile?: { name: string; color: string; avatar?: string; avatarCrop?: MediaCrop };
     home?: Layout;
     prefs?: SyncedPrefs;
     /** This profile's tracker connection (tracker.svelte.ts); older data has only the server. */
@@ -84,9 +85,12 @@ function decode(s: string | null | undefined): Payload | null {
     }
 }
 
-/** Profile pictures are stored at 256px; the synced copy is smaller. */
+/** Profile pictures are stored at 256px; the synced copy is smaller. A link
+ *  (the profile's picture on the server) goes as it is: it's short, loads on
+ *  every device, keeps moving, and its crop still fits it. */
 const shrunk = new Map<string, Promise<string>>();
 function smallAvatar(src: string): Promise<string> {
+    if (!src.startsWith('data:')) return Promise.resolve(src);
     let p = shrunk.get(src);
     if (!p) {
         p = new Promise((resolve) => {
@@ -97,7 +101,11 @@ function smallAvatar(src: string): Promise<string> {
                 const ctx = canvas.getContext('2d')!;
                 ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(img, 0, 0, AVATAR_PX, AVATAR_PX);
-                resolve(canvas.toDataURL('image/jpeg', 0.8));
+                try {
+                    resolve(canvas.toDataURL('image/jpeg', 0.8));
+                } catch {
+                    resolve(src); // a picture the canvas may not read back: sent as it is
+                }
             };
             img.onerror = () => resolve(src);
             img.src = src;
@@ -216,7 +224,7 @@ class CloudSync {
     #parts(uid: string): Record<Part | 'devices', string | null> {
         const p = profiles.get(uid);
         return {
-            profile: p ? JSON.stringify({ name: p.name, color: p.color, avatar: p.avatar }) : null,
+            profile: p ? JSON.stringify({ name: p.name, color: p.color, avatar: p.avatar, avatarCrop: p.avatarCrop }) : null,
             home: JSON.stringify($state.snapshot(homeLayout.layout)),
             prefs: JSON.stringify(playerPrefs.synced()),
             // Always a value, so connecting (from none) counts as a change to send.
@@ -263,7 +271,8 @@ class CloudSync {
                 if (name === nameFromEmail(here.email) && here.name !== name) name = here.name;
                 resend = avatar !== remote.profile.avatar || name !== remote.profile.name;
             }
-            profiles.update(uid, avatar ? { name, color, avatar } : { name, color, avatar: undefined });
+            const avatarCrop = avatar && avatar === remote.profile.avatar ? remote.profile.avatarCrop : here.avatar === avatar ? here.avatarCrop : undefined;
+            profiles.update(uid, avatar ? { name, color, avatar, avatarCrop } : { name, color, avatar: undefined, avatarCrop: undefined });
             mine.profile = resend ? Date.now() : theirs.profile;
             took = true;
         }

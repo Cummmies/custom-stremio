@@ -322,6 +322,7 @@
                 </div>
                 <div class="edit-col">
                     <h3>Who Can See Your Profile</h3>
+                    <div class="privacy">
                     <Segmented
                         label="Who can see your profile"
                         fill
@@ -336,6 +337,7 @@
                         <div class="row"><span>Show Scores</span><Toggle label="Show scores" bind:checked={shareScores} /></div>
                         <div class="row"><span>Show Reviews</span><Toggle label="Show reviews" bind:checked={shareReviews} /></div>
                         <div class="row"><span>Show Watch Dates</span><Toggle label="Show watch dates" bind:checked={shareDates} /></div>
+                    </div>
                     </div>
                     <p class="note">To people who can see your profile, and on titles your friends look at.</p>
                 </div>
@@ -738,18 +740,35 @@
     }
 
     /* Editing: two groups side by side, as Settings' rows. */
-    /* Two equal halves across the column, lined up with the favorites under them. */
+    /* Two equal halves across the column, lined up with the favorites under
+       them, on shared rows (heading, groups, note): the groups end level. */
     .edit-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 24px clamp(24px, 3vw, 48px);
+        grid-template-rows: auto auto auto;
+        grid-auto-flow: column;
+        gap: 10px clamp(24px, 3vw, 48px);
         margin-top: 8px;
     }
     .edit-col {
+        display: contents;
+    }
+    .privacy {
         display: flex;
         flex-direction: column;
         gap: 10px;
         min-width: 0;
+    }
+    /* The profile group fills its row; the bio takes the extra room. */
+    .edit-col > .group {
+        display: flex;
+        flex-direction: column;
+    }
+    .edit-col > .group .bio-row {
+        flex: 1;
+    }
+    .bio-row textarea {
+        align-self: stretch;
     }
     .group {
         border: 1px solid var(--separator);
@@ -1016,7 +1035,11 @@
     }
     @media (max-width: 800px) {
         .edit-grid {
-            grid-template-columns: minmax(0, 1fr);
+            display: flex;
+            flex-direction: column;
+        }
+        .edit-col + .edit-col h3 {
+            margin-top: 14px;
         }
     }
     /* Phones: the numbers under the bio, spread across; five favorites fill the width. */

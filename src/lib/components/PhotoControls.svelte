@@ -27,10 +27,15 @@
         if (file) cropping = file;
     }
     async function setPicture(avatar: string | undefined, crop: MediaCrop | null = null) {
-        if (!tracker.ready) return profiles.update(uid, { avatar });
+        if (!tracker.ready) return profiles.update(uid, { avatar, avatarCrop: (avatar && crop) || undefined });
         const res = await lb.updateProfile({ avatar: avatar ?? '', ...(avatar && crop ? { avatar_crop: crop } : {}) });
         // Kept as the saved picture's link (a moving one can be megabytes); the file only if saving failed.
-        profiles.update(uid, { avatar: 'data' in res ? (res.data.avatar ?? undefined) : avatar });
+        profiles.update(
+            uid,
+            'data' in res
+                ? { avatar: res.data.avatar ?? undefined, avatarCrop: res.data.avatar_crop ?? undefined }
+                : { avatar, avatarCrop: (avatar && crop) || undefined }
+        );
         if (!('data' in res)) error = 'Saved in the app; your profile didn’t take it. Try again in a moment.';
     }
 

@@ -4,6 +4,7 @@
 // signs in with that key. We never "log out" to switch, because Stremio's logout
 // ends the session on the server and the saved key would stop working.
 import { core } from '$lib/core';
+import type { MediaCrop } from '$lib/tracker/api';
 
 export type SavedProfile = {
     uid: string;
@@ -11,8 +12,10 @@ export type SavedProfile = {
     key: string;
     name: string;
     color: string;
-    /** Uploaded photo as a small JPEG data URL (stored on this PC only). */
+    /** Uploaded photo as a small JPEG data URL, or the profile picture's link. */
     avatar?: string;
+    /** A moving profile picture (kept uncropped): the part of it to show. */
+    avatarCrop?: MediaCrop;
     lastUsed: number;
 };
 
@@ -114,8 +117,13 @@ class Profiles {
         return uid ? (this.list.find((p) => p.uid === uid) ?? null) : null;
     }
 
-    update(uid: string, patch: Partial<Pick<SavedProfile, 'name' | 'color' | 'avatar'>>) {
-        this.list = this.list.map((p) => (p.uid === uid ? { ...p, ...patch } : p));
+    update(uid: string, patch: Partial<Pick<SavedProfile, 'name' | 'color' | 'avatar' | 'avatarCrop'>>) {
+        this.list = this.list.map((p) => {
+            if (p.uid !== uid) return p;
+            // A different picture without a crop of its own shows whole.
+            const crop = 'avatar' in patch && patch.avatar !== p.avatar && !('avatarCrop' in patch) ? { avatarCrop: undefined } : {};
+            return { ...p, ...crop, ...patch };
+        });
         this.#save();
     }
 

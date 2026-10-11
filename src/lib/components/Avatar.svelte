@@ -1,6 +1,8 @@
 <script lang="ts">
-    // A profile picture: the uploaded photo, or the name's initial on the profile color.
+    // A profile picture: the uploaded photo (a moving one shown at its crop,
+    // as on the profile), or the name's initial on the profile color.
     import type { SavedProfile } from '$lib/profiles.svelte';
+    import ProfileMedia from './profile/ProfileMedia.svelte';
 
     let {
         profile,
@@ -8,7 +10,7 @@
         size = 36,
         rounded = false,
     }: {
-        profile: Pick<SavedProfile, 'name' | 'color' | 'avatar'> | null | undefined;
+        profile: (Pick<SavedProfile, 'name' | 'color' | 'avatar'> & Partial<Pick<SavedProfile, 'avatarCrop'>>) | null | undefined;
         /** Used when there's no saved profile yet (e.g. just signed in). */
         fallbackName?: string;
         size?: number;
@@ -26,7 +28,9 @@
     style:--c={profile?.color ?? 'var(--accent)'}
     aria-hidden="true"
 >
-    {#if profile?.avatar}
+    {#if profile?.avatar && profile.avatarCrop}
+        <ProfileMedia src={profile.avatar} crop={profile.avatarCrop} />
+    {:else if profile?.avatar}
         <img src={profile.avatar} alt="" draggable="false" />
     {:else}
         <span class="initial">{name.charAt(0).toUpperCase()}</span>
