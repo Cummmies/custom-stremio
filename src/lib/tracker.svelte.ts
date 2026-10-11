@@ -31,7 +31,7 @@ import { untrack } from 'svelte';
 import { app } from '$lib/app.svelte';
 import { core } from '$lib/core';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
-import { NAME_BEFORE, TRACKER_LOCAL_HOST } from '$lib/serverIds';
+import { NAME_BEFORE, TRACKER_LOCAL_HOST, TRACKER_ROWS_ADDON } from '$lib/serverIds';
 
 /** What kind of device this is, for the tracker ("windows", "ios", "tv"). */
 const PLATFORM = isDesktop ? 'windows' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
@@ -266,10 +266,14 @@ class Tracker {
             });
             // Once connected and the account's addons have loaded (they can
             // arrive after the connection check): move localhost rows over.
+            // Whenever the account's addons change (pulled from Stremio, which
+            // can bring older links back): only the rows link in use stays.
             $effect(() => {
+                void app.ctx?.profile.addons;
                 if (this.status === 'ok' && this.rowsInstalled)
                     untrack(() => {
                         if (this.#uid) this.#moveRowsToShared(this.#uid);
+                        if (this.saved?.addonUrl) this.#dropOtherRows(this.saved.addonUrl);
                         void this.#updateRows();
                     });
             });
@@ -590,6 +594,20 @@ class Tracker {
         return addons?.find((a) => a.transportUrl === url) ?? null;
     }
 
+    /**
+     * Older links to the rows (another address, an earlier token) left
+     * installed in the account: each would add the same rows again. Only the
+     * one in use stays.
+     */
+    #dropOtherRows(keep: string) {
+        const addons = (app.ctx?.profile.addons ?? []) as AddonDescriptor[];
+        for (const a of addons) {
+            if ((a.manifest as { id?: string } | null)?.id === TRACKER_ROWS_ADDON && a.transportUrl !== keep) {
+                core.dispatch({ action: 'Ctx', args: { action: 'UninstallAddon', args: a } });
+            }
+        }
+    }
+
     #uninstallRows() {
         const installed = this.saved?.addonUrl ? this.#installedRows(this.saved.addonUrl) : null;
         if (installed) core.dispatch({ action: 'Ctx', args: { action: 'UninstallAddon', args: installed } });
@@ -628,6 +646,7 @@ class Tracker {
         if (uid && this.saved) this.#publish(uid, this.saved);
         const addon: AddonDescriptor = { transportUrl: url, manifest, flags: { official: false, protected: false } };
         core.dispatch({ action: 'Ctx', args: { action: 'InstallAddon', args: addon } });
+        this.#dropOtherRows(url);
         return true;
     }
 

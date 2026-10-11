@@ -176,8 +176,9 @@ class HomeLayout {
             }
         }
         // New rows: the built-in ones first (their usual place), then catalogs in addon order.
-        const fresh = ['cw', ...catalogs.map(catalogKey)].filter((k) => !seen.has(k));
-        for (const key of fresh) {
+        // The same catalog twice (an addon installed twice) is one row.
+        for (const key of ['cw', ...catalogs.map(catalogKey)]) {
+            if (seen.has(key)) continue;
             const row = make({ key });
             if (!row) continue;
             if (key === 'cw' && !this.layout.order.length) rows.unshift(row);
