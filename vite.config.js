@@ -10,7 +10,10 @@ const coreVersion = JSON.parse(readFileSync(new URL("./node_modules/@stremio/str
 // What's New (src/lib/whatsNew.svelte.ts): this build's commit time, and the
 // latest commits' subjects (written for people), minus housekeeping. The
 // workflows check out enough history for it (fetch-depth).
-const SKIP_SUBJECT = /^(merge|revert|ci|docs?|tests?|chore|build|wip|temp)\b|\[skip/i;
+const SKIP_SUBJECT = /^(merge|revert|ci|docs?|notes?|tests?|chore|build|wip|temp)\b|\[skip/i;
+// The tracker behind the app has no name to the people using it
+// (docs/lightboxd.md): older subjects that say it stay out.
+const INTERNAL_NAME = /lightboxd/i;
 function gitChanges() {
   try {
     const git = (/** @type {string} */ args) => execSync(`git ${args}`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
@@ -21,7 +24,7 @@ function gitChanges() {
         const [at, text] = line.split("\x1f");
         return { at: Number(at), text: (text ?? "").trim() };
       })
-      .filter((c) => c.at && c.text && !SKIP_SUBJECT.test(c.text));
+      .filter((c) => c.at && c.text && !SKIP_SUBJECT.test(c.text) && !INTERNAL_NAME.test(c.text));
     const at = Number(git("log -1 --format=%ct").trim()) || 0;
     return { at, changes };
   } catch {
