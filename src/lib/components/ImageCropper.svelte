@@ -2,16 +2,25 @@
     // Move and Scale (as iOS has it after choosing a photo): the picture fills
     // a frame, a circle for a profile picture, the banner's own shape for a
     // banner. Drag to move it; pinch, scroll or the slider to scale it; arrow
-    // keys move and + / - scale. Choose saves exactly what's in the frame.
-    // (Still pictures only: a moving one goes up as it is; lib/movingImage.ts.)
+    // keys move and + / - scale. Choose gives what's in the frame: a still
+    // picture cut to it, or a moving one (GIF, animated WebP) exactly as it is
+    // with the frame as its crop (never converted; lib/movingImage.ts).
     import Icon from './Icon.svelte';
+    import type { MediaCrop } from '$lib/tracker/api';
+    import { TOO_BIG, fitsUpload, isMoving, toDataUrl } from '$lib/movingImage';
 
     let {
         file,
         shape,
         onchoose,
         oncancel,
-    }: { file: File; shape: 'circle' | 'banner'; onchoose: (dataUrl: string) => void; oncancel: () => void } = $props();
+    }: {
+        file: File;
+        shape: 'circle' | 'banner';
+        /** url: a data: URL; crop: the frame, for a moving picture kept whole (else null). */
+        onchoose: (result: { url: string; crop: MediaCrop | null }) => void;
+        oncancel: () => void;
+    } = $props();
 
     /** The website's banner, 1120 by 220. */
     const ASPECT = $derived(shape === 'circle' ? 1 : 1120 / 220);
@@ -113,13 +122,25 @@
         else if (e.key === '-') scaleTo(zoom / 1.1);
     }
 
-    function choose() {
-        if (!bitmap) return;
+    let working = $state(false);
+    let error = $state<string | null>(null);
+    async function choose() {
+        if (!bitmap || working) return;
         const k = base * zoom;
         const sx = -ox / k;
         const sy = -oy / k;
         const sw = fw / k;
         const sh = fh / k;
+        if (await isMoving(file).catch(() => false)) {
+            if (!fitsUpload(file)) return void (error = TOO_BIG);
+            working = true;
+            try {
+                const crop = { x: sx / bitmap.width, y: sy / bitmap.height, w: sw / bitmap.width, h: sh / bitmap.height };
+                return onchoose({ url: await toDataUrl(file), crop });
+            } finally {
+                working = false;
+            }
+        }
         const outW = shape === 'circle' ? 400 : Math.round(Math.min(2560, Math.max(1120, sw)));
         const outH = Math.round(outW / ASPECT);
         const canvas = document.createElement('canvas');
@@ -128,7 +149,7 @@
         const ctx = canvas.getContext('2d')!;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, outW, outH);
-        onchoose(canvas.toDataURL('image/jpeg', 0.88));
+        onchoose({ url: canvas.toDataURL('image/jpeg', 0.88), crop: null });
     }
 
     let dialog = $state<HTMLDialogElement>();
@@ -187,9 +208,10 @@
             <button class="icon" onclick={() => scaleTo(zoom * 1.25)} aria-label="Larger" disabled={zoom >= MAX_ZOOM}><Icon name="plus" size={16} /></button>
         </div>
 
+        {#if error}<p class="note" role="alert">{error}</p>{/if}
         <footer>
             <button class="btn" onclick={oncancel}>Cancel</button>
-            <button class="btn primary" onclick={choose} disabled={!bitmap}>Choose</button>
+            <button class="btn primary" onclick={choose} disabled={!bitmap || working}>Choose</button>
         </footer>
     </div>
 </dialog>
@@ -342,6 +364,11 @@
         box-shadow:
             0 1px 4px rgb(0 0 0 / 0.45),
             0 0 0 4px rgb(255 255 255 / 0.35);
+    }
+    .note {
+        margin: 0;
+        font-size: 13px;
+        color: var(--bad-text);
     }
     footer {
         display: flex;

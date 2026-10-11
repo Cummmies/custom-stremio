@@ -11,7 +11,7 @@
     // ImageCropper), and Favorites shows its five slots (tap one to choose,
     // drag or arrow keys to reorder). Cancel and Save take Edit Profile's place.
     import { tick, untrack } from 'svelte';
-    import type { Profile, ProfileFields, Visibility } from '$lib/tracker/api';
+    import type { MediaCrop, Profile, ProfileFields, Visibility } from '$lib/tracker/api';
     import { day, score, type LibraryItem } from '$lib/tracker/api';
     import PosterCard from '$lib/components/PosterCard.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -21,7 +21,7 @@
     import ProfileMedia from './ProfileMedia.svelte';
     import FavoritePicker from './FavoritePicker.svelte';
     import ImageCropper from '$lib/components/ImageCropper.svelte';
-    import { PICTURE_TYPES, TOO_BIG, fitsUpload, isMoving, toDataUrl } from '$lib/movingImage';
+    import { PICTURE_TYPES } from '$lib/movingImage';
     import { isTV } from '$lib/platform';
 
     let {
@@ -54,6 +54,9 @@
     /** A new picture/banner (data URL), "" to remove, undefined: unchanged. */
     let avatar = $state<string | undefined>(undefined);
     let banner = $state<string | undefined>(undefined);
+    /** For a new moving picture: the part of it to show (it goes up uncropped). */
+    let avatarCrop = $state<MediaCrop | null>(null);
+    let bannerCrop = $state<MediaCrop | null>(null);
     /** The favorites in order; the empty slots always come last. */
     let slots = $state<LibraryItem[]>([]);
 
@@ -67,6 +70,7 @@
         shareReviews = p.share_reviews ?? true;
         shareDates = p.share_dates ?? true;
         avatar = banner = undefined;
+        avatarCrop = bannerCrop = null;
         slots = [...(p.favorites ?? [])].slice(0, SLOTS);
         editing = true;
     }
@@ -84,6 +88,8 @@
     const shownBanner = $derived(editing && banner !== undefined ? banner || null : profile.banner);
     const shownAvatar = $derived(editing && avatar !== undefined ? avatar || null : profile.avatar);
     const cover = $derived(shownBanner ?? fallbackCover(profile));
+    const shownAvatarCrop = $derived(editing && avatar !== undefined ? avatarCrop : (profile.avatar_crop ?? null));
+    const shownBannerCrop = $derived(shownBanner ? (editing && banner !== undefined ? bannerCrop : (profile.banner_crop ?? null)) : null);
     const shownName = $derived(editing ? name : profile.name);
     const initial = $derived((shownName || profile.handle.replace(/^@/, '') || '?').charAt(0).toUpperCase());
 
@@ -103,30 +109,25 @@
         if (shareDates !== (p.share_dates ?? true)) fields.share_dates = shareDates;
         if (avatar !== undefined) fields.avatar = avatar;
         if (banner !== undefined) fields.banner = banner;
+        if (avatar && avatarCrop) fields.avatar_crop = avatarCrop;
+        if (banner && bannerCrop) fields.banner_crop = bannerCrop;
         const ids = slots.map((s) => s.id);
         if (ids.join() !== (p.favorites ?? []).map((f) => f.id).join()) fields.favorites = ids;
         if (!Object.keys(fields).length || (await onsave(fields))) editing = false;
     }
 
-    // ---- Picture and banner: chosen, then moved and scaled (ImageCropper) ----
+    // ---- Picture and banner: chosen, then moved and scaled (ImageCropper). A
+    // still one comes back cut to the frame; a moving one whole, with the frame. ----
     let cropping = $state<{ file: File; kind: 'avatar' | 'banner' } | null>(null);
-    let pickError = $state<string | null>(null);
-    /** A still picture is moved and scaled first; a moving one (GIF, animated WebP) goes up as it is. */
-    async function pickImage(e: Event, kind: 'avatar' | 'banner') {
+    function pickImage(e: Event, kind: 'avatar' | 'banner') {
         const input = e.currentTarget as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        pickError = null;
-        if (!file) return;
-        if (!(await isMoving(file).catch(() => false))) return void (cropping = { file, kind });
-        if (!fitsUpload(file)) return void (pickError = TOO_BIG);
-        const url = await toDataUrl(file);
-        if (kind === 'avatar') avatar = url;
-        else banner = url;
+        if (file) cropping = { file, kind };
     }
-    function cropped(dataUrl: string) {
-        if (cropping?.kind === 'avatar') avatar = dataUrl;
-        else banner = dataUrl;
+    function cropped({ url, crop }: { url: string; crop: MediaCrop | null }) {
+        if (cropping?.kind === 'avatar') [avatar, avatarCrop] = [url, crop];
+        else [banner, bannerCrop] = [url, crop];
         cropping = null;
     }
     let avatarInput = $state<HTMLInputElement>();
@@ -231,7 +232,7 @@
 
 <div class="profile" class:editing>
     <div class="cover" aria-hidden={!editing}>
-        {#if cover}<ProfileMedia src={cover} />{/if}
+        {#if cover}<ProfileMedia src={cover} crop={shownBannerCrop} />{/if}
     </div>
 
     {#if editing}
@@ -253,13 +254,13 @@
             <div class="avatar-wrap">
                 {#if editing}
                     <button class="avatar" onclick={() => avatarInput?.click()} aria-label={shownAvatar ? 'Change Picture' : 'Add Picture'}>
-                        {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
+                        {#if shownAvatar}<ProfileMedia src={shownAvatar} crop={shownAvatarCrop} />{:else}<span>{initial}</span>{/if}
                     </button>
                     <!-- Over the picture (outside it, so its own edge can't show through), not the ring. -->
                     <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /><span class="avatar-edit-label">Change</span></span>
                 {:else}
                     <div class="avatar" aria-hidden="true">
-                        {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
+                        {#if shownAvatar}<ProfileMedia src={shownAvatar} crop={shownAvatarCrop} />{:else}<span>{initial}</span>{/if}
                     </div>
                 {/if}
             </div>
@@ -285,7 +286,7 @@
         {/if}
 
         {#if editing}
-            {#if error || pickError}<p class="error" role="alert">{pickError ?? error}</p>{/if}
+            {#if error}<p class="error" role="alert">{error}</p>{/if}
             <div class="edit-grid">
                 <div class="edit-col">
                     <h3>Profile</h3>

@@ -1,16 +1,17 @@
 <script lang="ts">
     // One button for a profile picture: "Upload…" when there's none, otherwise
     // "Change…" with Upload New Photo / Remove Photo in the app menu. A new
-    // still picture is moved and scaled into its circle first (ImageCropper); a
-    // moving one (GIF, animated WebP) is kept as it is. It's one picture: your
-    // profile's too.
+    // picture is moved and scaled into its circle first (ImageCropper): a still
+    // one is cut to it, a moving one (GIF, animated WebP) kept whole with the
+    // circle as its crop. It's one picture: your profile's too.
     import { profiles } from '$lib/profiles.svelte';
     import { menu } from '$lib/menu.svelte';
     import { tracker } from '$lib/tracker.svelte';
     import { lb } from '$lib/tracker/api';
     import Icon from './Icon.svelte';
     import ImageCropper from './ImageCropper.svelte';
-    import { PICTURE_TYPES, TOO_BIG, fitsUpload, isMoving, toDataUrl } from '$lib/movingImage';
+    import { PICTURE_TYPES } from '$lib/movingImage';
+    import type { MediaCrop } from '$lib/tracker/api';
 
     let { uid }: { uid: string } = $props();
 
@@ -19,19 +20,15 @@
     const hasPhoto = $derived(!!profiles.get(uid)?.avatar);
 
     let cropping = $state<File | null>(null);
-    /** A still picture is moved and scaled first; a moving one (GIF, animated WebP) is kept as it is. */
-    async function onchange() {
+    function onchange() {
         const file = input?.files?.[0];
         if (input) input.value = '';
         error = null;
-        if (!file) return;
-        if (!(await isMoving(file).catch(() => false))) return void (cropping = file);
-        if (!fitsUpload(file)) return void (error = TOO_BIG);
-        setPicture(await toDataUrl(file));
+        if (file) cropping = file;
     }
-    async function setPicture(avatar: string | undefined) {
+    async function setPicture(avatar: string | undefined, crop: MediaCrop | null = null) {
         if (!tracker.ready) return profiles.update(uid, { avatar });
-        const res = await lb.updateProfile({ avatar: avatar ?? '' });
+        const res = await lb.updateProfile({ avatar: avatar ?? '', ...(avatar && crop ? { avatar_crop: crop } : {}) });
         // Kept as the saved picture's link (a moving one can be megabytes); the file only if saving failed.
         profiles.update(uid, { avatar: 'data' in res ? (res.data.avatar ?? undefined) : avatar });
         if (!('data' in res)) error = 'Saved in the app; your profile didn’t take it. Try again in a moment.';
@@ -62,7 +59,7 @@
     <ImageCropper
         file={cropping}
         shape="circle"
-        onchoose={(url) => ((cropping = null), setPicture(url))}
+        onchoose={({ url, crop }) => ((cropping = null), setPicture(url, crop))}
         oncancel={() => (cropping = null)}
     />
 {/if}

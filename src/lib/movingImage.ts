@@ -1,10 +1,11 @@
-// Moving pictures (a GIF or an animated WebP) are kept exactly as chosen: they
-// go up whole, uncropped, and show as they are (ProfileMedia). Only still
-// pictures are moved and scaled first (ImageCropper). No videos go up from the
+// Moving pictures (a GIF or an animated WebP) are never converted: they go up
+// exactly as chosen, with the part you framed in Move and Scale kept beside
+// them as a crop, and ProfileMedia shows just that part. Still pictures are
+// cut to the frame before they go up (ImageCropper). No videos go up from the
 // app; one already on a profile (from the website) still plays.
 
-/** The upload limit is 5 MB of file; a data URL is a third bigger. Leave room. */
-const MAX_BYTES = 4.5 * 1024 * 1024;
+/** The upload limit: 10 MB of file (the server's MAX_UPLOAD_BYTES). */
+const MAX_BYTES = 10 * 1024 * 1024;
 
 /** What a picture or banner can be chosen as: JPEG, PNG, WebP or GIF. */
 export const PICTURE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
@@ -29,4 +30,4 @@ export function toDataUrl(blob: Blob): Promise<string> {
 
 export const fitsUpload = (file: Blob) => file.size <= MAX_BYTES;
 
-export const TOO_BIG = 'That picture is over 5 MB. Try a smaller one.';
+export const TOO_BIG = 'That picture is over 10 MB. Try a smaller one.';

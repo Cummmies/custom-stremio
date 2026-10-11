@@ -101,6 +101,8 @@ export type EpisodeLog = { video_id: string; log_id: number; rating: number | nu
 
 export type Visibility = 'public' | 'friends' | 'private';
 export type ProfileStats = { watched: number; hours: number; average: number | null; this_year: number };
+/** The part of a moving picture to show (it's kept uncropped), in fractions of its size. */
+export type MediaCrop = { x: number; y: number; w: number; h: number };
 /** A profile: yours (is_owner, with your settings and lists), or someone's as they allow (is_private: only their card). */
 export type Profile = {
     user_id: number;
@@ -109,6 +111,8 @@ export type Profile = {
     bio: string;
     avatar: string | null;
     banner: string | null;
+    avatar_crop?: MediaCrop | null;
+    banner_crop?: MediaCrop | null;
     is_owner: boolean;
     is_private?: boolean;
     stats?: ProfileStats;
@@ -120,7 +124,8 @@ export type Profile = {
     share_reviews?: boolean;
     share_dates?: boolean;
 };
-/** What a profile edit sends: only what changes. avatar/banner: a data: URL, or "" to remove. */
+/** What a profile edit sends: only what changes. avatar/banner: a data: URL, or "" to remove;
+ *  a new one without a crop shows whole. */
 export type ProfileFields = Partial<{
     name: string;
     handle: string;
@@ -132,6 +137,8 @@ export type ProfileFields = Partial<{
     favorites: string[];
     avatar: string;
     banner: string;
+    avatar_crop: MediaCrop | null;
+    banner_crop: MediaCrop | null;
 }>;
 
 /** A watch to log or change: only what's set is sent on an edit. */
