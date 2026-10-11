@@ -1,0 +1,1 @@
+import{x as e}from"./BzPcmVv6.js";var t=0,n;function r(){t++,clearTimeout(n),t===1&&e.dispatch({action:`Load`,args:{model:`CatalogsWithExtra`,args:{extra:[]}}},`board`);let r=!1;return()=>{r||(r=!0,t--,!(t>0)&&(clearTimeout(n),n=setTimeout(()=>{t===0&&e.dispatch({action:`Unload`},`board`)},1e3)))}}export{r as t};

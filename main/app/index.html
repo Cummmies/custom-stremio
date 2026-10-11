@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <script>window.__tvEntry = {"version":1791400496,"native":3,"start":"_app/immutable/entry/start.BcrNIWc7.js","app":"_app/immutable/entry/app.DndDA9nn.js","css":["_app/immutable/assets/whatsNew.BqyFoXpU.css","_app/immutable/assets/InstallFromUrl.CKZFqRrA.css","_app/immutable/assets/Toggle.B2TQ77LL.css","_app/immutable/assets/0.CYaVbXew.css"],"script":"_app/immutable/tv/app.d5ab827db4.js"};</script>
+    <script src="./fixtures.js"></script>
+    <script src="./preview-boot.js"></script>
+    <script src="./tv-boot.js"></script>
+    <link rel="icon" href="./favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Stremio - Freedom to Stream</title>
+		
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">
+			<script>
+				{
+					__sveltekit_bsy5i7 = {
+						base: new URL('.', location).pathname.slice(0, -1)
+					};
+
+					const element = document.currentScript.parentElement;
+
+					window.__tvBoot(function (url) { return import(url); }).then(([kit, app]) => {
+						window.__tvStep('kit.start'); Promise.resolve(kit.start(app, element)).then(function () { window.__tvStep('kit started'); }, function (e) { window.__tvStep('kit.start failed: ' + (e && (e.stack || e.message) || e)); window.__tvReport('The app couldn’t start'); });
+					});
+				}
+			</script>
+		</div>
+  </body>
+</html>

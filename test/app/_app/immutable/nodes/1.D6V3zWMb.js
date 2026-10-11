@@ -1,0 +1,1 @@
+import{A as e,M as t,St as n,X as r,it as i,k as a,nt as o,rt as s,xt as c}from"../chunks/BebZwNLA.js";import"../chunks/CXnWGUKM.js";import{t as l}from"../chunks/vimUQfh4.js";var u=t(`<h1> </h1> <p> </p>`,1);function d(t,d){n(d,!0);var f=u(),p=o(f),m=s(p,!0),h=i(p,2),g=s(h,!0);r(()=>{var e;a(m,l.status),a(g,(e=l.error)==null?void 0:e.message)}),e(t,f),c()}export{d as component};

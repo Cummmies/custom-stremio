@@ -1,0 +1,1 @@
+import"../chunks/BebZwNLA.js";import"../chunks/CXnWGUKM.js";import"../chunks/Bz5zQxTL.js";import{t as e}from"../chunks/DSxLvD6B.js";function t(t){e(t,{type:`movie`})}export{t as component};

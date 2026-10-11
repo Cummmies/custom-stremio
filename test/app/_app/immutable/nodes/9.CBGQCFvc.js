@@ -1,0 +1,1 @@
+import{$ as e,A as t,J as n,M as r,b as i,kt as a,tt as o}from"../chunks/BebZwNLA.js";import"../chunks/CXnWGUKM.js";import{t as s}from"../chunks/B43eyXGV.js";import"../chunks/Bz5zQxTL.js";var c=r(`<div class="page svelte-1ce0uvz"><!></div>`);function l(r){var l=c();i(`1ce0uvz`,t=>{n(()=>{e.title=`Notifications · Stremio`})});var u=o(l);s(u,{}),a(l),t(r,l)}export{l as component};

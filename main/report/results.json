@@ -1,0 +1,858 @@
+{
+ "date": "2026-10-07T19:15:36.525Z",
+ "commit": "dd667c0437e7c028a809ce3ee9a3975fd258fef2",
+ "branch": "main",
+ "engines": [
+  {
+   "id": "tv69",
+   "label": "TV · Chromium 69 (built-in engine)"
+  },
+  {
+   "id": "tv94",
+   "label": "TV · Chromium 94 (newer engine)"
+  },
+  {
+   "id": "chrome",
+   "label": "Chrome"
+  }
+ ],
+ "shots": [
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "home",
+   "file": "shots/tv69-tv-home.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "home-slow",
+   "file": "shots/tv69-tv-home-slow.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "profiles",
+   "file": "shots/tv69-tv-profiles.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "movies",
+   "file": "shots/tv69-tv-movies.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "series",
+   "file": "shots/tv69-tv-series.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "search",
+   "file": "shots/tv69-tv-search.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "search-results",
+   "file": "shots/tv69-tv-search-results.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "movie",
+   "file": "shots/tv69-tv-movie.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "show",
+   "file": "shots/tv69-tv-show.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "library",
+   "file": "shots/tv69-tv-library.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "customize",
+   "file": "shots/tv69-tv-customize.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "addons",
+   "file": "shots/tv69-tv-addons.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "settings",
+   "file": "shots/tv69-tv-settings.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "player",
+   "file": "shots/tv69-tv-player.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "player-intro",
+   "file": "shots/tv69-tv-player-intro.jpg"
+  },
+  {
+   "engine": "tv69",
+   "device": "tv",
+   "screen": "player-next",
+   "file": "shots/tv69-tv-player-next.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "home",
+   "file": "shots/tv94-tv-home.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "home-slow",
+   "file": "shots/tv94-tv-home-slow.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "profiles",
+   "file": "shots/tv94-tv-profiles.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "movies",
+   "file": "shots/tv94-tv-movies.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "series",
+   "file": "shots/tv94-tv-series.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "search",
+   "file": "shots/tv94-tv-search.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "search-results",
+   "file": "shots/tv94-tv-search-results.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "movie",
+   "file": "shots/tv94-tv-movie.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "show",
+   "file": "shots/tv94-tv-show.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "library",
+   "file": "shots/tv94-tv-library.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "customize",
+   "file": "shots/tv94-tv-customize.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "addons",
+   "file": "shots/tv94-tv-addons.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "settings",
+   "file": "shots/tv94-tv-settings.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "player",
+   "file": "shots/tv94-tv-player.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "player-intro",
+   "file": "shots/tv94-tv-player-intro.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv",
+   "screen": "player-next",
+   "file": "shots/tv94-tv-player-next.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "home",
+   "file": "shots/tv94-tv-small-home.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "home-slow",
+   "file": "shots/tv94-tv-small-home-slow.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "profiles",
+   "file": "shots/tv94-tv-small-profiles.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "movies",
+   "file": "shots/tv94-tv-small-movies.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "series",
+   "file": "shots/tv94-tv-small-series.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "search",
+   "file": "shots/tv94-tv-small-search.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "search-results",
+   "file": "shots/tv94-tv-small-search-results.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "movie",
+   "file": "shots/tv94-tv-small-movie.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "show",
+   "file": "shots/tv94-tv-small-show.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "library",
+   "file": "shots/tv94-tv-small-library.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "customize",
+   "file": "shots/tv94-tv-small-customize.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "addons",
+   "file": "shots/tv94-tv-small-addons.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "settings",
+   "file": "shots/tv94-tv-small-settings.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "player",
+   "file": "shots/tv94-tv-small-player.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "player-intro",
+   "file": "shots/tv94-tv-small-player-intro.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-small",
+   "screen": "player-next",
+   "file": "shots/tv94-tv-small-player-next.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "home",
+   "file": "shots/tv94-tv-large-home.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "home-slow",
+   "file": "shots/tv94-tv-large-home-slow.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "profiles",
+   "file": "shots/tv94-tv-large-profiles.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "movies",
+   "file": "shots/tv94-tv-large-movies.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "series",
+   "file": "shots/tv94-tv-large-series.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "search",
+   "file": "shots/tv94-tv-large-search.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "search-results",
+   "file": "shots/tv94-tv-large-search-results.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "movie",
+   "file": "shots/tv94-tv-large-movie.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "show",
+   "file": "shots/tv94-tv-large-show.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "library",
+   "file": "shots/tv94-tv-large-library.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "customize",
+   "file": "shots/tv94-tv-large-customize.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "addons",
+   "file": "shots/tv94-tv-large-addons.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "settings",
+   "file": "shots/tv94-tv-large-settings.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "player",
+   "file": "shots/tv94-tv-large-player.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "player-intro",
+   "file": "shots/tv94-tv-large-player-intro.jpg"
+  },
+  {
+   "engine": "tv94",
+   "device": "tv-large",
+   "screen": "player-next",
+   "file": "shots/tv94-tv-large-player-next.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "home",
+   "file": "shots/chrome-phone-home.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "profiles",
+   "file": "shots/chrome-phone-profiles.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "movies",
+   "file": "shots/chrome-phone-movies.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "series",
+   "file": "shots/chrome-phone-series.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "search",
+   "file": "shots/chrome-phone-search.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "search-results",
+   "file": "shots/chrome-phone-search-results.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "movie",
+   "file": "shots/chrome-phone-movie.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "show",
+   "file": "shots/chrome-phone-show.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "library",
+   "file": "shots/chrome-phone-library.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "customize",
+   "file": "shots/chrome-phone-customize.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "addons",
+   "file": "shots/chrome-phone-addons.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "phone",
+   "screen": "settings",
+   "file": "shots/chrome-phone-settings.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "home",
+   "file": "shots/chrome-tablet-home.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "profiles",
+   "file": "shots/chrome-tablet-profiles.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "movies",
+   "file": "shots/chrome-tablet-movies.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "series",
+   "file": "shots/chrome-tablet-series.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "search",
+   "file": "shots/chrome-tablet-search.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "search-results",
+   "file": "shots/chrome-tablet-search-results.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "movie",
+   "file": "shots/chrome-tablet-movie.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "show",
+   "file": "shots/chrome-tablet-show.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "library",
+   "file": "shots/chrome-tablet-library.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "customize",
+   "file": "shots/chrome-tablet-customize.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "addons",
+   "file": "shots/chrome-tablet-addons.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "tablet",
+   "screen": "settings",
+   "file": "shots/chrome-tablet-settings.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "home",
+   "file": "shots/chrome-desktop-home.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "profiles",
+   "file": "shots/chrome-desktop-profiles.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "movies",
+   "file": "shots/chrome-desktop-movies.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "series",
+   "file": "shots/chrome-desktop-series.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "search",
+   "file": "shots/chrome-desktop-search.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "search-results",
+   "file": "shots/chrome-desktop-search-results.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "movie",
+   "file": "shots/chrome-desktop-movie.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "show",
+   "file": "shots/chrome-desktop-show.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "library",
+   "file": "shots/chrome-desktop-library.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "customize",
+   "file": "shots/chrome-desktop-customize.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "addons",
+   "file": "shots/chrome-desktop-addons.jpg"
+  },
+  {
+   "engine": "chrome",
+   "device": "desktop",
+   "screen": "settings",
+   "file": "shots/chrome-desktop-settings.jpg"
+  }
+ ],
+ "nav": [
+  {
+   "engine": "tv69",
+   "screen": "home",
+   "start": "Play",
+   "visited": 46,
+   "complete": false,
+   "moves": 168,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "home-slow",
+   "start": "Popular · Movie",
+   "visited": 46,
+   "complete": false,
+   "moves": 152,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "profiles",
+   "start": "Switch to Alex (dialog)",
+   "visited": 6,
+   "complete": true,
+   "moves": 24,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "movies",
+   "start": "Play",
+   "visited": 30,
+   "complete": true,
+   "moves": 120,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "series",
+   "start": "Play",
+   "visited": 30,
+   "complete": true,
+   "moves": 120,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "search",
+   "start": "Search movies and series (top bar)",
+   "visited": 5,
+   "complete": true,
+   "moves": 20,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "search-results",
+   "start": "The Ninth Hour, 2024 — in “Popular · Movie”",
+   "visited": 11,
+   "complete": true,
+   "moves": 44,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "movie",
+   "start": "Play",
+   "visited": 20,
+   "complete": true,
+   "moves": 80,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "show",
+   "start": "Play S1 · E1",
+   "visited": 41,
+   "complete": true,
+   "moves": 164,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "library",
+   "start": "All",
+   "visited": 13,
+   "complete": true,
+   "moves": 52,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "customize",
+   "start": "Home",
+   "visited": 31,
+   "complete": true,
+   "moves": 124,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "addons",
+   "start": "Install from URL…",
+   "visited": 17,
+   "complete": true,
+   "moves": 68,
+   "issues": []
+  },
+  {
+   "engine": "tv69",
+   "screen": "settings",
+   "start": "Log In… — in “Account”",
+   "visited": 22,
+   "complete": true,
+   "moves": 88,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "home",
+   "start": "Play",
+   "visited": 46,
+   "complete": false,
+   "moves": 168,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "home-slow",
+   "start": "Popular · Movie",
+   "visited": 46,
+   "complete": false,
+   "moves": 168,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "profiles",
+   "start": "Switch to Alex (dialog)",
+   "visited": 6,
+   "complete": true,
+   "moves": 24,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "movies",
+   "start": "Play",
+   "visited": 30,
+   "complete": true,
+   "moves": 120,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "series",
+   "start": "Play",
+   "visited": 30,
+   "complete": true,
+   "moves": 120,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "search",
+   "start": "Search movies and series (top bar)",
+   "visited": 5,
+   "complete": true,
+   "moves": 20,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "search-results",
+   "start": "The Ninth Hour, 2024 — in “Popular · Movie”",
+   "visited": 11,
+   "complete": true,
+   "moves": 44,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "movie",
+   "start": "Play",
+   "visited": 20,
+   "complete": true,
+   "moves": 80,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "show",
+   "start": "Play S1 · E1",
+   "visited": 41,
+   "complete": true,
+   "moves": 164,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "library",
+   "start": "All",
+   "visited": 13,
+   "complete": true,
+   "moves": 52,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "customize",
+   "start": "Home",
+   "visited": 31,
+   "complete": true,
+   "moves": 124,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "addons",
+   "start": "Install from URL…",
+   "visited": 17,
+   "complete": true,
+   "moves": 68,
+   "issues": []
+  },
+  {
+   "engine": "tv94",
+   "screen": "settings",
+   "start": "Log In… — in “Account”",
+   "visited": 21,
+   "complete": true,
+   "moves": 84,
+   "issues": []
+  }
+ ],
+ "errors": []
+}
