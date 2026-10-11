@@ -103,6 +103,11 @@ export type Visibility = 'public' | 'friends' | 'private';
 export type ProfileStats = { watched: number; hours: number; average: number | null; this_year: number };
 /** The part of a moving picture to show (it's kept uncropped), in fractions of its size. */
 export type MediaCrop = { x: number; y: number; w: number; h: number };
+/** A person as friends lists show one. close: you marked them a close friend; friendship_id: a request to answer or cancel. */
+export type FriendCard = { user_id: number; name: string; handle: string; avatar: string | null; close?: boolean; friendship_id?: number | null };
+/** How you stand with someone: friends, a request you sent (outgoing) or got (incoming), or none. */
+export type Relationship = 'none' | 'outgoing' | 'incoming' | 'friends';
+export type FriendsOverview = { friends: FriendCard[]; incoming: FriendCard[]; outgoing: FriendCard[]; blocked: FriendCard[] };
 /** A profile: yours (is_owner, with your settings and lists), or someone's as they allow (is_private: only their card). */
 export type Profile = {
     user_id: number;
@@ -116,6 +121,15 @@ export type Profile = {
     /** Yours, or a friend's: an optional real name ("" none). Nobody else gets it. */
     real_name?: string;
     is_owner: boolean;
+    /** Someone else's: how you stand with them, whether you marked them close or blocked them. */
+    relationship?: Relationship;
+    friendship_id?: number | null;
+    is_close?: boolean;
+    blocked?: boolean;
+    friends?: FriendCard[];
+    friend_count?: number;
+    /** Yours: friend requests waiting for an answer. */
+    friend_requests?: number;
     is_private?: boolean;
     stats?: ProfileStats;
     favorites?: LibraryItem[];
@@ -166,6 +180,17 @@ export const lb = {
     /** The saved profile, or why not (409: the handle is taken; 400: not valid; null: no connection). */
     updateProfile: (fields: ProfileFields) => tracker.requestOrStatus<Profile>('/profile', { method: 'PUT', body: fields, timeout: 60_000 }),
     userProfile: (handle: string) => tracker.request<Profile>(`/users/${enc(handle.replace(/^@/, ''))}`),
+    // Friends (each answers with status, or the error's detail to show).
+    friends: () => tracker.request<FriendsOverview>('/friends'),
+    addFriend: (handle: string) =>
+        tracker.requestOrStatus<{ status: 'pending' | 'accepted'; friendship_id: number }>('/friends/requests', { method: 'POST', body: { handle } }),
+    acceptFriend: (friendshipId: number) => tracker.request<{ status: string }>(`/friends/requests/${friendshipId}/accept`, { method: 'POST' }),
+    declineFriend: (friendshipId: number) => tracker.request<{ status: string }>(`/friends/requests/${friendshipId}/decline`, { method: 'POST' }),
+    cancelFriendRequest: (friendshipId: number) => tracker.request<{ status: string }>(`/friends/requests/${friendshipId}`, { method: 'DELETE' }),
+    unfriend: (userId: number) => tracker.request<{ status: string }>(`/friends/${userId}`, { method: 'DELETE' }),
+    setCloseFriend: (userId: number, close: boolean) => tracker.request<{ close: boolean }>(`/friends/${userId}/close`, { method: 'PUT', body: { close } }),
+    block: (userId: number) => tracker.request<{ status: string }>(`/blocks/${userId}`, { method: 'POST' }),
+    unblock: (userId: number) => tracker.request<{ status: string }>(`/blocks/${userId}`, { method: 'DELETE' }),
     /** What you're watching and what's next, and what you've finished (for Continue Watching). */
     continueWatching: () => tracker.request<import('$lib/continueWatching').TrackerContinue>('/continue'),
     /** A show's episodes you've marked watched or scored. */

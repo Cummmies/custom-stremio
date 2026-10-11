@@ -76,7 +76,7 @@
         const user = app.user;
         const name = user ? profiles.list.find((p) => p.uid === user._id)?.name || user.email : null;
         const account: MenuEntry[] = name
-            ? [{ header: name }, { label: 'Profile', icon: 'user', onselect: () => goto('/profile') }]
+            ? [{ header: name }, { label: 'Profile', icon: 'user', onselect: () => goto('/profile') }, { label: 'Friends', icon: 'users', onselect: () => goto('/friends') }]
             : [
                   { header: 'Not logged in' },
                   { label: 'Log In…', icon: 'user', onselect: () => app.openLogin() },

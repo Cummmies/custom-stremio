@@ -4,7 +4,10 @@
     // numbers in its bottom-right corner, as a title's scores; Edit Profile
     // right under them. Then the name, @username and bio; Favorites, a centred
     // row of five (yours keeps empty places to add to); then Lists (yours) and
-    // Recently Watched, each one row of as many as fit.
+    // Recently Watched, each one row of as many as fit; then Friends.
+    // Someone else's has, where Edit Profile is on yours, what you can do
+    // about them (lib/friendActions.ts): Add Friend, Requested, Accept and
+    // Decline, Friends (Close Friend, Unfriend, Block), Unblock.
     // Edit Profile works as the website's does: in place. The name, username
     // and bio become grouped fields (as Settings) beside who can see what, the
     // banner and picture say how to change them (moved and scaled first, in
@@ -24,13 +27,23 @@
     import ImageCropper from '$lib/components/ImageCropper.svelte';
     import { PICTURE_TYPES } from '$lib/movingImage';
     import { isTV } from '$lib/platform';
+    import Avatar from '$lib/components/Avatar.svelte';
+    import * as friendship from '$lib/friendActions';
 
     let {
         profile,
         busy = false,
         error = null,
         onsave,
-    }: { profile: Profile; busy?: boolean; error?: string | null; onsave?: (fields: ProfileFields) => Promise<boolean> } = $props();
+        onchanged,
+    }: {
+        profile: Profile;
+        busy?: boolean;
+        error?: string | null;
+        onsave?: (fields: ProfileFields) => Promise<boolean>;
+        /** After a friend action: load the profile again. */
+        onchanged?: () => void;
+    } = $props();
 
     const SLOTS = 5;
     const NAME_MAX = 40;
@@ -224,6 +237,29 @@
     /** A list is three posters fanned out, the front one poster-sized: about one and a half posters wide. */
     const listCols = $derived(rowW && posterW ? Math.max(1, Math.floor((rowW + 24) / (posterW * 1.45 + 24))) : 4);
 
+    // ---- Friends: what you can do about someone else, and a row of friends ----
+    const person = $derived({ user_id: profile.user_id, name: profile.name || profile.handle, handle: profile.handle });
+    let note = $state<string | null>(null);
+    let noteTimer: ReturnType<typeof setTimeout> | undefined;
+    let acting = $state(false);
+    /** After an action: say what happened (if anything to say) and show the new state. */
+    const done: friendship.Done = (text) => {
+        acting = false;
+        if (text) {
+            note = text;
+            clearTimeout(noteTimer);
+            noteTimer = setTimeout(() => (note = null), 3500);
+        }
+        onchanged?.();
+    };
+    const act = (run: () => unknown) => {
+        acting = true;
+        run();
+    };
+    const anchor = (e: MouseEvent) => e.currentTarget as HTMLElement;
+    const FRIEND_W = 96;
+    const friendCols = $derived(rowW ? Math.max(2, Math.floor((rowW + GAP) / (FRIEND_W + GAP))) : 8);
+
     const thisYear = String(new Date().getFullYear());
     function recentLine(i: LibraryItem) {
         const when = i.date ? day(i.date, { month: 'short', day: 'numeric', year: i.date.startsWith(thisYear) ? undefined : 'numeric' }) : null;
@@ -276,6 +312,35 @@
             {:else if canEdit}
                 <div class="actions">
                     <button class="glass-pill" onclick={begin}><Icon name="pencil" size={14} /> Edit Profile</button>
+                </div>
+            {:else if !profile.is_owner && profile.relationship}
+                <!-- Someone else: where Edit Profile is on yours. -->
+                <div class="actions">
+                    {#if profile.blocked}
+                        <button class="glass-pill" disabled={acting} onclick={() => act(() => friendship.unblock(person, done))}>Unblock</button>
+                    {:else if profile.relationship === 'friends'}
+                        <button class="glass-pill" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.friendMenu(anchor(e), { ...person, close: profile.is_close }, done)}>
+                            <Icon name={profile.is_close ? 'star' : 'check'} size={14} /> {profile.is_close ? 'Close Friend' : 'Friends'} <Icon name="chevronDown" size={14} />
+                        </button>
+                    {:else if profile.relationship === 'incoming' && profile.friendship_id}
+                        {@const id = profile.friendship_id}
+                        <button class="glass-pill" disabled={acting} onclick={() => act(() => friendship.decline(id, done))}>Decline</button>
+                        <button class="primary-pill" disabled={acting} onclick={() => act(() => friendship.accept(id, () => done('You’re now friends.')))}>Accept</button>
+                    {:else if profile.relationship === 'outgoing' && profile.friendship_id}
+                        {@const id = profile.friendship_id}
+                        <button class="glass-pill" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.requestedMenu(anchor(e), id, done)}>
+                            <Icon name="check" size={14} /> Requested
+                        </button>
+                    {:else}
+                        <button class="primary-pill" disabled={acting} onclick={() => act(() => friendship.addFriend(profile.handle, done))}>
+                            <Icon name="plus" size={14} /> Add Friend
+                        </button>
+                    {/if}
+                    {#if !profile.blocked && profile.relationship !== 'friends'}
+                        <button class="glass-pill icon-only" aria-label="More" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.strangerMenu(anchor(e), person, done)}>
+                            <Icon name="more" size={16} />
+                        </button>
+                    {/if}
                 </div>
             {/if}
         </div>
@@ -445,12 +510,38 @@
                         </div>
                     </section>
                 {/if}
+
+                {#if profile.friends?.length || profile.is_owner}
+                    <section>
+                        <div class="head">
+                            <h2>Friends{#if profile.friend_count}<span class="count">{profile.friend_count}</span>{/if}</h2>
+                            {#if profile.is_owner}
+                                <a class="see-all" href="/friends">
+                                    {profile.friend_requests ? `${profile.friend_requests} ${profile.friend_requests === 1 ? 'Request' : 'Requests'} · ` : ''}See All
+                                </a>
+                            {/if}
+                        </div>
+                        {#if profile.friends?.length}
+                            <div class="friends" style="--cols: {friendCols}">
+                                {#each profile.friends.slice(0, friendCols) as f (f.user_id)}
+                                    <a class="friend" href={`/u/${f.handle.replace(/^@/, '')}`}>
+                                        <Avatar profile={{ name: f.name, color: '#6d4af0', avatar: f.avatar ?? undefined }} fallbackName={f.name} size={FRIEND_W - 8} />
+                                        <span class="friend-name">{f.name}</span>
+                                    </a>
+                                {/each}
+                            </div>
+                        {:else}
+                            <p class="prompt">Friends you add show here. <a class="see-all" href="/friends">Add Friends</a></p>
+                        {/if}
+                    </section>
+                {/if}
             </div>
         {/if}
     {/if}
     </div>
 </div>
 
+{#if note}<p class="note-toast" role="status">{note}</p>{/if}
 {#if picking !== null}
     <FavoritePicker slot={picking} taken={slots.map((s) => s.id)} onpick={chose} onclose={() => (picking = null)} />
 {/if}
@@ -969,6 +1060,55 @@
         cursor: default;
     }
 
+    .icon-only {
+        width: 36px;
+        padding: 0;
+        justify-content: center;
+    }
+    .count {
+        margin-left: 8px;
+        color: var(--label-2);
+        font-weight: 500;
+    }
+    /* Friends: one row of pictures and names, as many as fit. */
+    .friends {
+        display: grid;
+        grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+        gap: 16px;
+    }
+    .friend {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: inherit;
+        text-decoration: none;
+    }
+    .friend-name {
+        max-width: 100%;
+        overflow: hidden;
+        font-size: var(--text-callout);
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .friend:hover .friend-name {
+        text-decoration: underline;
+    }
+    .note-toast {
+        position: fixed;
+        left: 50%;
+        bottom: calc(24px + var(--tabbar-h));
+        z-index: 20;
+        transform: translateX(-50%);
+        margin: 0;
+        padding: 10px 16px;
+        border: 1px solid var(--separator);
+        border-radius: var(--radius-l);
+        background: var(--elevated);
+        box-shadow: var(--shadow-m);
+    }
     /* One row, as many as fit (the count comes from the width). */
     .probe {
         display: block;
