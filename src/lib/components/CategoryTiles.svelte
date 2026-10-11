@@ -37,7 +37,7 @@
         border-radius: var(--radius);
         overflow: hidden;
         background: rgb(255 255 255 / 0.08);
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
         color: var(--label);
         text-decoration: none;
         font-weight: 600;

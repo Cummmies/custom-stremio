@@ -547,7 +547,7 @@
     .row.dragging {
         z-index: 2;
         background: var(--elevated-2);
-        box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+        box-shadow: var(--shadow-m);
     }
     .row.target {
         background: rgb(109 74 240 / 0.18);
@@ -679,7 +679,7 @@
         gap: 6px;
         padding: 4px 10px;
         border-radius: 999px;
-        background: #6d4af0;
+        background: var(--accent);
         color: white;
         font-size: 12px;
         font-weight: 700;
@@ -772,7 +772,7 @@
         width: 48px;
         height: 48px;
         border-radius: 14px;
-        background: #6d4af0;
+        background: var(--accent);
         color: white;
     }
     .sheet h2 {

@@ -43,7 +43,7 @@
         height: 20px;
         border-radius: 50%;
         background: white;
-        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+        box-shadow: var(--shadow-s);
         transition: transform var(--fast) var(--ease);
     }
     .toggle[aria-checked='true'] .knob {

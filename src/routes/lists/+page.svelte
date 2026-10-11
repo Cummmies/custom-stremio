@@ -228,7 +228,7 @@
         border: 1px solid var(--separator);
         border-radius: var(--radius-l);
         background: var(--elevated);
-        box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+        box-shadow: var(--shadow-m);
     }
     h1 {
         margin: 0;

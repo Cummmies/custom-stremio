@@ -210,7 +210,7 @@
         padding: 0;
         border: 1px solid var(--separator);
         border-radius: var(--radius-l);
-        background: rgb(31 31 40 / 0.94);
+        background: var(--glass-strong);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
         box-shadow: 0 24px 64px rgb(0 0 0 / 0.55);

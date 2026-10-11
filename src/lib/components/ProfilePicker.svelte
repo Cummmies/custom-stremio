@@ -405,7 +405,7 @@
         height: 50vh;
         left: 10vw;
         top: -20vh;
-        background: #6d4af0;
+        background: var(--accent);
     }
     .art span:nth-child(2) {
         width: 40vw;
@@ -756,7 +756,7 @@
         max-width: 420px;
         text-align: center;
         font-size: 13px;
-        color: #ff6961;
+        color: var(--bad-text);
     }
     .actions {
         display: flex;
@@ -773,7 +773,7 @@
         border: 0;
         border-radius: 999px;
         background: transparent;
-        color: #ff6961;
+        color: var(--bad-text);
         font-weight: 600;
         cursor: pointer;
     }

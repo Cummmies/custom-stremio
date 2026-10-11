@@ -8,6 +8,7 @@
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import { isInternalAddon } from '$lib/internalAddons';
+    import Segmented from '$lib/components/Segmented.svelte';
 
     type Source = 'installed' | 'official' | 'community';
     const sources: { id: Source; label: string }[] = [
@@ -87,14 +88,11 @@
     </header>
 
     <div class="controls">
-        <div class="segmented" role="tablist" aria-label="Addon source">
-            {#each sources as s (s.id)}
-                <button role="tab" aria-selected={source === s.id} class:on={source === s.id} onclick={() => (source = s.id)}>
-                    {s.label}
-                    {#if s.id === 'installed'}<span class="count">{installedList.length}</span>{/if}
-                </button>
-            {/each}
-        </div>
+        <Segmented
+            label="Addon source"
+            options={sources.map((s) => ({ value: s.id, label: s.label, count: s.id === 'installed' ? installedList.length : null }))}
+            bind:value={source}
+        />
         <div class="right">
             <label class="filter">
                 <Icon name="search" size={15} />
@@ -180,40 +178,6 @@
     .right {
         display: flex;
         gap: 10px;
-    }
-    .segmented {
-        display: flex;
-        padding: 3px;
-        border-radius: var(--radius);
-        background: var(--fill);
-    }
-    .segmented button {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        height: 30px;
-        padding: 0 14px;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: var(--label-2);
-        font-weight: 500;
-        cursor: pointer;
-    }
-    .segmented button:hover {
-        color: var(--label);
-    }
-    .segmented button.on {
-        background: var(--elevated-2);
-        color: var(--label);
-        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
-    }
-    .count {
-        font-size: 11px;
-        padding: 0 6px;
-        border-radius: 999px;
-        background: var(--fill-hover);
-        color: var(--label-2);
     }
     .filter {
         display: flex;

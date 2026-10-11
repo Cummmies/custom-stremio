@@ -273,8 +273,8 @@
         position: absolute;
         inset: 0;
         background:
-            linear-gradient(to right, rgb(13 13 18 / 0.92) 0%, rgb(13 13 18 / 0.55) 38%, transparent 70%),
-            linear-gradient(to top, var(--bg) 8%, rgb(13 13 18 / 0.7) 40%, transparent 70%),
+            linear-gradient(to right, rgb(13 13 18 / 0.92) 0%, var(--scrim) 38%, transparent 70%),
+            linear-gradient(to top, var(--bg) 8%, var(--scrim-strong) 40%, transparent 70%),
             linear-gradient(to bottom, rgb(13 13 18 / 0.5), transparent 18%);
     }
     .hero {
@@ -464,7 +464,7 @@
         .scrim {
             background:
                 linear-gradient(to top, var(--bg) 4%, rgb(13 13 18 / 0.75) 34%, transparent 62%),
-                linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 22%);
+                linear-gradient(to bottom, var(--scrim), transparent 22%);
         }
         .hero {
             flex-direction: column;

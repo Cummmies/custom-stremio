@@ -135,7 +135,7 @@
         height: 24px;
         padding: 0 9px;
         border-radius: 6px;
-        background: rgb(14 14 20 / 0.72);
+        background: var(--scrim-tag);
         color: white;
         font-size: 12px;
         font-weight: 600;

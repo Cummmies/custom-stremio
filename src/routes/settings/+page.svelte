@@ -1018,7 +1018,7 @@
         outline-offset: -2px;
     }
     .row.action.destructive {
-        color: #ff6961;
+        color: var(--bad-text);
     }
     .title {
         font-weight: 500;

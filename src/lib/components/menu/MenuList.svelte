@@ -224,13 +224,12 @@
         overflow-y: auto;
         padding: 5px;
         border-radius: 12px;
-        background: rgb(31 31 40 / 0.86);
-        backdrop-filter: blur(28px) saturate(1.5);
-        -webkit-backdrop-filter: blur(28px) saturate(1.5);
-        border: 1px solid rgb(255 255 255 / 0.1);
+        background: var(--glass);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
         box-shadow:
-            0 0 0 0.5px rgb(0 0 0 / 0.6),
-            0 18px 48px rgb(0 0 0 / 0.55);
+            var(--shadow-l);
         color: var(--label);
         font-size: 13px;
         outline: none;
@@ -279,7 +278,7 @@
         background: transparent;
     }
     .item.destructive {
-        color: #ff6961;
+        color: var(--bad-text);
     }
     .item.destructive:focus {
         background: var(--bad);

@@ -21,7 +21,7 @@
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
-    import { slider } from '$lib/slider';
+    import Segmented from '$lib/components/Segmented.svelte';
 
     // --- Type ---
     const types = $derived([
@@ -57,8 +57,6 @@
     const sections = [{ id: 'all', label: 'All' }, ...STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] }))];
     const ids = sections.map((x) => x.id);
     let section = $state<string>('all');
-    /** The section the bar's highlight is dragged over (lib/slider.ts). */
-    let statusOver = $state<number | null>(null);
 
     // Sort: Lightboxd's, newest / highest / most first; Title A to Z.
     type SortKey = 'recent' | 'added' | 'rating' | 'year' | 'title' | 'episodes' | 'rewatches';
@@ -371,17 +369,8 @@
     <header>
         <h1 class:sr-only={lightboxd.ready}>Library</h1>
         {#if lightboxd.ready}
-            <div
-                class="segmented status"
-                role="radiogroup"
-                aria-label="Status"
-                use:slider={{ active: ids.indexOf(section), onhover: (i) => (statusOver = i), onpick: (i) => pick(ids[i]) }}
-            >
-                {#each sections as s, i (s.id)}
-                    <button role="radio" aria-checked={section === s.id} class:on={statusOver != null ? statusOver === i : section === s.id} onclick={() => pick(s.id)}>
-                        {s.label}
-                    </button>
-                {/each}
+            <div class="status">
+                <Segmented label="Status" options={sections.map((s) => ({ value: s.id, label: s.label }))} value={section} onchange={pick} scroll />
             </div>
         {/if}
         <div class="tools">
@@ -512,60 +501,9 @@
     h2:first-of-type {
         margin-top: 0;
     }
-    .segmented {
+    .status {
         display: flex;
-        padding: 3px;
-        border-radius: var(--radius);
-        background: var(--fill);
-    }
-    .segmented button {
-        height: 30px;
-        padding: 0 14px;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: var(--label-2);
-        font-weight: 500;
-        white-space: nowrap;
-        cursor: pointer;
-        transition: background var(--fast), color var(--fast);
-    }
-    .segmented button:hover {
-        color: var(--label);
-    }
-    .segmented button.on {
-        background: var(--elevated-2);
-        color: var(--label);
-        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
-    }
-    /* The status bar's highlight slides (and drags) between sections. */
-    .segmented button {
-        position: relative;
-        z-index: 1;
-    }
-    .segmented:global(.glides) button.on {
-        background: transparent;
-        box-shadow: none;
-    }
-    .segmented :global(.glider) {
-        position: absolute;
-        top: 0;
-        left: 0;
-        z-index: 0;
-        border-radius: 7px;
-        background: var(--elevated-2);
-        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
-        pointer-events: none;
-        will-change: transform, width;
-    }
-    /* Labels under the highlight read as the chosen one's, even half under it. */
-    .segmented :global(.glider-text button) {
-        color: var(--label);
-    }
-    .segmented:global(.dragging),
-    .segmented:global(.dragging) button {
-        cursor: grabbing;
-        user-select: none;
+        min-width: 0;
     }
     /* Sort and Edit: the same height as the bars beside them. */
     .pill {
@@ -668,7 +606,7 @@
         border: 1px solid var(--separator);
         border-radius: var(--radius-l);
         background: var(--elevated);
-        box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+        box-shadow: var(--shadow-m);
         white-space: nowrap;
     }
     .toolbar button {
@@ -716,11 +654,10 @@
         border-radius: var(--radius-l);
         background: var(--elevated);
         border: 1px solid var(--separator);
-        box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+        box-shadow: var(--shadow-m);
     }
 
     @media (pointer: coarse) {
-        .segmented button,
         .pill,
         .toolbar button {
             height: 44px;
@@ -732,13 +669,6 @@
     @media (max-width: 600px) {
         .status {
             flex: 1 1 100%;
-            min-width: 0;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-        .segmented button {
-            flex: none;
-            padding: 0 12px;
         }
         .tools {
             flex: 1 1 100%;

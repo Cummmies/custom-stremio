@@ -272,10 +272,10 @@
         gap: 2px;
         padding: 4px;
         border-radius: 999px;
-        background: rgb(30 30 38 / 0.55);
+        background: var(--glass-thin);
         backdrop-filter: blur(20px) saturate(1.4);
         -webkit-backdrop-filter: blur(20px) saturate(1.4);
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
     }
     .scrolled .pill {
         background: var(--fill);
@@ -346,9 +346,9 @@
         width: 36px;
         height: 36px;
         flex: none;
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
         border-radius: 50%;
-        background: rgb(30 30 38 / 0.55);
+        background: var(--glass-thin);
         color: var(--label);
         cursor: pointer;
         transition: background var(--fast);
@@ -395,14 +395,13 @@
         overscroll-behavior: contain;
         padding: 14px 8px 8px;
         /* The same glass as the app's menus (MenuList.svelte). */
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
         border-radius: var(--radius-l);
-        background: rgb(31 31 40 / 0.86);
-        backdrop-filter: blur(28px) saturate(1.5);
-        -webkit-backdrop-filter: blur(28px) saturate(1.5);
+        background: var(--glass);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
         box-shadow:
-            0 0 0 0.5px rgb(0 0 0 / 0.6),
-            0 18px 48px rgb(0 0 0 / 0.55);
+            var(--shadow-l);
         animation: pop var(--fast) var(--ease);
         transform-origin: top right;
     }

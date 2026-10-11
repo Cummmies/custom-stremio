@@ -10,6 +10,7 @@
     import { lightboxd } from '$lib/lightboxd.svelte';
     import { titleHref } from '$lib/links';
     import Icon from '$lib/components/Icon.svelte';
+    import Segmented from '$lib/components/Segmented.svelte';
 
     /** One release, whichever source it came from. */
     type CalEvent = {
@@ -327,9 +328,8 @@
                         <h2>{view === 'day' ? dayHeading(selected) : monthTitle}</h2>
                         <p class="count">{loading ? 'Loading…' : countLabel(view === 'day' ? selectedEvents.length : monthCount)}</p>
                     </div>
-                    <div class="segmented" role="radiogroup" aria-label="Show">
-                        <button role="radio" aria-checked={view === 'day'} class:on={view === 'day'} onclick={() => (view = 'day')}>Day</button>
-                        <button role="radio" aria-checked={view === 'month'} class:on={view === 'month'} onclick={() => (view = 'month')}>Month</button>
+                    <div class="view">
+                        <Segmented label="Show" options={[{ value: 'day', label: 'Day' }, { value: 'month', label: 'Month' }]} bind:value={view} />
                     </div>
                 </div>
 
@@ -595,27 +595,8 @@
         font-size: 12px;
         color: var(--label-2);
     }
-    .segmented {
+    .view {
         flex: none;
-        display: flex;
-        padding: 3px;
-        border-radius: var(--radius);
-        background: var(--fill);
-    }
-    .segmented button {
-        height: 26px;
-        padding: 0 12px;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: var(--label-2);
-        font-weight: 500;
-        cursor: pointer;
-    }
-    .segmented button.on {
-        background: var(--elevated-2);
-        color: var(--label);
-        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
     }
     .empty {
         margin: 24px 0;

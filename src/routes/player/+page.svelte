@@ -2187,7 +2187,7 @@
         background: rgb(24 24 32 / 0.9);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
         animation: rise var(--slow) var(--ease);
     }
     @keyframes rise {
@@ -2255,7 +2255,7 @@
         background: rgb(24 24 32 / 0.9);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
         animation: rise var(--slow) var(--ease);
     }
     .rate-head {
@@ -2342,7 +2342,7 @@
         background: rgb(24 24 32 / 0.9);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgb(255 255 255 / 0.1);
+        border: 1px solid var(--glass-border);
         text-align: center;
         animation: rise var(--slow) var(--ease);
     }

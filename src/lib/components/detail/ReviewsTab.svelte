@@ -5,6 +5,7 @@
     // watch (opens it to edit). The scores are in the tab bar on wide windows,
     // here on narrow ones.
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
+    import Segmented from '$lib/components/Segmented.svelte';
     import { isTV } from '$lib/platform';
     import { day, score, type Reviews, type Watch } from '$lib/lightboxd/api';
 
@@ -126,12 +127,8 @@
     {/if}
 
     <div class="bar">
-        <div class="segmented" role="radiogroup" aria-label="Reviews">
-            {#each tabs as t (t)}
-                <button role="radio" aria-checked={tab === t} class:on={tab === t} onclick={() => (tab = t)}>
-                    {t}{#if counts[t]}<span class="count">{counts[t]}</span>{/if}
-                </button>
-            {/each}
+        <div class="tabs">
+            <Segmented label="Reviews" options={tabs.map((t) => ({ value: t, label: t, count: counts[t] }))} bind:value={tab} />
         </div>
         {#if tab === 'Aggregate' && aggregate.length > 1}
             <PopupButton
@@ -289,39 +286,6 @@
         justify-content: space-between;
         gap: 12px;
         margin-bottom: 16px;
-    }
-    .segmented {
-        display: inline-flex;
-        padding: 3px;
-        border-radius: var(--radius);
-        background: var(--fill);
-    }
-    .segmented button {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        height: 30px;
-        padding: 0 14px;
-        border: 0;
-        border-radius: 7px;
-        background: transparent;
-        color: var(--label-2);
-        font-weight: 500;
-        cursor: pointer;
-        transition: background var(--fast), color var(--fast);
-    }
-    .segmented button:hover {
-        color: var(--label);
-    }
-    .segmented button.on {
-        background: var(--elevated-2);
-        color: var(--label);
-        box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
-    }
-    .count {
-        font-size: 12px;
-        color: var(--label-2);
-        font-variant-numeric: tabular-nums;
     }
     /* Cards in a row share a height, so the grid reads as rows, not a scatter. */
     .grid {
@@ -562,18 +526,20 @@
         .bar {
             flex-wrap: wrap;
         }
-        .segmented {
+        /* Phones: the tabs share the width. */
+        .tabs {
+            width: 100%;
+        }
+        .tabs :global(.segmented) {
             display: flex;
             width: 100%;
         }
-        .segmented button {
+        .tabs :global(.segmented button) {
             flex: 1;
-            justify-content: center;
         }
     }
     @media (pointer: coarse) {
-        .btn,
-        .segmented button {
+        .btn {
             height: 44px;
             padding: 0 18px;
         }

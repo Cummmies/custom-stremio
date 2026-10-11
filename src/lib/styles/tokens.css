@@ -1,6 +1,9 @@
 /*
- * Design tokens. Dark only, on purpose: HIG allows a permanently dark interface
- * for immersive media so the UI recedes behind the artwork (dark-mode.md).
+ * Design tokens: every color, shadow and glass the app reuses, by what it's for
+ * (docs/design.md). Components use these, never raw colors, so the look (or a
+ * theme, such as a light one: redefine these under a [data-theme] selector)
+ * changes here alone. Dark today, on purpose: HIG allows a permanently dark
+ * interface for immersive media so the UI recedes behind the artwork.
  * Contrast figures are against --bg (#0D0D12).
  */
 :root {
@@ -13,6 +16,25 @@
     --fill: rgb(255 255 255 / 0.06);
     --fill-hover: rgb(255 255 255 / 0.1);
     --separator: rgb(255 255 255 / 0.08);
+    /* The raised square a segmented control's choice sits on */
+    --highlight: var(--elevated-2);
+
+    /* Glass: the frosted chrome over artwork (menus, popovers, the nav pill, sheets) */
+    --glass: rgb(31 31 40 / 0.86);
+    --glass-strong: rgb(31 31 40 / 0.94);
+    --glass-thin: rgb(30 30 38 / 0.55);
+    --glass-blur: blur(28px) saturate(1.5);
+    --glass-border: rgb(255 255 255 / 0.1);
+
+    /* Scrims: darkening over artwork so text on it reads */
+    --scrim: rgb(13 13 18 / 0.55);
+    --scrim-strong: rgb(13 13 18 / 0.7);
+    --scrim-tag: rgb(14 14 20 / 0.72);
+
+    /* Shadows, small to large */
+    --shadow-s: 0 1px 3px rgb(0 0 0 / 0.4);
+    --shadow-m: 0 12px 32px rgb(0 0 0 / 0.5);
+    --shadow-l: 0 0 0 0.5px rgb(0 0 0 / 0.6), 0 18px 48px rgb(0 0 0 / 0.55);
 
     /* Labels */
     --label: #f4f4f6; /* 17.7:1 */
@@ -23,11 +45,15 @@
     --accent: #6d4af0;
     --accent-hover: #7b5bf5;
     --accent-text: #a48dff; /* 7.2:1, for accent-colored text on --bg */
+    --on-accent: #fff;
+    /* Text drawn straight on artwork or scrims */
+    --on-media: #fff;
 
     /* Signal, always paired with a text label */
     --ok: #30d158;
     --warn: #ff9f0a;
     --bad: #ff453a;
+    --bad-text: #ff6961; /* destructive text on --bg, a touch lighter to read */
 
     /* Type: Segoe UI Variable is Windows 11's system face, with optical sizes */
     --font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -44,6 +70,7 @@
     --radius-s: 6px;
     --radius: 10px;
     --radius-l: 16px;
+    --radius-segment: 7px;
     --poster-w: clamp(132px, 11vw, 168px);
     --nav-h: 68px;
     --ease: cubic-bezier(0.2, 0.8, 0.2, 1);

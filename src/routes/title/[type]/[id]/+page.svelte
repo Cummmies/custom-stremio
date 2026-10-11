@@ -911,7 +911,7 @@
         background:
             linear-gradient(to right, rgb(13 13 18 / 0.94) 0%, rgb(13 13 18 / 0.6) 40%, transparent 72%),
             linear-gradient(to top, var(--bg) 6%, rgb(13 13 18 / 0.6) 42%, transparent 72%),
-            linear-gradient(to bottom, rgb(13 13 18 / 0.55), transparent 20%);
+            linear-gradient(to bottom, var(--scrim), transparent 20%);
     }
     /* Window-height layout: header on top, body takes the rest. Very short
        windows get a sensible minimum instead of a squashed list. */
@@ -1332,7 +1332,7 @@
         }
         .scrim {
             background:
-                linear-gradient(to top, var(--bg) 6%, rgb(13 13 18 / 0.7) 38%, transparent 70%),
+                linear-gradient(to top, var(--bg) 6%, var(--scrim-strong) 38%, transparent 70%),
                 linear-gradient(to bottom, rgb(13 13 18 / 0.5), transparent 20%);
         }
         .screen {
