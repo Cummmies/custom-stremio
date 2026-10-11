@@ -738,11 +738,11 @@
     }
 
     /* Editing: two groups side by side, as Settings' rows. */
+    /* Two equal halves across the column, lined up with the favorites under them. */
     .edit-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 24px 40px;
-        max-width: 1040px;
+        gap: 24px clamp(24px, 3vw, 48px);
         margin-top: 8px;
     }
     .edit-col {

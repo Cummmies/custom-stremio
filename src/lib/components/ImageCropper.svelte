@@ -2,8 +2,10 @@
     // Move and Scale (as iOS has it after choosing a photo): the picture fills
     // a frame, a circle for a profile picture, the banner's own shape for a
     // banner. Drag to move it; pinch, scroll or the slider to scale it; arrow
-    // keys move and + / - scale. Choose saves exactly what's in the frame.
+    // keys move and + / - scale. Choose saves exactly what's in the frame; a
+    // moving GIF stays moving (lib/gifCrop.ts).
     import Icon from './Icon.svelte';
+    import { canCropGif, cropGif, fitsUpload, isAnimatedGif, toDataUrl } from '$lib/gifCrop';
 
     let {
         file,
@@ -112,8 +114,10 @@
         else if (e.key === '-') scaleTo(zoom / 1.1);
     }
 
-    function choose() {
-        if (!bitmap) return;
+    let working = $state(false);
+    let tooBig = $state(false);
+    async function choose() {
+        if (!bitmap || working) return;
         const k = base * zoom;
         const sx = -ox / k;
         const sy = -oy / k;
@@ -121,6 +125,19 @@
         const sh = fh / k;
         const outW = shape === 'circle' ? 400 : Math.round(Math.min(2560, Math.max(1120, sw)));
         const outH = Math.round(outW / ASPECT);
+        if (await isAnimatedGif(file).catch(() => false)) {
+            working = true;
+            try {
+                const moving = (await canCropGif()) ? await cropGif(file, { sx, sy, sw, sh, outW, outH }).catch(() => null) : null;
+                if (moving) return onchoose(moving);
+                // Can't cut its frames here: the whole GIF, uncropped but moving, if it fits.
+                if (fitsUpload(file)) return onchoose(await toDataUrl(file));
+                tooBig = true;
+            } finally {
+                working = false;
+            }
+            return;
+        }
         const canvas = document.createElement('canvas');
         canvas.width = outW;
         canvas.height = outH;
@@ -186,9 +203,10 @@
             <button class="icon" onclick={() => scaleTo(zoom * 1.25)} aria-label="Larger" disabled={zoom >= MAX_ZOOM}><Icon name="plus" size={16} /></button>
         </div>
 
+        {#if tooBig}<p class="note" role="alert">That GIF is too big to keep moving. Try a shorter or smaller one.</p>{/if}
         <footer>
             <button class="btn" onclick={oncancel}>Cancel</button>
-            <button class="btn primary" onclick={choose} disabled={!bitmap}>Choose</button>
+            <button class="btn primary" onclick={choose} disabled={!bitmap || working}>{working ? 'Preparing…' : 'Choose'}</button>
         </footer>
     </div>
 </dialog>
@@ -341,6 +359,11 @@
         box-shadow:
             0 1px 4px rgb(0 0 0 / 0.45),
             0 0 0 4px rgb(255 255 255 / 0.35);
+    }
+    .note {
+        margin: 0;
+        font-size: 13px;
+        color: var(--bad-text);
     }
     footer {
         display: flex;

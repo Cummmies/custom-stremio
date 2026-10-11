@@ -56,7 +56,8 @@
         if (uid && profiles.get(uid)) {
             const patch: { name?: string; avatar?: string } = {};
             if (fields.name !== undefined) patch.name = res.data.name;
-            if (fields.avatar !== undefined) patch.avatar = fields.avatar || undefined;
+            // The saved picture's link, not the file: a moving one can be megabytes.
+            if (fields.avatar !== undefined) patch.avatar = (fields.avatar && res.data.avatar) || undefined;
             if (Object.keys(patch).length) profiles.update(uid, patch);
         }
         return true;
