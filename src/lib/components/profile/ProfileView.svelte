@@ -463,9 +463,6 @@
         /* The website's banner: 1120 wide by 220 tall, full width here. On a
            phone it keeps a usable height under the bar. */
         --cover-h: clamp(calc(var(--nav-h) + 100px), 19.643vw, 440px);
-        /* The picture reaches a little past that edge and has faded into the
-           page by then (everything is still placed from the edge). */
-        --cover-fade: clamp(24px, 3vw, 48px);
         --avatar: 120px;
         /* Everything under the banner sits in one centred column on wide screens. */
         --content-w: 1240px;
@@ -475,11 +472,11 @@
     .cover {
         position: absolute;
         inset: 0 0 auto;
-        height: calc(var(--cover-h) + var(--cover-fade));
+        height: var(--cover-h);
         overflow: hidden;
-        /* A long fade of the picture itself into whatever is behind it. */
-        -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(var(--cover-h) * 0.5), rgb(0 0 0 / 0.35) calc(var(--cover-h) * 0.85), transparent 100%);
-        mask-image: linear-gradient(to bottom, #000 0, #000 calc(var(--cover-h) * 0.5), rgb(0 0 0 / 0.35) calc(var(--cover-h) * 0.85), transparent 100%);
+        /* The picture itself fades into whatever is behind it, ending at the edge. */
+        -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 62%, rgb(0 0 0 / 0.4) 84%, transparent 100%);
+        mask-image: linear-gradient(to bottom, #000 0, #000 62%, rgb(0 0 0 / 0.4) 84%, transparent 100%);
     }
     /* Light at the top, for the bar. */
     .cover::after {
@@ -772,6 +769,15 @@
         flex-direction: column;
     }
     .edit-col > .group .bio-row {
+        flex: 1;
+    }
+    /* …and the privacy side matches it: its rows share the same height. */
+    .privacy .group {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .privacy .group .row {
         flex: 1;
     }
     .bio-row textarea {
