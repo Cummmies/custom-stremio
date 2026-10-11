@@ -180,6 +180,11 @@ export const lb = {
     lists: () => tracker.request<{ lists: ListInfo[] }>('/lists'),
     list: (listId: number) => tracker.request<ListDetail>(`/lists/${listId}`),
     newList: (name: string) => tracker.request<ListInfo>('/lists', { method: 'POST', body: { name } }),
+    /** Renames a list and/or changes its description ("" clears it). */
+    editList: (listId: number, fields: { name?: string; description?: string }) =>
+        tracker.request<ListDetail>(`/lists/${listId}`, { method: 'PUT', body: fields }),
+    /** Deletes a list; its titles stay in your library. */
+    deleteList: (listId: number) => tracker.request<{ deleted: true }>(`/lists/${listId}`, { method: 'DELETE' }),
     addToList: (listId: number, id: string, type: string, name: string) =>
         tracker.request<{ title: Summary }>(`/lists/${listId}/titles`, { method: 'POST', body: { id, type, name }, timeout: 30_000 }),
     /** A link anyone can open to see the list (the same one each time, until sharing stops). */

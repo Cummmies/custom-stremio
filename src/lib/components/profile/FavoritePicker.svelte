@@ -1,16 +1,20 @@
 <script lang="ts">
-    // Choose a favorite for one slot of the profile's row: a title from your
-    // library, picked with one tap (the website's slot picker). A modal
-    // <dialog> (docs/design.md); on iPhone a sheet with Cancel in its top bar.
+    // Choose a title from your library with one tap: a favorite for one slot of
+    // the profile's row (the website's slot picker), or (with `title`) a title
+    // to add to a list. A modal <dialog> (docs/design.md); on iPhone a sheet
+    // with Cancel in its top bar.
     import { lb, type LibraryItem } from '$lib/tracker/api';
     import Icon from '$lib/components/Icon.svelte';
 
     let {
-        slot,
+        slot = 0,
+        title,
         taken,
         onpick,
         onclose,
-    }: { slot: number; taken: string[]; onpick: (item: LibraryItem) => void; onclose: () => void } = $props();
+    }: { slot?: number; title?: string; taken: string[]; onpick: (item: LibraryItem) => void; onclose: () => void } = $props();
+    const heading = $derived(title ?? `Choose Favorite ${slot + 1}`);
+    const short = $derived(title ?? `Favorite ${slot + 1}`);
 
     let all = $state<LibraryItem[] | null>(null);
     let failed = $state(false);
@@ -42,11 +46,11 @@
     <div class="body">
         <div class="toolbar">
             <button class="bar-btn" onclick={onclose}>Cancel</button>
-            <span class="bar-title" aria-hidden="true">Favorite {slot + 1}</span>
+            <span class="bar-title" aria-hidden="true">{short}</span>
             <span></span>
         </div>
         <header>
-            <h2 id="favorite-heading">Choose Favorite {slot + 1}</h2>
+            <h2 id="favorite-heading">{heading}</h2>
             <button class="close" onclick={onclose} aria-label="Cancel"><Icon name="close" size={16} /></button>
         </header>
         <label class="search">

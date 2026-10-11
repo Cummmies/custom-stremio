@@ -19,6 +19,7 @@
     import Segmented from '$lib/components/Segmented.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
     import ProfileMedia from './ProfileMedia.svelte';
+    import ListCard from '$lib/components/ListCard.svelte';
     import FavoritePicker from './FavoritePicker.svelte';
     import ImageCropper from '$lib/components/ImageCropper.svelte';
     import { PICTURE_TYPES } from '$lib/movingImage';
@@ -419,15 +420,7 @@
                             {#if profile.lists.length > listCols}<a class="see-all" href="/lists">See All</a>{/if}
                         </div>
                         <div class="lists" style="--cols: {listCols}">
-                            {#each profile.lists.slice(0, listCols) as l (l.id)}
-                                <a class="list" href={`/lists?id=${l.id}`}>
-                                    <span class="stack" aria-hidden="true">
-                                        {#each l.posters.slice(0, 3) as src, i (i)}<img {src} alt="" loading="lazy" style="--i: {i}" />{:else}<span class="blank"><Icon name="list" size={22} /></span>{/each}
-                                    </span>
-                                    <span class="name">{l.name}</span>
-                                    <span class="meta">{l.count} {l.count === 1 ? 'title' : 'titles'}</span>
-                                </a>
-                            {/each}
+                            {#each profile.lists.slice(0, listCols) as l (l.id)}<ListCard list={l} href={`/lists?id=${l.id}`} />{/each}
                         </div>
                     </section>
                 {/if}
@@ -967,60 +960,10 @@
         grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
         gap: 16px;
     }
-    /* Lists keep their size (the front poster as large as a row's): as many as fit, from the left. */
+    /* Lists (ListCard) keep their size: as many as fit, from the left. */
     .lists {
         display: flex;
         gap: 24px;
-    }
-    .lists .list {
-        flex: none;
-        width: calc(var(--poster-w) / 0.69);
-        max-width: 100%;
-    }
-    .list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 0;
-        color: inherit;
-        text-decoration: none;
-    }
-    /* Three posters fanned out, the front one as large as a poster in a row. */
-    .stack {
-        position: relative;
-        aspect-ratio: 1 / 1.03;
-        margin-bottom: 6px;
-    }
-    .stack img,
-    .blank {
-        position: absolute;
-        z-index: calc(3 - var(--i, 0));
-        top: 0;
-        left: calc(var(--i, 0) * 15%);
-        width: 69%;
-        height: 100%;
-        border-radius: var(--radius-s);
-        object-fit: cover;
-        background: var(--elevated-2);
-        box-shadow: var(--shadow-s);
-    }
-    .blank {
-        display: grid;
-        place-items: center;
-        color: var(--label-3);
-    }
-    .list .name {
-        overflow: hidden;
-        font-weight: 600;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .list .meta {
-        color: var(--label-2);
-        font-size: var(--text-caption);
-    }
-    .list:hover .name {
-        text-decoration: underline;
     }
 
     @media (pointer: coarse) {
