@@ -1,6 +1,12 @@
+<script lang="ts" module>
+    import type { MetaItemPreview as BannerItem } from '$lib/core/types';
+    /** The banner's titles per row, for this visit (Home comes and goes; the banner shouldn't). */
+    const bannerCache = new Map<string, BannerItem[]>();
+</script>
+
 <script lang="ts">
     // Home, Movies and Series share this layout; `type` narrows it to one kind.
-    import { onMount } from 'svelte';
+    import { onMount, untrack } from 'svelte';
     import { app } from '$lib/app.svelte';
     import { libraryItemPreview } from '$lib/library';
     import { tracker } from '$lib/tracker.svelte';
@@ -96,15 +102,30 @@
     // Only titles with a picture wide enough for it.
     const bannerRow = $derived(pickBannerRow(resolved, homeLayout.layout.banner));
     const bannerParts = $derived(bannerRow && bannerRow.kind !== 'special' ? bannerRow.parts.join('\n') : '');
-    /** The chosen row's titles, fetched from its addon (it may be far down, not loaded yet). */
-    let bannerFetched = $state<MetaItemPreview[]>([]);
+    /** The chosen row's titles, fetched from its addon (it may be far down, not loaded yet).
+     *  Fetched once per row: only a different row fetches again (reading the
+     *  loading rows here would refetch, and blank the banner, as each arrives).
+     *  Kept for the visit, so coming back to Home shows them straight away. */
+    let bannerFetched = $state<MetaItemPreview[]>(untrack(() => bannerCache.get(bannerParts)) ?? []);
+    let bannerPending = $state(false);
     $effect(() => {
-        const parts = bannerParts ? bannerParts.split('\n') : [];
-        bannerFetched = [];
+        const key = bannerParts;
+        const parts = key ? key.split('\n') : [];
+        // (Only written here, never read: reading it would make this run again on its own change.)
+        const cached = bannerCache.get(key) ?? [];
+        bannerFetched = cached;
+        bannerPending = false;
         if (!parts.length) return;
         let stale = false;
-        Promise.all(parts.map(fetchCatalog)).then((lists) => {
-            if (!stale) bannerFetched = interleave(lists);
+        bannerPending = !cached.length;
+        untrack(() => Promise.all(parts.map(fetchCatalog))).then((lists) => {
+            if (stale) return;
+            const got = interleave(lists);
+            if (got.length) {
+                bannerFetched = got;
+                bannerCache.set(key, got);
+            }
+            bannerPending = false;
         });
         return () => {
             stale = true;
@@ -131,6 +152,8 @@
             bannerRow?.kind === 'special' ? cwItems.map((i) => libraryItemPreview(i) as MetaItemPreview) : bannerFetched
         ).filter((m) => (!type || m.type === type) && backgroundOf(m));
         if (chosen.length) return chosen.slice(0, 6);
+        // (Not another row's titles while the chosen row's are on their way: that swaps the banner twice.)
+        if (bannerPending) return [];
         for (const r of rows) {
             if (r.special) continue;
             const items = interleave(r.indices.map(readyItems)).filter((m) => backgroundOf(m));
