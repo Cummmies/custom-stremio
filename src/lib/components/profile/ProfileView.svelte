@@ -245,8 +245,9 @@
                 {#if editing}
                     <button class="avatar" onclick={() => avatarInput?.click()} aria-label={shownAvatar ? 'Change Picture' : 'Add Picture'}>
                         {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
-                        <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /><span class="avatar-edit-label">Change</span></span>
                     </button>
+                    <!-- Over the picture and its ring alike, so nothing shows through at the edge. -->
+                    <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /><span class="avatar-edit-label">Change</span></span>
                 {:else}
                     <div class="avatar" aria-hidden="true">
                         {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
@@ -585,7 +586,10 @@
     }
     .avatar-edit {
         position: absolute;
-        inset: 0;
+        z-index: 2;
+        inset: -8px;
+        border-radius: 50%;
+        pointer-events: none;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -595,7 +599,7 @@
         color: var(--on-media);
         transition: background var(--fast);
     }
-    button.avatar:hover .avatar-edit {
+    .avatar-wrap:hover .avatar-edit {
         background: var(--scrim-strong);
     }
     .avatar-edit-label {
@@ -621,8 +625,8 @@
         .avatar-edit-label {
             display: block;
         }
-        button.avatar:hover .avatar-edit,
-        button.avatar:focus-visible .avatar-edit {
+        .avatar-wrap:hover .avatar-edit,
+        button.avatar:focus-visible + .avatar-edit {
             opacity: 1;
         }
     }
