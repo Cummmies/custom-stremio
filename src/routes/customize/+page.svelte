@@ -9,6 +9,7 @@
     import { onMount, tick } from 'svelte';
     import { goto } from '$lib/nav';
     import { core } from '$lib/core';
+    import { holdBoard } from '$lib/board';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { itemMenu } from '$lib/contextmenu';
@@ -26,10 +27,11 @@
             core.watch<Board>('board', (s) => (board = s)),
             core.watch<ContinueWatchingPreview>('continue_watching_preview', (s) => (cw = s)),
         ];
-        core.dispatch({ action: 'Load', args: { model: 'CatalogsWithExtra', args: { extra: [] } } }, 'board');
+        // Shared with Home (lib/board.ts): going between them keeps the rows.
+        const letGo = holdBoard();
         return () => {
             offs.forEach((off) => off());
-            core.dispatch({ action: 'Unload' }, 'board');
+            letGo();
         };
     });
 

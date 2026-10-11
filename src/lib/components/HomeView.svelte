@@ -8,6 +8,7 @@
     import { mergeContinueWatching, type TrackerContinue } from '$lib/continueWatching';
     import { isTV } from '$lib/platform';
     import { core } from '$lib/core';
+    import { holdBoard } from '$lib/board';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { backgroundOf } from '$lib/core/art';
     import Hero from './Hero.svelte';
@@ -34,10 +35,11 @@
             core.watch<Board>('board', (s) => (board = s)),
             core.watch<ContinueWatchingPreview>('continue_watching_preview', (s) => (continueWatching = s)),
         ];
-        core.dispatch({ action: 'Load', args: { model: 'CatalogsWithExtra', args: { extra: [] } } }, 'board');
+        // Shared with Customize Home (lib/board.ts): going between them keeps the rows.
+        const letGo = holdBoard();
         return () => {
             unwatch.forEach((fn) => fn());
-            core.dispatch({ action: 'Unload' }, 'board');
+            letGo();
         };
     });
 
