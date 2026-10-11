@@ -34,7 +34,8 @@
         oneditwatch: (id: number) => void;
     } = $props();
 
-    type Card = { key: string; author: string; avatar: string | null; date: string | null; sort: string; score: number | null; body: string | null; source?: string };
+    /** `profile`: a friend's, opened from their name. */
+    type Card = { key: string; author: string; avatar: string | null; date: string | null; sort: string; score: number | null; body: string | null; source?: string; profile?: string };
 
     const SOURCES: Record<string, string> = { tmdb: 'TMDb', trakt: 'Trakt', anilist: 'AniList' };
     const aggregate = $derived<Card[]>(
@@ -59,6 +60,7 @@
             sort: f.date ?? '',
             score: f.rating,
             body: f.review,
+            profile: f.handle ? `/u/${f.handle.replace(/^@/, '')}` : undefined,
         }))
     );
     const written = $derived(friendCards.filter((f) => f.body));
@@ -101,7 +103,7 @@
         <header>
             {@render avatar(r)}
             <div class="who">
-                <p class="name">{r.author}</p>
+                {#if r.profile}<a class="name" href={r.profile}>{r.author}</a>{:else}<p class="name">{r.author}</p>{/if}
                 {#if r.date}<p class="meta">{r.date}</p>{/if}
             </div>
             {#if r.score != null}<p class="score">{score(r.score)}<span>/10</span></p>{/if}
@@ -168,11 +170,11 @@
                 <div class="also">
                     <span class="also-label">Also Rated</span>
                     {#each ratedOnly as f (f.key)}
-                        <span class="also-item">
+                        <a class="also-item" href={f.profile}>
                             {@render avatar(f, true)}
                             {f.author}
                             <strong>{score(f.score!)}</strong>
-                        </span>
+                        </a>
                     {/each}
                 </div>
             {/if}
@@ -317,6 +319,15 @@
     }
     .name {
         font-weight: 600;
+    }
+    a.name,
+    a.also-item {
+        color: inherit;
+        text-decoration: none;
+    }
+    a.name:hover,
+    a.also-item:hover {
+        text-decoration: underline;
     }
     .meta {
         font-size: 12px;

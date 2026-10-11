@@ -482,6 +482,28 @@ address comes from the profile's other devices (Settings sync).
   the TV, and scanning the QR code with a phone camera. The browser build can't stand in for
   those.
 
+## Profiles — built
+
+The website's profile, in the app: the account menu's **Profile** (`/profile`), and anyone's
+at `/u/<handle>` (friends' names and "Also Rated" on the title page link there).
+
+- **Server:** `GET`/`PUT /app-api/v1/profile` and `GET /app-api/v1/users/{handle}`
+  (`core/app_profile.py`). Someone else's respects who can see it and their score and date
+  settings. Pictures and banners come as signed links, `/m/<user>/<avatar|banner>/<sig><ext>`
+  (`core/media_links.py`), because uploads need a website sign-in and their names hold
+  the email. Five favorites, as the website.
+- **Layout:** the banner in the website's shape (1120 by 220, full width), the picture across
+  its edge. Who you are and four numbers on the left, Favorites beside them (one column when
+  narrow). Then Lists (yours) and Recently Watched, one row each of as many as fit, with
+  See All.
+- **Editing works as on the website: in place.** Name, handle and bio become grouped fields,
+  with who can see your profile under them. The banner and picture say how to change them;
+  Favorites shows five slots (tap to choose, drag or arrow keys to reorder, × to remove).
+  Cancel and Save take Edit Profile's place, and Escape cancels. Banners keep the whole
+  picture (at most 2560 wide), as the website does. Not on the TV.
+- The name and picture are also the app's for that account: saving updates them, and an
+  account with no picture takes the profile's (unless it's a video).
+
 ## Later, maybe
 
 - **Brand name and email (pinned 2026-10-10):** the Privacy Policy and Terms say "Custom Stremio"

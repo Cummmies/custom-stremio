@@ -552,6 +552,12 @@ class Tracker {
         return res?.ok ? res.data : null;
     }
 
+    /** Like request, saying why it failed: the HTTP status (409: taken, say), or null when it couldn't be reached. */
+    async requestOrStatus<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number } = {}): Promise<{ data: T } | { status: number | null }> {
+        const res = await this.#send<T>(path, opts);
+        return res?.ok ? { data: res.data } : { status: res ? res.status : null };
+    }
+
     /** Like request, with the failure's HTTP status; null when not connected or switched meanwhile. */
     async #send<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number }): Promise<Result<T> | null> {
         const saved = this.saved;

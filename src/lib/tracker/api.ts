@@ -99,6 +99,41 @@ export type BackupConflict = { title_id: number; title_name: string; imported: R
 /** One episode you've marked watched or scored (by Stremio's episode ID). */
 export type EpisodeLog = { video_id: string; log_id: number; rating: number | null; review: string | null; date: string | null };
 
+export type Visibility = 'public' | 'friends' | 'private';
+export type ProfileStats = { watched: number; hours: number; average: number | null; this_year: number };
+/** A profile: yours (is_owner, with your settings and lists), or someone's as they allow (is_private: only their card). */
+export type Profile = {
+    user_id: number;
+    name: string;
+    handle: string;
+    bio: string;
+    avatar: string | null;
+    banner: string | null;
+    is_owner: boolean;
+    is_private?: boolean;
+    stats?: ProfileStats;
+    favorites?: LibraryItem[];
+    recent?: LibraryItem[];
+    lists?: ListInfo[];
+    visibility?: Visibility;
+    share_scores?: boolean;
+    share_reviews?: boolean;
+    share_dates?: boolean;
+};
+/** What a profile edit sends: only what changes. avatar/banner: a data: URL, or "" to remove. */
+export type ProfileFields = Partial<{
+    name: string;
+    handle: string;
+    bio: string;
+    visibility: Visibility;
+    share_scores: boolean;
+    share_reviews: boolean;
+    share_dates: boolean;
+    favorites: string[];
+    avatar: string;
+    banner: string;
+}>;
+
 /** A watch to log or change: only what's set is sent on an edit. */
 export type WatchFields = { rating?: number | null; review?: string; watch_date?: string | null };
 
@@ -117,6 +152,10 @@ export const lb = {
     editWatch: (logId: number, fields: WatchFields) =>
         tracker.request<{ title: Summary }>(`/watches/${logId}`, { method: 'PUT', body: fields }),
     deleteWatch: (logId: number) => tracker.request<{ title: Summary }>(`/watches/${logId}`, { method: 'DELETE' }),
+    profile: () => tracker.request<Profile>('/profile'),
+    /** The saved profile, or why not (409: the handle is taken; 400: not valid; null: no connection). */
+    updateProfile: (fields: ProfileFields) => tracker.requestOrStatus<Profile>('/profile', { method: 'PUT', body: fields, timeout: 60_000 }),
+    userProfile: (handle: string) => tracker.request<Profile>(`/users/${enc(handle.replace(/^@/, ''))}`),
     /** What you're watching and what's next, and what you've finished (for Continue Watching). */
     continueWatching: () => tracker.request<import('$lib/continueWatching').TrackerContinue>('/continue'),
     /** A show's episodes you've marked watched or scored. */
