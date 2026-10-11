@@ -220,7 +220,7 @@
                             class:current
                             onclick={() => pick(p)}
                             disabled={!!profiles.switching && !busyTile}
-                            aria-label={managing ? `Edit ${p.name}` : current ? `${p.name}, current profile` : `Switch to ${p.name}`}
+                            aria-label={managing ? `Edit ${p.realName || p.name}` : current ? `${p.realName || p.name}, current profile` : `Switch to ${p.realName || p.name}`}
                             aria-busy={busyTile}
                             title={p.email}
                         >
@@ -229,7 +229,7 @@
                                 {#if busyTile}<span class="spinner" aria-hidden="true"></span>{/if}
                                 {#if managing}<span class="badge" aria-hidden="true"><Icon name="pencil" size={15} /></span>{/if}
                             </span>
-                            <span class="name">{p.name}</span>
+                            <span class="name">{p.realName || p.name}</span>
                         </button>
                     </li>
                 {/each}

@@ -46,6 +46,7 @@
     // ---- Editing: a draft of everything, saved together. ----
     let editing = $state(false);
     let name = $state('');
+    let realName = $state('');
     let handle = $state('');
     let bio = $state('');
     let visibility = $state<Visibility>('public');
@@ -64,6 +65,7 @@
     function begin() {
         const p = untrack(() => profile);
         name = p.name;
+        realName = p.real_name ?? '';
         handle = p.handle.replace(/^@/, '');
         bio = p.bio;
         visibility = p.visibility ?? 'public';
@@ -102,6 +104,7 @@
         const p = profile;
         const fields: ProfileFields = {};
         if (name.trim() !== p.name) fields.name = name.trim();
+        if (realName.trim() !== (p.real_name ?? '')) fields.real_name = realName.trim();
         if (`@${handle}` !== p.handle) fields.handle = handle;
         if (bio.trim() !== p.bio) fields.bio = bio.trim();
         if (visibility !== (p.visibility ?? 'public')) fields.visibility = visibility;
@@ -294,7 +297,11 @@
                     <div class="group">
                         <label class="row">
                             <span class="label">Name</span>
-                            <input bind:value={name} maxlength={NAME_MAX} placeholder="Your name" autocomplete="name" />
+                            <input bind:value={name} maxlength={NAME_MAX} placeholder="Your name" autocomplete="nickname" />
+                        </label>
+                        <label class="row">
+                            <span class="label">Real Name</span>
+                            <input bind:value={realName} maxlength="80" placeholder="Optional" autocomplete="name" />
                         </label>
                         <label class="row">
                             <span class="label">Username</span>
@@ -318,7 +325,7 @@
                     {#if handle && !handleValid}
                         <p class="note bad">A username is 3 to 24 letters, numbers or underscores.</p>
                     {:else}
-                        <p class="note">Your name shows here and in the app. Your username is how friends find you, and your profile’s link.</p>
+                        <p class="note">Your name shows here and in the app. Only friends see your real name, and it’s the one shown when switching profiles (empty: your name). Your username is how friends find you, and your profile’s link.</p>
                     {/if}
                 </div>
                 <div class="edit-col">
@@ -346,7 +353,9 @@
         {:else}
             <div class="who">
                 <h1>{profile.name || profile.handle}</h1>
-                {#if profile.handle}<p class="handle">{profile.handle}</p>{/if}
+                {#if profile.handle || profile.real_name}
+                    <p class="handle">{[profile.handle, profile.real_name].filter(Boolean).join(' · ')}</p>
+                {/if}
                 {#if profile.bio}<p class="bio">{profile.bio}</p>{/if}
             </div>
         {/if}
@@ -454,6 +463,9 @@
         /* The website's banner: 1120 wide by 220 tall, full width here. On a
            phone it keeps a usable height under the bar. */
         --cover-h: clamp(calc(var(--nav-h) + 100px), 19.643vw, 440px);
+        /* The picture reaches a little past that edge and has faded into the
+           page by then (everything is still placed from the edge). */
+        --cover-fade: clamp(24px, 3vw, 48px);
         --avatar: 120px;
         /* Everything under the banner sits in one centred column on wide screens. */
         --content-w: 1240px;
@@ -463,16 +475,18 @@
     .cover {
         position: absolute;
         inset: 0 0 auto;
-        height: var(--cover-h);
+        height: calc(var(--cover-h) + var(--cover-fade));
         overflow: hidden;
-        background: var(--elevated);
+        /* A long fade of the picture itself into whatever is behind it. */
+        -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(var(--cover-h) * 0.5), rgb(0 0 0 / 0.35) calc(var(--cover-h) * 0.85), transparent 100%);
+        mask-image: linear-gradient(to bottom, #000 0, #000 calc(var(--cover-h) * 0.5), rgb(0 0 0 / 0.35) calc(var(--cover-h) * 0.85), transparent 100%);
     }
-    /* Light at the top for the bar, a short fade into the page at the bottom. */
+    /* Light at the top, for the bar. */
     .cover::after {
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(to bottom, var(--scrim) 0%, transparent 38%, transparent 62%, var(--bg) 100%);
+        background: linear-gradient(to bottom, var(--scrim) 0, transparent calc(var(--cover-h) * 0.4));
         pointer-events: none;
     }
     .cover-edit {

@@ -16,6 +16,8 @@ export type SavedProfile = {
     avatar?: string;
     /** A moving profile picture (kept uncropped): the part of it to show. */
     avatarCrop?: MediaCrop;
+    /** The real name on the profile (shown when switching profiles); none: `name`. */
+    realName?: string;
     lastUsed: number;
 };
 
@@ -117,7 +119,7 @@ class Profiles {
         return uid ? (this.list.find((p) => p.uid === uid) ?? null) : null;
     }
 
-    update(uid: string, patch: Partial<Pick<SavedProfile, 'name' | 'color' | 'avatar' | 'avatarCrop'>>) {
+    update(uid: string, patch: Partial<Pick<SavedProfile, 'name' | 'color' | 'avatar' | 'avatarCrop' | 'realName'>>) {
         this.list = this.list.map((p) => {
             if (p.uid !== uid) return p;
             // A different picture without a crop of its own shows whole.

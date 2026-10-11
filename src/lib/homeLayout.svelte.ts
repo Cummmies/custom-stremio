@@ -185,7 +185,9 @@ class HomeLayout {
             else rows.push(row);
             seen.add(key);
         }
-        return rows;
+        // Rows on Home first, then the ones switched off, each keeping its order
+        // (Customize Home lists them so; Home shows only the first).
+        return [...rows.filter((r) => !r.hidden), ...rows.filter((r) => r.hidden)];
     }
 
     /** Saves the current resolved order (so later changes have something to work on). */

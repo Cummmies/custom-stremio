@@ -113,6 +113,8 @@ export type Profile = {
     banner: string | null;
     avatar_crop?: MediaCrop | null;
     banner_crop?: MediaCrop | null;
+    /** Yours, or a friend's: an optional real name ("" none). Nobody else gets it. */
+    real_name?: string;
     is_owner: boolean;
     is_private?: boolean;
     stats?: ProfileStats;
@@ -128,6 +130,7 @@ export type Profile = {
  *  a new one without a crop shows whole. */
 export type ProfileFields = Partial<{
     name: string;
+    real_name: string;
     handle: string;
     bio: string;
     visibility: Visibility;

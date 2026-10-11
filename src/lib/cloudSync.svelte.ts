@@ -47,7 +47,7 @@ type Payload = {
      * `updated` stands for all of them).
      */
     stamps?: Partial<Record<Part, number>>;
-    profile?: { name: string; color: string; avatar?: string; avatarCrop?: MediaCrop };
+    profile?: { name: string; color: string; avatar?: string; avatarCrop?: MediaCrop; realName?: string };
     home?: Layout;
     prefs?: SyncedPrefs;
     /** This profile's tracker connection (tracker.svelte.ts); older data has only the server. */
@@ -224,7 +224,7 @@ class CloudSync {
     #parts(uid: string): Record<Part | 'devices', string | null> {
         const p = profiles.get(uid);
         return {
-            profile: p ? JSON.stringify({ name: p.name, color: p.color, avatar: p.avatar, avatarCrop: p.avatarCrop }) : null,
+            profile: p ? JSON.stringify({ name: p.name, color: p.color, avatar: p.avatar, avatarCrop: p.avatarCrop, realName: p.realName }) : null,
             home: JSON.stringify($state.snapshot(homeLayout.layout)),
             prefs: JSON.stringify(playerPrefs.synced()),
             // Always a value, so connecting (from none) counts as a change to send.
@@ -272,7 +272,8 @@ class CloudSync {
                 resend = avatar !== remote.profile.avatar || name !== remote.profile.name;
             }
             const avatarCrop = avatar && avatar === remote.profile.avatar ? remote.profile.avatarCrop : here.avatar === avatar ? here.avatarCrop : undefined;
-            profiles.update(uid, avatar ? { name, color, avatar, avatarCrop } : { name, color, avatar: undefined, avatarCrop: undefined });
+            const realName = remote.profile.realName ?? here.realName;
+            profiles.update(uid, avatar ? { name, color, avatar, avatarCrop, realName } : { name, color, avatar: undefined, avatarCrop: undefined, realName });
             mine.profile = resend ? Date.now() : theirs.profile;
             took = true;
         }

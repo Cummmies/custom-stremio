@@ -26,8 +26,9 @@
         const uid = app.user?._id;
         const saved = profiles.get(uid);
         if (!uid || !saved) return;
-        const patch: { name?: string; avatar?: string; avatarCrop?: MediaCrop } = {};
+        const patch: { name?: string; avatar?: string; avatarCrop?: MediaCrop; realName?: string } = {};
         if (p.name && p.name !== saved.name) patch.name = p.name;
+        if ((p.real_name || undefined) !== saved.realName) patch.realName = p.real_name || undefined;
         // (A video picture stays on the profile; the app's small picture is a still.)
         if (!saved.avatar && p.avatar && !/\.(mp4|webm|mov)$/i.test(p.avatar)) patch.avatar = p.avatar;
         // The same picture: its crop as the profile has it (set on another device, or the website).
@@ -57,8 +58,9 @@
         // The app's own copy of the name and picture follows.
         const uid = app.user?._id;
         if (uid && profiles.get(uid)) {
-            const patch: { name?: string; avatar?: string; avatarCrop?: MediaCrop } = {};
+            const patch: { name?: string; avatar?: string; avatarCrop?: MediaCrop; realName?: string } = {};
             if (fields.name !== undefined) patch.name = res.data.name;
+            if (fields.real_name !== undefined) patch.realName = res.data.real_name || undefined;
             // The saved picture's link, not the file: a moving one can be megabytes.
             if (fields.avatar !== undefined) {
                 patch.avatar = (fields.avatar && res.data.avatar) || undefined;
