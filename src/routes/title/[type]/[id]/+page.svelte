@@ -6,7 +6,7 @@
     import RelatedTab from '$lib/components/detail/RelatedTab.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import { LightboxdTitle } from '$lib/lightboxd/title.svelte';
-    import { STATUS_LABEL, day, score, today, type Status, type Summary } from '$lib/lightboxd/api';
+    import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/lightboxd/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
@@ -462,11 +462,84 @@
         ...((main?.scores.imdb ?? rating) ? [{ label: 'IMDb', value: (main?.scores.imdb ?? rating)! }] : []),
     ]);
 
+    // Episodes on their own (with the tracker): marked watched and scored,
+    // by Stremio's episode IDs.
+    let episodeLogs = $state<Record<string, EpisodeLog>>({});
+    /** Only which show (not every update of its details) brings them again. */
+    const episodeShowId = $derived(isSeries && lbOn ? (meta?.id ?? null) : null);
+    $effect(() => {
+        const showId = episodeShowId;
+        episodeLogs = {};
+        if (!showId) return;
+        lb.episodes(showId).then((res) => {
+            if (res && episodeShowId === showId) episodeLogs = Object.fromEntries(res.episodes.map((e) => [e.video_id, e]));
+        });
+    });
+    function keepEpisodeLog(entry: EpisodeLog) {
+        episodeLogs = { ...episodeLogs, [entry.video_id]: entry };
+    }
+    function forgetEpisodeLog(videoId: string) {
+        const { [videoId]: _gone, ...rest } = episodeLogs;
+        episodeLogs = rest;
+    }
+
     function toggleEpisodeWatched(v: Video) {
         core.dispatch({
             action: 'MetaDetails',
             args: { action: 'MarkVideoAsWatched', args: [{ id: v.id, released: v.released }, !v.watched] },
         });
+        if (!lbOn || !meta) return;
+        // Your history follows: watched is logged, unwatched leaves it.
+        const logged = episodeLogs[v.id];
+        if (!v.watched && !logged) {
+            lb.logEpisode(meta.id, v.id, meta.name).then((res) => res && keepEpisodeLog(res.episode));
+        } else if (v.watched && logged) {
+            lb.removeEpisode(logged.log_id).then((res) => res && forgetEpisodeLog(v.id));
+        }
+    }
+
+    // Rate Episode: the same dialog as a whole title's, for one episode.
+    let episodeRate = $state<{ video: Video; entry: EpisodeLog | null } | null>(null);
+    let episodeBusy = $state(false);
+    let episodeError = $state<string | null>(null);
+    /** The day an episode came out, as the dialog's earliest date (Stremio's dates are calendar days). */
+    function episodeDay(v: Video): string | null {
+        if (!v.released) return null;
+        const d = new Date(v.released);
+        if (isNaN(d.getTime())) return null;
+        return d.getUTCHours() === 0 ? v.released.slice(0, 10) : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    function rateEpisode(v: Video) {
+        episodeError = null;
+        episodeRate = { video: v, entry: episodeLogs[v.id] ?? null };
+    }
+    async function saveEpisode(d: LogDraft) {
+        if (!episodeRate || !meta) return;
+        const v = episodeRate.video;
+        episodeBusy = true;
+        episodeError = null;
+        const res = await lb.logEpisode(meta.id, v.id, meta.name, { rating: d.score, review: d.review, watch_date: d.date });
+        episodeBusy = false;
+        if (!res) {
+            episodeError = 'Couldn’t save. Try again in a moment.';
+            return;
+        }
+        keepEpisodeLog(res.episode);
+        if (!v.watched) core.dispatch({ action: 'MetaDetails', args: { action: 'MarkVideoAsWatched', args: [{ id: v.id, released: v.released }, true] } });
+        episodeRate = null;
+    }
+    async function removeEpisodeWatch() {
+        const entry = episodeRate?.entry;
+        if (!episodeRate || !entry) return;
+        episodeBusy = true;
+        const res = await lb.removeEpisode(entry.log_id);
+        episodeBusy = false;
+        if (!res) {
+            episodeError = 'Couldn’t remove it. Try again in a moment.';
+            return;
+        }
+        forgetEpisodeLog(episodeRate.video.id);
+        episodeRate = null;
     }
 
     const selectedVideo = $derived(meta && videoId ? meta.videos.find((v) => v.id === videoId) ?? null : null);
@@ -645,6 +718,8 @@
                                 currentId={resuming ? (resumeVideo?.id ?? null) : null}
                                 onselect={(v) => (v.upcoming ? openSources(v.id) : playVideo(v.id))}
                                 ontogglewatched={toggleEpisodeWatched}
+                                logs={episodeLogs}
+                                onrate={lbOn ? rateEpisode : undefined}
                             />
                         {:else}
                             <ul class="extras">
@@ -715,6 +790,24 @@
         onsave={saveLog}
         ondelete={deleteLog}
         onclose={() => (log = null)}
+    />
+{/if}
+
+{#if episodeRate && meta}
+    {@const v = episodeRate.video}
+    <LogDialog
+        mode={episodeRate.entry ? 'edit' : 'rate'}
+        title={episodeRate.entry ? 'Edit Episode Rating' : 'Rate Episode'}
+        name={`S${v.season} · E${v.episode}${v.title ? ` · ${v.title}` : ''}`}
+        year={null}
+        poster={meta.poster ?? null}
+        earliest={episodeDay(v)}
+        initial={{ score: episodeRate.entry?.rating ?? null, date: episodeRate.entry?.date ?? today(), review: episodeRate.entry?.review ?? '' }}
+        busy={episodeBusy}
+        error={episodeError}
+        onsave={saveEpisode}
+        ondelete={episodeRate.entry ? removeEpisodeWatch : undefined}
+        onclose={() => (episodeRate = null)}
     />
 {/if}
 

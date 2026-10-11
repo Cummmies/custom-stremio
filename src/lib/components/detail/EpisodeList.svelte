@@ -3,6 +3,11 @@
     import Icon from '../Icon.svelte';
     import PopupButton from '../menu/PopupButton.svelte';
     import { releasedDate } from '$lib/released';
+    import { itemMenu } from '$lib/contextmenu';
+    import type { MenuEntry } from '$lib/menu.svelte';
+    import { score } from '$lib/lightboxd/api';
+    import type { EpisodeLog } from '$lib/lightboxd/api';
+    import { isTV } from '$lib/platform';
 
     let {
         videos,
@@ -11,6 +16,8 @@
         currentId = null,
         onselect,
         ontogglewatched,
+        logs = {},
+        onrate,
     }: {
         videos: Video[];
         season: number;
@@ -19,7 +26,22 @@
         currentId?: string | null;
         onselect: (video: Video) => void;
         ontogglewatched: (video: Video) => void;
+        /** Your episode watches (scores), by episode ID. */
+        logs?: Record<string, EpisodeLog>;
+        /** Score an episode (with the tracker connected). */
+        onrate?: (video: Video) => void;
     } = $props();
+
+    /** An episode's menu (right-click, or press and hold): what its buttons do, and rating. */
+    function episodeMenu(ep: Video): MenuEntry[] {
+        const rated = logs[ep.id]?.rating != null;
+        return [
+            { label: ep.watched ? 'Mark as Unwatched' : 'Mark as Watched', icon: 'check', onselect: () => ontogglewatched(ep) },
+            ...(onrate && !ep.upcoming
+                ? [{ label: rated ? 'Edit Rating…' : 'Rate Episode…', icon: 'star', onselect: () => onrate(ep) } as MenuEntry]
+                : []),
+        ];
+    }
 
     let list = $state<HTMLElement>();
     let atTop = $state(true);
@@ -69,7 +91,8 @@
 <ol class="episodes" class:fade-top={!atTop} class:fade-bottom={!atBottom} bind:this={list} onscroll={updateEdges}>
     {#each episodes as ep (ep.id)}
         {@const progress = ep.progress && ep.progress > 0 ? Math.min(ep.progress, 100) : 0}
-        <li class:selected={ep.id === selectedId} class:current={ep.id === currentId} data-id={ep.id}>
+        {@const rating = logs[ep.id]?.rating ?? null}
+        <li class:selected={ep.id === selectedId} class:current={ep.id === currentId} data-id={ep.id} use:itemMenu={() => episodeMenu(ep)}>
             <button class="main" onclick={() => onselect(ep)} class:upcoming-ep={ep.upcoming} aria-label={`Episode ${ep.episode}: ${ep.title}${ep.watched ? ', watched' : ''}${ep.upcoming ? ', upcoming: see if sources are out early' : ''}`}>
                 <div class="thumb">
                     {#if ep.thumbnail}
@@ -94,9 +117,21 @@
                     <span class="meta">
                         {#if ep.upcoming}<span class="upcoming">Upcoming</span>{/if}
                         {fmtDate(ep.released) ?? ''}
+                        {#if rating != null}<span class="your-score" aria-label={`You rated it ${score(rating)}`}> · <Icon name="star" size={11} filled /> {score(rating)}</span>{/if}
                     </span>
                 </div>
             </button>
+            {#if onrate && !ep.upcoming && !isTV}
+                <button
+                    class="rate"
+                    class:has={rating != null}
+                    onclick={() => onrate(ep)}
+                    aria-label={rating != null ? `Edit your rating of episode ${ep.episode}` : `Rate episode ${ep.episode}`}
+                    title={rating != null ? 'Edit Rating' : 'Rate Episode'}
+                >
+                    <Icon name="star" size={15} filled={rating != null} />
+                </button>
+            {/if}
             <button
                 class="watched"
                 class:on={ep.watched}
@@ -313,6 +348,58 @@
         background: var(--label);
         border-color: var(--label);
         color: var(--bg);
+    }
+    /* Rate: beside Watched, shown on hover or focus (always once rated). */
+    .rate {
+        position: absolute;
+        right: 48px;
+        top: 50%;
+        translate: 0 -50%;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--label-2);
+        cursor: pointer;
+        opacity: 0;
+        transition:
+            opacity var(--fast),
+            background var(--fast);
+    }
+    li:hover .rate,
+    .rate:focus-visible,
+    .rate.has {
+        opacity: 1;
+    }
+    .rate:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
+    .rate.has {
+        color: var(--label);
+    }
+    li:has(.rate) .text {
+        padding-right: 80px;
+    }
+    .your-score {
+        color: var(--label);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .your-score :global(svg) {
+        vertical-align: -1px;
+    }
+    /* Touch: no hover, so the star shows once rated; press and hold for the menu. */
+    @media (pointer: coarse) {
+        .rate:not(.has) {
+            display: none;
+        }
+        li:has(.rate:not(.has)) .text {
+            padding-right: 44px;
+        }
     }
     @media (max-width: 640px) {
         .thumb {

@@ -68,7 +68,14 @@ export type LibraryItem = {
 };
 
 export type ListInfo = { id: number; name: string; description: string | null; count: number; posters: string[] };
-export type ListDetail = { id: number; name: string; description: string | null; items: LibraryItem[] };
+export type ListDetail = {
+    id: number;
+    name: string;
+    description: string | null;
+    items: LibraryItem[];
+    /** Its link, while it's shared with anyone who has it. */
+    share_url: string | null;
+};
 
 export type AggregateReview = { author: string; source: string; body: string; rating: number | null; date: string | null; url: string | null };
 export type FriendReview = { name: string; handle: string; avatar: string | null; rating: number | null; review: string | null; date: string | null };
@@ -89,6 +96,9 @@ export type RelatedGroup = { title: string; items: RelatedItem[] };
 /** A title whose status or progress here differs from a backup's (from an import). */
 export type BackupConflict = { title_id: number; title_name: string; imported: Record<string, unknown> };
 
+/** One episode you've marked watched or scored (by Stremio's episode ID). */
+export type EpisodeLog = { video_id: string; log_id: number; rating: number | null; review: string | null; date: string | null };
+
 /** A watch to log or change: only what's set is sent on an edit. */
 export type WatchFields = { rating?: number | null; review?: string; watch_date?: string | null };
 
@@ -107,6 +117,12 @@ export const lb = {
     editWatch: (logId: number, fields: WatchFields) =>
         lightboxd.request<{ title: Summary }>(`/watches/${logId}`, { method: 'PUT', body: fields }),
     deleteWatch: (logId: number) => lightboxd.request<{ title: Summary }>(`/watches/${logId}`, { method: 'DELETE' }),
+    /** A show's episodes you've marked watched or scored. */
+    episodes: (id: string) => lightboxd.request<{ episodes: EpisodeLog[] }>(`/episodes?id=${enc(id)}`),
+    /** Marks an episode watched (counting it) and sets what's in `fields`. */
+    logEpisode: (id: string, videoId: string, name: string, fields: WatchFields = {}) =>
+        lightboxd.request<{ episode: EpisodeLog }>('/episodes', { method: 'POST', body: { id, video_id: videoId, name, ...fields }, timeout: 30_000 }),
+    removeEpisode: (logId: number) => lightboxd.request<{ status: string }>(`/episodes/${logId}`, { method: 'DELETE' }),
     reviews: (titleId: number) => lightboxd.request<Reviews>(`/titles/${titleId}/reviews`, { timeout: 30_000 }),
     related: (titleId: number) => lightboxd.request<{ groups: RelatedGroup[] }>(`/titles/${titleId}/related`, { timeout: 30_000 }),
 
@@ -118,6 +134,9 @@ export const lb = {
     newList: (name: string) => lightboxd.request<ListInfo>('/lists', { method: 'POST', body: { name } }),
     addToList: (listId: number, id: string, type: string, name: string) =>
         lightboxd.request<{ title: Summary }>(`/lists/${listId}/titles`, { method: 'POST', body: { id, type, name }, timeout: 30_000 }),
+    /** A link anyone can open to see the list (the same one each time, until sharing stops). */
+    shareList: (listId: number) => lightboxd.request<{ share_url: string }>(`/lists/${listId}/share`, { method: 'POST' }),
+    unshareList: (listId: number) => lightboxd.request<{ share_url: null }>(`/lists/${listId}/share`, { method: 'DELETE' }),
     removeFromList: (listId: number, titleId: number) =>
         lightboxd.request<{ title: Summary }>(`/lists/${listId}/titles/${titleId}`, { method: 'DELETE' }),
 

@@ -1,7 +1,8 @@
 <script lang="ts">
     // Lists: your Lightboxd lists (docs/lightboxd.md), each as a stack of its
     // first posters; one opens in place (?id=, so Back returns to them all).
-    // New List makes one. Without Lightboxd connected, says where to connect.
+    // New List makes one; Share gives an open list a link anyone can open
+    // (and Stop Sharing turns it off). Without Lightboxd connected, says so.
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
     import { lightboxd } from '$lib/lightboxd.svelte';
@@ -11,6 +12,8 @@
     import EmptyState from '$lib/components/EmptyState.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import Icon from '$lib/components/Icon.svelte';
+    import { menu, type MenuEntry } from '$lib/menu.svelte';
+    import { isIOS } from '$lib/platform';
 
     const openId = $derived(Number(appUrl(page.url).searchParams.get('id')) || null);
 
@@ -51,6 +54,63 @@
         creating = false;
     }
 
+    // --- Share: a link anyone can open (a page of the list's titles) ---
+    /** iPhone: the system's share sheet; elsewhere the link is copied. */
+    const canShareSheet = isIOS && typeof navigator !== 'undefined' && 'share' in navigator;
+    let shareNote = $state<string | null>(null);
+    let noteTimer: ReturnType<typeof setTimeout> | undefined;
+    function note(text: string) {
+        shareNote = text;
+        clearTimeout(noteTimer);
+        noteTimer = setTimeout(() => (shareNote = null), 3000);
+    }
+    async function copyLink(url: string) {
+        try {
+            await navigator.clipboard.writeText(url);
+            note('Link copied.');
+        } catch {
+            note('Couldn’t copy the link.');
+        }
+    }
+    async function shareSheet(url: string, name: string) {
+        try {
+            await navigator.share({ title: name, url });
+        } catch {
+            /* closed without sharing */
+        }
+    }
+    async function startSharing(list: ListDetail) {
+        const res = await lb.shareList(list.id);
+        if (!res) return note('Couldn’t make a link. Try again in a moment.');
+        if (detail?.id === list.id) detail = { ...detail, share_url: res.share_url };
+        if (canShareSheet) await shareSheet(res.share_url, list.name);
+        else await copyLink(res.share_url);
+    }
+    async function stopSharing(list: ListDetail) {
+        const res = await lb.unshareList(list.id);
+        if (!res) return note('Couldn’t stop sharing. Try again in a moment.');
+        if (detail?.id === list.id) detail = { ...detail, share_url: null };
+        note('The link no longer works.');
+    }
+    function shareMenu(e: MouseEvent) {
+        const list = detail;
+        if (!list) return;
+        const url = list.share_url;
+        const entries: MenuEntry[] = url
+            ? [
+                  { header: 'Shared', detail: 'Anyone with the link can see this list.' },
+                  { label: 'Copy Link', icon: 'link', onselect: () => copyLink(url) },
+                  ...(canShareSheet ? [{ label: 'Share…', icon: 'share', onselect: () => shareSheet(url, list.name) } as MenuEntry] : []),
+                  { separator: true },
+                  { label: 'Stop Sharing', icon: 'close', destructive: true, onselect: () => stopSharing(list) },
+              ]
+            : [
+                  { header: 'Share This List', detail: 'Anyone with the link can see its titles. Your scores and history stay private.' },
+                  { label: canShareSheet ? 'Share Link…' : 'Copy Link', icon: canShareSheet ? 'share' : 'link', onselect: () => startSharing(list) },
+              ];
+        menu.toggleFor(e.currentTarget as HTMLElement, entries, 'end');
+    }
+
     const open = (id: number) => goto(`/lists?id=${id}`);
     const below = (i: ListDetail['items'][number]) =>
         [i.year, i.status ? STATUS_SHORT[i.status] : null, i.rating != null ? score(i.rating) : null].filter(Boolean).join(' · ') || null;
@@ -77,10 +137,16 @@
             <div>
                 <h1>{detail?.name ?? lists?.find((l) => l.id === openId)?.name ?? 'List'}</h1>
                 {#if detail}
-                    <p class="sub">{detail.items.length} {detail.items.length === 1 ? 'title' : 'titles'}{detail.description ? ` · ${detail.description}` : ''}</p>
+                    <p class="sub">
+                        {detail.items.length} {detail.items.length === 1 ? 'title' : 'titles'}{detail.share_url ? ' · Shared' : ''}{detail.description ? ` · ${detail.description}` : ''}
+                    </p>
                 {/if}
             </div>
+            {#if detail}
+                <button class="new share" aria-haspopup="menu" aria-expanded="false" onclick={shareMenu}><Icon name="share" size={16} /> Share</button>
+            {/if}
         </header>
+        {#if shareNote}<p class="share-note" role="status">{shareNote}</p>{/if}
         {#if detail === undefined}
             <p class="loading" role="status">Loading…</p>
         {:else if detail === null}
@@ -147,6 +213,22 @@
     }
     header.detail {
         justify-content: flex-start;
+    }
+    .share {
+        margin-left: auto;
+    }
+    .share-note {
+        position: fixed;
+        left: 50%;
+        bottom: calc(24px + var(--tabbar-h));
+        z-index: 20;
+        transform: translateX(-50%);
+        margin: 0;
+        padding: 10px 16px;
+        border: 1px solid var(--separator);
+        border-radius: var(--radius-l);
+        background: var(--elevated);
+        box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
     }
     h1 {
         margin: 0;

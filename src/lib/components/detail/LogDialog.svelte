@@ -35,6 +35,7 @@
         onsave,
         ondelete,
         onclose,
+        title,
     }: {
         mode: LogMode;
         /** It is (or would be) a rewatch. */
@@ -50,6 +51,8 @@
         onsave: (d: LogDraft) => void;
         ondelete?: () => void;
         onclose: () => void;
+        /** The heading, when it's not a whole title's (an episode's: "Rate Episode"). */
+        title?: string;
     } = $props();
 
     const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -71,6 +74,7 @@
     });
 
     const heading = $derived(
+        title ??
         mode === 'rate' ? 'Your Rating' : mode === 'edit' ? (rewatch ? 'Edit Rewatch' : 'Edit Watch') : rewatch ? 'Log Rewatch' : 'Log Watch'
     );
     const saveLabel = $derived(busy ? 'Saving…' : mode === 'edit' ? 'Save Changes' : mode === 'rate' ? 'Save' : rewatch ? 'Save Rewatch' : 'Save Watch');
