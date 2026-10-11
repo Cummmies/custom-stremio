@@ -1,14 +1,16 @@
 <script lang="ts">
     // One button for a profile picture: "Upload…" when there's none, otherwise
     // "Change…" with Upload New Photo / Remove Photo in the app menu. A new
-    // picture is moved and scaled into its circle first (ImageCropper). It's
-    // one picture: your profile's too.
+    // still picture is moved and scaled into its circle first (ImageCropper); a
+    // moving one (GIF, animated WebP) is kept as it is. It's one picture: your
+    // profile's too.
     import { profiles } from '$lib/profiles.svelte';
     import { menu } from '$lib/menu.svelte';
     import { tracker } from '$lib/tracker.svelte';
     import { lb } from '$lib/tracker/api';
     import Icon from './Icon.svelte';
     import ImageCropper from './ImageCropper.svelte';
+    import { PICTURE_TYPES, TOO_BIG, fitsUpload, isMoving, toDataUrl } from '$lib/movingImage';
 
     let { uid }: { uid: string } = $props();
 
@@ -17,11 +19,15 @@
     const hasPhoto = $derived(!!profiles.get(uid)?.avatar);
 
     let cropping = $state<File | null>(null);
-    function onchange() {
+    /** A still picture is moved and scaled first; a moving one (GIF, animated WebP) is kept as it is. */
+    async function onchange() {
         const file = input?.files?.[0];
         if (input) input.value = '';
         error = null;
-        if (file) cropping = file;
+        if (!file) return;
+        if (!(await isMoving(file).catch(() => false))) return void (cropping = file);
+        if (!fitsUpload(file)) return void (error = TOO_BIG);
+        setPicture(await toDataUrl(file));
     }
     async function setPicture(avatar: string | undefined) {
         if (!tracker.ready) return profiles.update(uid, { avatar });
@@ -45,7 +51,7 @@
 </script>
 
 <div class="photo">
-    <input bind:this={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" {onchange} hidden />
+    <input bind:this={input} type="file" accept={PICTURE_TYPES} {onchange} hidden />
     <button class="btn" aria-haspopup={hasPhoto ? 'menu' : undefined} aria-expanded="false" {onclick}>
         {hasPhoto ? 'Change' : 'Upload…'}
         {#if hasPhoto}<Icon name="chevronDown" size={14} />{/if}

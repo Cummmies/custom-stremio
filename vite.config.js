@@ -55,8 +55,6 @@ export default defineConfig(() => ({
       "@stremio/stremio-core-web/bridge.js",
       "@stremio/stremio-core-web/stremio_core_web.js",
     ],
-    // The WebP encoder finds its .wasm next to its own script: pre-bundling would move it.
-    exclude: ["@jsquash/webp"],
   },
   // The TV build's worker is a classic script: the TV's built-in engine
   // (Chromium 69) has no module workers.

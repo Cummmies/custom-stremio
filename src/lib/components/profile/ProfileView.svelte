@@ -21,6 +21,7 @@
     import ProfileMedia from './ProfileMedia.svelte';
     import FavoritePicker from './FavoritePicker.svelte';
     import ImageCropper from '$lib/components/ImageCropper.svelte';
+    import { PICTURE_TYPES, TOO_BIG, fitsUpload, isMoving, toDataUrl } from '$lib/movingImage';
     import { isTV } from '$lib/platform';
 
     let {
@@ -109,11 +110,19 @@
 
     // ---- Picture and banner: chosen, then moved and scaled (ImageCropper) ----
     let cropping = $state<{ file: File; kind: 'avatar' | 'banner' } | null>(null);
-    function pickImage(e: Event, kind: 'avatar' | 'banner') {
+    let pickError = $state<string | null>(null);
+    /** A still picture is moved and scaled first; a moving one (GIF, animated WebP) goes up as it is. */
+    async function pickImage(e: Event, kind: 'avatar' | 'banner') {
         const input = e.currentTarget as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        if (file) cropping = { file, kind };
+        pickError = null;
+        if (!file) return;
+        if (!(await isMoving(file).catch(() => false))) return void (cropping = { file, kind });
+        if (!fitsUpload(file)) return void (pickError = TOO_BIG);
+        const url = await toDataUrl(file);
+        if (kind === 'avatar') avatar = url;
+        else banner = url;
     }
     function cropped(dataUrl: string) {
         if (cropping?.kind === 'avatar') avatar = dataUrl;
@@ -233,8 +242,8 @@
         <div class="cover-edit">
             <button class="glass-pill change" onclick={() => bannerInput?.click()}><Icon name="camera" size={15} /> {shownBanner ? 'Change Banner' : 'Add Banner'}</button>
         </div>
-        <input bind:this={avatarInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'avatar')} />
-        <input bind:this={bannerInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'banner')} />
+        <input bind:this={avatarInput} type="file" accept={PICTURE_TYPES} hidden onchange={(e) => pickImage(e, 'avatar')} />
+        <input bind:this={bannerInput} type="file" accept={PICTURE_TYPES} hidden onchange={(e) => pickImage(e, 'banner')} />
     {/if}
 
     <div class="content">
@@ -246,7 +255,7 @@
                     <button class="avatar" onclick={() => avatarInput?.click()} aria-label={shownAvatar ? 'Change Picture' : 'Add Picture'}>
                         {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
                     </button>
-                    <!-- Over the picture and its ring alike, so nothing shows through at the edge. -->
+                    <!-- Over the picture (outside it, so its own edge can't show through), not the ring. -->
                     <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /><span class="avatar-edit-label">Change</span></span>
                 {:else}
                     <div class="avatar" aria-hidden="true">
@@ -276,7 +285,7 @@
         {/if}
 
         {#if editing}
-            {#if error}<p class="error" role="alert">{error}</p>{/if}
+            {#if error || pickError}<p class="error" role="alert">{pickError ?? error}</p>{/if}
             <div class="edit-grid">
                 <div class="edit-col">
                     <h3>Profile</h3>
@@ -587,7 +596,7 @@
     .avatar-edit {
         position: absolute;
         z-index: 2;
-        inset: -8px;
+        inset: -1px;
         border-radius: 50%;
         pointer-events: none;
         display: flex;
