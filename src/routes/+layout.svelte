@@ -21,6 +21,7 @@
     import { focusPrimary, startRemote } from '$lib/tv/remote';
     import { afterNavigate } from '$app/navigation';
     import { notify } from '$lib/notify.svelte';
+    import { startErrorReports } from '$lib/errorReports';
     import '$lib/styles/tv.css';
 
     let { children } = $props();
@@ -37,6 +38,8 @@
             startRemote({ atHome: () => appUrl(page.url).pathname === '/', back: () => history.back() });
             focusPrimary();
         }
+        // What breaks goes to the server, unless turned off in Settings.
+        startErrorReports();
         app.start();
         // New episodes and the like: the bell, and the system's notifications.
         notify.start();

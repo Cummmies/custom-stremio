@@ -474,6 +474,11 @@ class Lightboxd {
         }
     }
 
+    /** Where the app's error reports go (lib/errorReports.ts): this device's server, else the built-in one. */
+    get reportsServer(): string | null {
+        return this.saved?.server ?? BUILT_IN_SERVER;
+    }
+
     /** What Settings fills the address field with: this device's, else the profile's shared one. */
     get suggestedServer(): string | null {
         return this.saved?.server ?? (this.#uid ? this.sharedServerFor(this.#uid) : null);

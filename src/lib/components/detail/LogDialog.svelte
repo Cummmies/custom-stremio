@@ -74,8 +74,7 @@
     });
 
     const heading = $derived(
-        title ??
-        mode === 'rate' ? 'Your Rating' : mode === 'edit' ? (rewatch ? 'Edit Rewatch' : 'Edit Watch') : rewatch ? 'Log Rewatch' : 'Log Watch'
+        title ?? (mode === 'rate' ? 'Your Rating' : mode === 'edit' ? (rewatch ? 'Edit Rewatch' : 'Edit Watch') : rewatch ? 'Log Rewatch' : 'Log Watch')
     );
     const saveLabel = $derived(busy ? 'Saving…' : mode === 'edit' ? 'Save Changes' : mode === 'rate' ? 'Save' : rewatch ? 'Save Rewatch' : 'Save Watch');
 

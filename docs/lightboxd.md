@@ -400,6 +400,33 @@ Stremio ID and poster. `POST /notifications/read`, `POST /notifications/{id}/rea
 - The native plugin ships with the installer / `.ipa`: an app updated only over the air shows the
   list, and Settings says notifications need the latest version.
 
+## Before release, round 1 — built
+
+- **Sub or Dub** (Settings → Anime → New Episodes): `GET/PUT /app-api/v1/preferences`
+  (`anime_track`), the same preference the website keeps (`user_profiles.anime_release_pref`).
+- **New Seasons and For You rows**: two more catalogs in the rows addon (core/addon.py, manifest
+  1.1.0). New Seasons: season premieres from the calendar plus new-season notifications, a month back
+  to three months ahead, out first, then soonest. For You: recommend/content_based.py, as posters,
+  kept 6 hours per account. The app updates its installed copy of the manifest when the version
+  changes (Stremio keeps the one it installed).
+- **Banner row** (Customize Home → Banner, or a row's ⋯ → Use for Banner): any row on Home,
+  Automatic by default; the row's titles are fetched from its addon if Home hasn't loaded it yet.
+- **Episodes on their own**: `GET/POST /app-api/v1/episodes`, `DELETE /episodes/{log_id}`
+  (core/app_episodes.py). An episode log has its episode and Stremio's episode ID (`video_id`,
+  migration 036); marking one watched also counts it, as the player's "finished" does. The
+  episode list shows your score, a star to rate (on hover; always once rated), and a menu
+  (right-click, press and hold) with Mark as Watched and Rate Episode. Ticking an episode logs it;
+  unticking removes its log.
+- **Shared lists**: Share on an open list makes a link (`/l/<token>`, migration 035), a plain page of
+  its titles that open in Stremio; Stop Sharing makes the link stop working.
+- **Error reports**: `POST /app-api/v1/errors` (no sign-in, limited per address) and unhandled server
+  exceptions, counted per distinct error (core/error_reports.py, migration 037); the admin reads them
+  at `GET /api/admin/errors`. The app sends uncaught errors unless Settings → Privacy → Send Error
+  Reports is off.
+- **Privacy Policy and Terms of Use**: `/privacy`, `/terms`, from Settings → Privacy. Who runs it, a
+  contact and the date go in `src/lib/legal.ts` (brackets until filled in).
+- **What's New** leaves out subjects starting with "Notes" and any that name the tracker.
+
 ## iPhone and TV — built
 
 Lightboxd now runs on every device, held to Apple's guidelines (iOS for the phone, tvOS's

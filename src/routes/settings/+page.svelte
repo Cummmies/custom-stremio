@@ -10,6 +10,7 @@
     import { inTauri } from '$lib/player/mpv.svelte';
     import { isDesktop, isIOS, isTV } from '$lib/platform';
     import { notify } from '$lib/notify.svelte';
+    import { errorReportsOn, setErrorReports } from '$lib/errorReports';
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
@@ -153,6 +154,9 @@
         void lightboxd.check();
         void notify.refresh();
     }
+
+    // Privacy: error reports (on unless turned off here), and the policy and terms.
+    let sendErrors = $state(errorReportsOn());
 
     // Data: your watchlist, watches, scores and lists as a backup file, and
     // importing one (PC and iPhone; not the TV).
@@ -905,6 +909,27 @@
             </div>
         </section>
     {/if}
+
+    <section>
+        <h2>Privacy</h2>
+        <div class="group">
+            <div class="row">
+                <div>
+                    <div class="title">Send Error Reports</div>
+                    <div class="sub">When something breaks, what broke is sent so it can be fixed. Nothing about your account or what you watch.</div>
+                </div>
+                <Toggle label="Send Error Reports" checked={sendErrors} onchange={(v) => (setErrorReports(v), (sendErrors = v))} />
+            </div>
+            <div class="row">
+                <div class="title">Privacy Policy</div>
+                <a class="btn" href="/privacy">Read…</a>
+            </div>
+            <div class="row">
+                <div class="title">Terms of Use</div>
+                <a class="btn" href="/terms">Read…</a>
+            </div>
+        </div>
+    </section>
 
     <p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>
 </div>
