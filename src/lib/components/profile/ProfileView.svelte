@@ -232,7 +232,6 @@
         </button>
         <div class="cover-edit">
             <button class="glass-pill change" onclick={() => bannerInput?.click()}><Icon name="camera" size={15} /> {shownBanner ? 'Change Banner' : 'Add Banner'}</button>
-            {#if shownBanner}<button class="glass-pill" onclick={() => (banner = '')}>Remove Banner</button>{/if}
         </div>
         <input bind:this={avatarInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'avatar')} />
         <input bind:this={bannerInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'banner')} />
@@ -248,9 +247,6 @@
                         {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
                         <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /><span class="avatar-edit-label">Change</span></span>
                     </button>
-                    {#if shownAvatar}
-                        <button class="remove" onclick={() => (avatar = '')} aria-label="Remove Picture"><Icon name="close" size={12} /></button>
-                    {/if}
                 {:else}
                     <div class="avatar" aria-hidden="true">
                         {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
@@ -607,24 +603,14 @@
         font-size: 12px;
         font-weight: 600;
     }
-    .remove {
-        z-index: 2;
-    }
     /* PC (a pointer that hovers): as on the website, the picture and banner say
-       "Change" when you point at them; the banner's own buttons come with it. */
+       "Change" when you point at them, in place of the banner's button. */
     @media (hover: hover) and (pointer: fine) {
         .cover-hover {
             display: grid;
         }
-        .cover-edit .change {
-            display: none;
-        }
         .cover-edit {
-            opacity: 0;
-            transition: opacity var(--fast);
-        }
-        .profile:has(.cover-hover:hover, .cover-hover:focus-visible, .cover-edit:hover, .cover-edit:focus-within) .cover-edit {
-            opacity: 1;
+            display: none;
         }
         .avatar-edit {
             opacity: 0;
@@ -640,7 +626,7 @@
             opacity: 1;
         }
     }
-    /* Remove: a small glass button on the picture's (or poster's) corner. */
+    /* Remove: a small glass button on a favorite's corner. */
     .remove {
         position: absolute;
         top: 0;
@@ -877,6 +863,7 @@
         opacity: 0.9;
     }
     .slots .remove {
+        z-index: 2;
         top: -8px;
         right: -8px;
     }

@@ -1,4 +1,4 @@
-// gifenc (no types of its own): only what lib/gifCrop.ts uses.
+// gifenc (no types of its own): only what lib/movingImage.ts uses.
 declare module 'gifenc' {
     export type Palette = number[][];
     export function GIFEncoder(): {

@@ -3,9 +3,9 @@
     // a frame, a circle for a profile picture, the banner's own shape for a
     // banner. Drag to move it; pinch, scroll or the slider to scale it; arrow
     // keys move and + / - scale. Choose saves exactly what's in the frame; a
-    // moving GIF stays moving (lib/gifCrop.ts).
+    // moving GIF or WebP stays moving (lib/movingImage.ts).
     import Icon from './Icon.svelte';
-    import { canCropGif, cropGif, fitsUpload, isAnimatedGif, toDataUrl } from '$lib/gifCrop';
+    import { canCropMoving, cropMoving, fitsUpload, isMoving, toDataUrl } from '$lib/movingImage';
 
     let {
         file,
@@ -125,12 +125,12 @@
         const sh = fh / k;
         const outW = shape === 'circle' ? 400 : Math.round(Math.min(2560, Math.max(1120, sw)));
         const outH = Math.round(outW / ASPECT);
-        if (await isAnimatedGif(file).catch(() => false)) {
+        if (await isMoving(file).catch(() => false)) {
             working = true;
             try {
-                const moving = (await canCropGif()) ? await cropGif(file, { sx, sy, sw, sh, outW, outH }).catch(() => null) : null;
+                const moving = (await canCropMoving(file)) ? await cropMoving(file, { sx, sy, sw, sh, outW, outH }).catch(() => null) : null;
                 if (moving) return onchoose(moving);
-                // Can't cut its frames here: the whole GIF, uncropped but moving, if it fits.
+                // Can't cut its frames here: the whole file, uncropped but moving, if it fits.
                 if (fitsUpload(file)) return onchoose(await toDataUrl(file));
                 tooBig = true;
             } finally {
@@ -203,7 +203,7 @@
             <button class="icon" onclick={() => scaleTo(zoom * 1.25)} aria-label="Larger" disabled={zoom >= MAX_ZOOM}><Icon name="plus" size={16} /></button>
         </div>
 
-        {#if tooBig}<p class="note" role="alert">That GIF is too big to keep moving. Try a shorter or smaller one.</p>{/if}
+        {#if tooBig}<p class="note" role="alert">That moving picture is too big to keep moving. Try a shorter or smaller one.</p>{/if}
         <footer>
             <button class="btn" onclick={oncancel}>Cancel</button>
             <button class="btn primary" onclick={choose} disabled={!bitmap || working}>{working ? 'Preparing…' : 'Choose'}</button>
