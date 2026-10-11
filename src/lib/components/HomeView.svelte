@@ -1,6 +1,8 @@
 <script lang="ts">
     // Home, Movies and Series share this layout; `type` narrows it to one kind.
     import { onMount } from 'svelte';
+    import { app } from '$lib/app.svelte';
+    import { libraryItemPreview } from '$lib/library';
     import { isTV } from '$lib/platform';
     import { core } from '$lib/core';
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
@@ -11,7 +13,7 @@
     import { WIDE_ITEM_WIDTH } from '$lib/shelf';
     import CategoryTiles from './CategoryTiles.svelte';
     import CatalogList, { catalogTitle, isEmptyCatalog, rowAnchor, type ListRow } from './CatalogList.svelte';
-    import { catalogKey, homeLayout, type BoardCatalog } from '$lib/homeLayout.svelte';
+    import { catalogKey, homeLayout, interleave, type BoardCatalog } from '$lib/homeLayout.svelte';
     import Icon from './Icon.svelte';
     import EmptyState from './EmptyState.svelte';
 
@@ -45,12 +47,6 @@
         return c?.content?.type === 'Ready' ? c.content.content : [];
     };
 
-    // Hero: the top titles of the first loaded catalog (for Home, favor movies then series).
-    const featured = $derived.by((): MetaItemPreview[] => {
-        const first = ofType.find(({ index }) => readyItems(index).length > 0);
-        return first ? readyItems(first.index).filter((m) => backgroundOf(m)).slice(0, 6) : [];
-    });
-
     const cwItems = $derived((continueWatching?.items ?? []).filter((i) => !type || i.type === type));
 
     // Rows in the order set in Customize Home (per profile): hidden ones left out,
@@ -73,6 +69,50 @@
             })
             .filter((r) => r.special || r.indices.length > 0)
     );
+
+    // Hero: the titles of the row chosen in Customize Home, else the first
+    // loaded catalog's (for Home, favor movies then series). Only titles with
+    // a picture wide enough for it.
+    const bannerRow = $derived(homeLayout.layout.banner ? resolved.find((r) => r.key === homeLayout.layout.banner) : undefined);
+    const bannerParts = $derived(bannerRow && bannerRow.kind !== 'special' ? bannerRow.parts.join('\n') : '');
+    /** The chosen row's titles, fetched from its addon (it may be far down, not loaded yet). */
+    let bannerFetched = $state<MetaItemPreview[]>([]);
+    $effect(() => {
+        const parts = bannerParts ? bannerParts.split('\n') : [];
+        bannerFetched = [];
+        if (!parts.length) return;
+        let stale = false;
+        Promise.all(parts.map(fetchCatalog)).then((lists) => {
+            if (!stale) bannerFetched = interleave(lists);
+        });
+        return () => {
+            stale = true;
+        };
+    });
+    /** A catalog's titles from its addon ("cat:<addon>/<type>/<id>"); none when it can't be had. */
+    async function fetchCatalog(key: string): Promise<MetaItemPreview[]> {
+        const index = indexByKey.get(key);
+        if (index != null && readyItems(index).length) return readyItems(index);
+        const [addonId, catType, ...rest] = key.slice(4).split('/');
+        const addon = app.ctx?.profile.addons.find((a) => a.manifest.id === addonId);
+        if (!addon || !rest.length) return [];
+        const base = addon.transportUrl.replace(/\/manifest\.json$/, '');
+        try {
+            const res = await fetch(`${base}/catalog/${encodeURIComponent(catType)}/${encodeURIComponent(rest.join('/'))}.json`);
+            const body = res.ok ? await res.json() : null;
+            return Array.isArray(body?.metas) ? body.metas : [];
+        } catch {
+            return [];
+        }
+    }
+    const featured = $derived.by((): MetaItemPreview[] => {
+        const chosen = (
+            bannerRow?.kind === 'special' ? cwItems.map((i) => libraryItemPreview(i) as MetaItemPreview) : bannerFetched
+        ).filter((m) => (!type || m.type === type) && backgroundOf(m));
+        if (chosen.length) return chosen.slice(0, 6);
+        const first = ofType.find(({ index }) => readyItems(index).length > 0);
+        return first ? readyItems(first.index).filter((m) => backgroundOf(m)).slice(0, 6) : [];
+    });
 
     const tiles = $derived(
         rows

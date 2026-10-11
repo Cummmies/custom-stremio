@@ -248,7 +248,11 @@ class Lightboxd {
             // Once connected and the account's addons have loaded (they can
             // arrive after the connection check): move localhost rows over.
             $effect(() => {
-                if (this.status === 'ok' && this.rowsInstalled) untrack(() => this.#uid && this.#moveRowsToShared(this.#uid));
+                if (this.status === 'ok' && this.rowsInstalled)
+                    untrack(() => {
+                        if (this.#uid) this.#moveRowsToShared(this.#uid);
+                        void this.#updateRows();
+                    });
             });
         });
         const recheck = () => {
@@ -268,6 +272,7 @@ class Lightboxd {
         this.lastResult = null;
         this.newEpisodes = {};
         this.#rowsMoveTried = false;
+        this.#rowsChecked = null;
         this.check();
     }
 
@@ -599,6 +604,23 @@ class Lightboxd {
         const addon: AddonDescriptor = { transportUrl: url, manifest, flags: { official: false, protected: false } };
         core.dispatch({ action: 'Ctx', args: { action: 'InstallAddon', args: addon } });
         return true;
+    }
+
+    /**
+     * Stremio keeps the rows' manifest from when they were installed: when the
+     * server's is newer (rows added, say), the installed copy is updated, once
+     * per link and launch.
+     */
+    #rowsChecked: string | null = null;
+    async #updateRows() {
+        const url = this.saved?.addonUrl;
+        const installed = url ? this.#installedRows(url) : null;
+        if (!url || !installed || this.#rowsChecked === url) return;
+        this.#rowsChecked = url;
+        type Versioned = { version?: string };
+        const manifest = (await fetchManifest(url)) as Versioned | null;
+        if (!manifest || manifest.version === (installed.manifest as Versioned | null)?.version || url !== this.saved?.addonUrl) return;
+        core.dispatch({ action: 'Ctx', args: { action: 'UpgradeAddon', args: { ...installed, manifest } } });
     }
 
     /** Rows installed through localhost before the profile had a shared address: moved over once. */

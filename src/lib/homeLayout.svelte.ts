@@ -1,5 +1,6 @@
-// Customize Home: the order of Home's rows, which are hidden, their names, and
-// rows merged from several catalogs. Saved per profile on this PC.
+// Customize Home: the order of Home's rows, which are hidden, their names,
+// rows merged from several catalogs, and which row the banner shows. Saved per
+// profile on this PC.
 //
 // Row keys:
 //   "cw"                      Continue Watching
@@ -12,8 +13,12 @@ import type { Catalog } from '$lib/core/types';
 
 export type RowEntry = { key: string; hidden?: boolean; name?: string };
 export type Merge = { name: string; parts: string[] };
-/** `dismissed`: combine suggestions the person said no to. */
-export type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[] };
+/**
+ * `dismissed`: combine suggestions the person said no to. `banner`: the row
+ * whose titles the banner at the top shows (a row key); none: the first row
+ * that has any.
+ */
+export type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[]; banner?: string | null };
 
 export type SpecialKey = 'cw';
 export const SPECIAL_NAMES: Record<SpecialKey, string> = { cw: 'Continue Watching' };
@@ -252,6 +257,15 @@ class HomeLayout {
             l.order = [];
             l.merges = {};
             l.dismissed = [];
+            l.banner = null;
+        });
+    }
+
+    /** The banner shows this row's titles (null: the first row that has any). */
+    setBanner(rows: ResolvedRow[], key: string | null) {
+        const row = key ? rows.find((r) => r.key === key) : null;
+        this.#change(row ? `The banner shows “${row.name}”` : 'The banner chooses by itself', (l) => {
+            l.banner = key;
         });
     }
 }

@@ -123,6 +123,37 @@
         core.dispatch({ action: 'StreamingServer', args: { action: 'Reload' } });
     }
 
+    // Anime: which release of a new episode counts (subtitled or dubbed), kept
+    // with the account (Lightboxd), for the calendar, new-episode counts and
+    // notifications.
+    type AnimeTrack = 'sub' | 'dub';
+    const animeTrackOptions: { value: AnimeTrack; label: string }[] = [
+        { value: 'sub', label: 'Subtitled' },
+        { value: 'dub', label: 'Dubbed' },
+    ];
+    let animeTrack = $state<AnimeTrack | null>(null);
+    let animeTrackFailed = $state(false);
+    $effect(() => {
+        if (!lightboxd.ready || !app.user) return;
+        lightboxd.request<{ anime_track: AnimeTrack }>('/preferences').then((res) => {
+            if (res) animeTrack = res.anime_track;
+        });
+    });
+    async function setAnimeTrack(track: AnimeTrack) {
+        const before = animeTrack;
+        animeTrack = track;
+        animeTrackFailed = false;
+        const res = await lightboxd.request<{ anime_track: AnimeTrack }>('/preferences', { method: 'PUT', body: { anime_track: track } });
+        if (!res) {
+            animeTrack = before;
+            animeTrackFailed = true;
+            return;
+        }
+        // What's new and when changes with it.
+        void lightboxd.check();
+        void notify.refresh();
+    }
+
     // Data: your watchlist, watches, scores and lists as a backup file, and
     // importing one (PC and iPhone; not the TV).
     let dataBusy = $state<'download' | 'import' | 'resolve' | null>(null);
@@ -604,6 +635,25 @@
                             <div class="sub">Your Discord profile shows the title, episode and time left while something plays. Needs the Discord app running.</div>
                         </div>
                         <Toggle label="Show what you’re watching on Discord" checked={playerPrefs.discordPresence} onchange={(v) => (playerPrefs.discordPresence = v)} />
+                    </div>
+                </div>
+            </section>
+        {/if}
+
+        {#if app.user && lightboxd.ready && animeTrack}
+            <section>
+                <h2>Anime</h2>
+                <div class="group">
+                    <div class="row">
+                        <div>
+                            <div class="title">New Episodes</div>
+                            <div class="sub" class:sync-error={animeTrackFailed} role={animeTrackFailed ? 'status' : undefined}>
+                                {animeTrackFailed
+                                    ? 'Couldn’t save. Try again in a moment.'
+                                    : 'Count an episode as out once it’s subtitled, or wait for the dub. Used by the calendar, new-episode counts and notifications.'}
+                            </div>
+                        </div>
+                        <PopupButton label="New anime episodes" value={animeTrack} options={animeTrackOptions} onchange={setAnimeTrack} />
                     </div>
                 </div>
             </section>

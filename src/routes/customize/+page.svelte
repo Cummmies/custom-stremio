@@ -4,7 +4,8 @@
     // in Settings). The drag handle and ⋯ menu appear on hover or focus. Combining is
     // offered where it makes sense (a suggestion card), works like making a folder
     // (drop a row onto another), and is in every row's menu for keyboard users.
-    // Changes apply as you make them; Undo covers every one of them.
+    // Changes apply as you make them; Undo covers every one of them. Above the
+    // rows: which row the banner at the top of Home shows.
     import { onMount, tick } from 'svelte';
     import { goto } from '$lib/nav';
     import { core } from '$lib/core';
@@ -15,6 +16,7 @@
     import { catalogTitle } from '$lib/components/CatalogList.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
+    import PopupButton from '$lib/components/menu/PopupButton.svelte';
 
     let board = $state<Board | null>(null);
     let cw = $state<ContinueWatchingPreview | null>(null);
@@ -68,6 +70,12 @@
         return [typeLabel(c?.type), c?.addon?.manifest?.name && `from ${c.addon.manifest.name}`].filter(Boolean).join(' · ');
     }
     const canCombine = (r: ResolvedRow) => r.kind !== 'special';
+
+    // --- Banner: Automatic (the first row with titles) or one of the rows on Home ---
+    const AUTO = '';
+    const bannerKey = $derived(homeLayout.layout.banner && rows.some((r) => r.key === homeLayout.layout.banner) ? homeLayout.layout.banner : AUTO);
+    const bannerOptions = $derived([{ value: AUTO, label: 'Automatic' }, ...onHome.map((r) => ({ value: r.key, label: r.name }))]);
+    const bannerRow = $derived(rows.find((r) => r.key === bannerKey));
 
     // --- Suggestions: rows that belong together ("Popular · Movie" + "Popular · Series") ---
     const suggestion = $derived.by(() => {
@@ -123,6 +131,13 @@
             });
         }
         if (r.kind === 'merge') entries.push({ label: 'Separate Rows', onselect: () => homeLayout.unmerge(rows, r.key) });
+        const isBanner = bannerKey === r.key;
+        entries.push({ separator: true }, {
+            label: 'Use for Banner',
+            checked: isBanner,
+            disabled: r.hidden,
+            onselect: () => homeLayout.setBanner(rows, isBanner ? null : r.key),
+        });
         return entries;
     }
     function rowMenu(e: MouseEvent, r: ResolvedRow) {
@@ -260,6 +275,24 @@
             <button class="pill primary" onclick={() => openCombine(suggestion.rows)}>Combine</button>
         </div>
     {/if}
+
+    <section class="banner" aria-labelledby="banner-head">
+        <h2 id="banner-head">Banner</h2>
+        <div class="list">
+            <div class="banner-row">
+                <div class="art" aria-hidden="true">
+                    {#each bannerRow ? posters(bannerRow) : [null] as pic, i (i)}
+                        {#if pic}<img src={pic} alt="" loading="lazy" />{:else}<span></span>{/if}
+                    {/each}
+                </div>
+                <div class="text">
+                    <span class="name">Shows</span>
+                    <span class="detail">The large picture at the top of Home, from one of its rows.</span>
+                </div>
+                <PopupButton label="Banner shows" value={bannerKey} options={bannerOptions} onchange={(v) => homeLayout.setBanner(rows, v || null)} />
+            </div>
+        </div>
+    </section>
 
     <section aria-labelledby="rows-head">
         <h2 id="rows-head">Rows <span class="count">{onHome.length} of {rows.length} on Home</span></h2>
@@ -449,6 +482,16 @@
         font-size: 13px;
         font-weight: 600;
         color: var(--label-2);
+    }
+    .banner {
+        margin-bottom: 28px;
+    }
+    .banner-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 72px;
+        padding: 10px 14px 10px 8px;
     }
     .count {
         margin-left: 6px;
