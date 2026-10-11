@@ -12,7 +12,7 @@
     import type { Board, ContinueWatchingPreview, MetaItemPreview } from '$lib/core/types';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { itemMenu } from '$lib/contextmenu';
-    import { catalogKey, homeLayout, interleave, type BoardCatalog, type ResolvedRow } from '$lib/homeLayout.svelte';
+    import { bannerRow as pickBannerRow, catalogKey, homeLayout, interleave, type BoardCatalog, type ResolvedRow } from '$lib/homeLayout.svelte';
     import { catalogTitle } from '$lib/components/CatalogList.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
@@ -74,12 +74,10 @@
     }
     const canCombine = (r: ResolvedRow) => r.kind !== 'special';
 
-    // --- Banner: First Row (the first row on Home with titles) or one of the rows ---
-    const AUTO = '';
-    const bannerKey = $derived(homeLayout.layout.banner && rows.some((r) => r.key === homeLayout.layout.banner) ? homeLayout.layout.banner : AUTO);
-    const bannerOptions = $derived([{ value: AUTO, label: 'First Row' }, ...onHome.map((r) => ({ value: r.key, label: r.name }))]);
-    /** The row it shows: the chosen one, or (First Row) the first on Home after Continue Watching. */
-    const bannerRow = $derived(rows.find((r) => r.key === bannerKey) ?? onHome.find((r) => r.kind !== 'special'));
+    // --- Banner: one of the rows on Home (Popular unless another is chosen) ---
+    const bannerRow = $derived(pickBannerRow(rows, homeLayout.layout.banner));
+    const bannerKey = $derived(bannerRow?.key ?? '');
+    const bannerOptions = $derived(onHome.map((r) => ({ value: r.key, label: r.name })));
 
     // --- Suggestions: rows that belong together ("Popular · Movie" + "Popular · Series") ---
     const suggestion = $derived.by(() => {
@@ -140,7 +138,7 @@
             label: 'Use for Banner',
             checked: isBanner,
             disabled: r.hidden,
-            onselect: () => homeLayout.setBanner(rows, isBanner ? null : r.key),
+            onselect: () => homeLayout.setBanner(rows, r.key),
         });
         return entries;
     }
@@ -292,9 +290,9 @@
                 </div>
                 <div class="text">
                     <span class="name">Shows</span>
-                    <span class="detail">The large picture at the top of Home. First Row uses the first row after Continue Watching.</span>
+                    <span class="detail">The large picture at the top of Home.</span>
                 </div>
-                <PopupButton label="Banner shows" value={bannerKey} options={bannerOptions} onchange={(v) => homeLayout.setBanner(rows, v || null)} />
+                <PopupButton label="Banner shows" value={bannerKey} options={bannerOptions} onchange={(v) => homeLayout.setBanner(rows, v)} />
             </div>
         </div>
     </section>

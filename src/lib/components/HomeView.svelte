@@ -16,7 +16,7 @@
     import { WIDE_ITEM_WIDTH } from '$lib/shelf';
     import CategoryTiles from './CategoryTiles.svelte';
     import CatalogList, { catalogTitle, isEmptyCatalog, rowAnchor, type ListRow } from './CatalogList.svelte';
-    import { catalogKey, homeLayout, interleave, type BoardCatalog } from '$lib/homeLayout.svelte';
+    import { bannerRow as pickBannerRow, catalogKey, homeLayout, interleave, type BoardCatalog } from '$lib/homeLayout.svelte';
     import Icon from './Icon.svelte';
     import EmptyState from './EmptyState.svelte';
 
@@ -89,11 +89,10 @@
             .filter((r) => r.special || r.indices.length > 0)
     );
 
-    // Hero: the titles of the row chosen in Customize Home, else (First Row)
-    // the first row on Home, in its order, that has any: not Continue Watching,
-    // which is right below it (it can be chosen). Only titles with a picture
-    // wide enough for it.
-    const bannerRow = $derived(homeLayout.layout.banner ? resolved.find((r) => r.key === homeLayout.layout.banner) : undefined);
+    // Hero: the titles of the row chosen in Customize Home, else Popular's
+    // (homeLayout's bannerRow); while those load, the first row that has any.
+    // Only titles with a picture wide enough for it.
+    const bannerRow = $derived(pickBannerRow(resolved, homeLayout.layout.banner));
     const bannerParts = $derived(bannerRow && bannerRow.kind !== 'special' ? bannerRow.parts.join('\n') : '');
     /** The chosen row's titles, fetched from its addon (it may be far down, not loaded yet). */
     let bannerFetched = $state<MetaItemPreview[]>([]);

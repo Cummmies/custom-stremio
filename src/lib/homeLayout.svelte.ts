@@ -15,8 +15,8 @@ export type RowEntry = { key: string; hidden?: boolean; name?: string };
 export type Merge = { name: string; parts: string[] };
 /**
  * `dismissed`: combine suggestions the person said no to. `banner`: the row
- * whose titles the banner at the top shows (a row key); none: the first row
- * that has any.
+ * whose titles the banner at the top shows (a row key); none: Popular
+ * (bannerRow below).
  */
 export type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[]; banner?: string | null };
 
@@ -42,6 +42,22 @@ export type ResolvedRow = {
 };
 
 const EMPTY: Layout = { order: [], merges: {} };
+
+/** The banner's row when none is chosen: Popular (movies), or a row it's combined into. */
+export const DEFAULT_BANNER_CATALOG = 'cat:com.linvo.cinemeta/movie/top';
+
+/**
+ * The row the banner shows: the chosen one while it's on Home, else the row
+ * with Popular in it, else the first row of titles.
+ */
+export function bannerRow(rows: ResolvedRow[], chosen: string | null | undefined): ResolvedRow | undefined {
+    const shown = rows.filter((r) => !r.hidden);
+    return (
+        shown.find((r) => r.key === chosen) ??
+        shown.find((r) => r.parts.includes(DEFAULT_BANNER_CATALOG)) ??
+        shown.find((r) => r.kind !== 'special')
+    );
+}
 
 function storageKey(uid: string | null) {
     return `homeLayout:${uid ?? 'guest'}`;
@@ -261,10 +277,10 @@ class HomeLayout {
         });
     }
 
-    /** The banner shows this row's titles (null: the first row that has any). */
+    /** The banner shows this row's titles (null: Popular, the default). */
     setBanner(rows: ResolvedRow[], key: string | null) {
         const row = key ? rows.find((r) => r.key === key) : null;
-        this.#change(row ? `The banner shows “${row.name}”` : 'The banner shows the first row', (l) => {
+        this.#change(row ? `The banner shows “${row.name}”` : 'The banner shows Popular', (l) => {
             l.banner = key;
         });
     }
