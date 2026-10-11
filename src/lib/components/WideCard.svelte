@@ -9,7 +9,7 @@
     import { cleanVideoId, resumeHref } from '$lib/player/deeplink';
     import { canPlay } from '$lib/platform';
     import { playerPrefs } from '$lib/player/prefs.svelte';
-    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { tracker } from '$lib/tracker.svelte';
     import { app } from '$lib/app.svelte';
 
     let { item }: { item: LibraryItem } = $props();
@@ -19,11 +19,11 @@
     const progress = $derived(Math.min(1, Math.max(0, item.progress / 100)));
     const detail = $derived(episodeLabel(item) ?? '');
     // New episodes out since you last watched: "+N" in the corner. For anime,
-    // Lightboxd's count when it's connected (it knows when the dub is out, if
+    // The tracker's count when it's connected (it knows when the dub is out, if
     // that's what you watch); otherwise Stremio's own, minus episodes you've seen.
-    const lightboxdCount = $derived(lightboxd.ready ? lightboxd.newEpisodes[item._id] : undefined);
+    const trackerCount = $derived(tracker.ready ? tracker.newEpisodes[item._id] : undefined);
     const stremioCount = $derived(newEpisodeCount(item, app.ctx?.notifications?.items[item._id]));
-    const fresh = $derived(item.type === 'series' ? Math.max(0, lightboxdCount ?? stremioCount) : 0);
+    const fresh = $derived(item.type === 'series' ? Math.max(0, trackerCount ?? stremioCount) : 0);
     const freshLabel = $derived(fresh ? `${fresh} new ${fresh === 1 ? 'episode' : 'episodes'}` : '');
     const resumeVideo = $derived(item.type === 'series' ? cleanVideoId(item.state?.videoId) : null);
     // Core remembers the stream you last used; if it has one, go straight back to it.

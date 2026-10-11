@@ -1,5 +1,5 @@
 // The sliding highlight of a pill of choices (the top nav's sections, the
-// Library's status bar), after Lightboxd's: the highlight glides to the chosen
+// Library's status bar), after the tracker's: the highlight glides to the chosen
 // item with a little overshoot, and can be dragged from the chosen item to
 // another (stretching at the ends), which picks it on release.
 //

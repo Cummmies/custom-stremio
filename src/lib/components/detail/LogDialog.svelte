@@ -4,12 +4,12 @@
 </script>
 
 <script lang="ts">
-    // Your score, or a watch to log or change, as Lightboxd's own Log Watch
+    // Your score, or a watch to log or change, as the tracker's own Log Watch
     // form has it: score (optional; the wheel moves it a tenth), watch date
     // (optional; never after today or before the title was out, which
-    // Lightboxd works out (earliest); out-of-range dates move to the nearest
+    // The tracker works out (earliest); out-of-range dates move to the nearest
     // allowed one; the wheel moves it a day) and review. Whether it's a
-    // rewatch is Lightboxd's to say (every watch after your first), so it's in
+    // rewatch is the tracker's to say (every watch after your first), so it's in
     // the heading, not a switch. Editing a watch can also delete it.
     //
     // A modal <dialog>: focus stays inside, Escape (the TV remote's Back)
@@ -43,7 +43,7 @@
         name: string;
         year: string | null;
         poster: string | null;
-        /** yyyy-mm-dd: the earliest a watch can be (Lightboxd's). */
+        /** yyyy-mm-dd: the earliest a watch can be (the tracker's). */
         earliest: string | null;
         initial: LogDraft;
         busy?: boolean;
@@ -78,7 +78,7 @@
     );
     const saveLabel = $derived(busy ? 'Saving…' : mode === 'edit' ? 'Save Changes' : mode === 'rate' ? 'Save' : rewatch ? 'Save Rewatch' : 'Save Watch');
 
-    // As Lightboxd: a date outside [earliest, today] moves to the nearest end.
+    // As the tracker: a date outside [earliest, today] moves to the nearest end.
     const clamp = (d: string) => (d > today ? today : earliest && earliest <= today && d < earliest ? earliest : d);
     function settleDate() {
         if (date) date = clamp(date);

@@ -12,7 +12,7 @@ const coreVersion = JSON.parse(readFileSync(new URL("./node_modules/@stremio/str
 // workflows check out enough history for it (fetch-depth).
 const SKIP_SUBJECT = /^(merge|revert|ci|docs?|notes?|tests?|chore|build|wip|temp)\b|\[skip/i;
 // The tracker behind the app has no name to the people using it
-// (docs/lightboxd.md): older subjects that say it stay out.
+// (docs/tracker.md): older subjects that say it stay out.
 const INTERNAL_NAME = /lightboxd/i;
 function gitChanges() {
   try {

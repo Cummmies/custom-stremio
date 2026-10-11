@@ -1,12 +1,12 @@
 <script lang="ts">
-    // A title page's Related tab, from Lightboxd: an anime's seasons in watch
+    // A title page's Related tab, from the tracker: an anime's seasons in watch
     // order and its side stories, or a film's collection in release order,
     // with the title you're on among them. Under each poster, two lines: its
     // name without the franchise (the hero already says it), then its year and
     // your status ("Watching" also gets the progress bar Continue Watching
     // uses). Same cards and grid as Library.
     import PosterCard from '$lib/components/PosterCard.svelte';
-    import { STATUS_SHORT, type RelatedGroup, type RelatedItem } from '$lib/lightboxd/api';
+    import { STATUS_SHORT, type RelatedGroup, type RelatedItem } from '$lib/tracker/api';
 
     let { groups }: { groups: RelatedGroup[] } = $props();
 

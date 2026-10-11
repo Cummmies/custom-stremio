@@ -74,8 +74,8 @@ class Profiles {
 
     /** Drop a profile from this PC without touching its session. */
     forget(uid: string) {
-        // Signed out of Stremio here is signed out of Lightboxd here: one sign-in.
-        import('$lib/lightboxd.svelte').then((m) => m.lightboxd.signOut(uid));
+        // Signed out of Stremio here is signed out of the tracker here: one sign-in.
+        import('$lib/tracker.svelte').then((m) => m.tracker.signOut(uid));
         this.#forgotten.set(uid, Date.now());
         this.list = this.list.filter((x) => x.uid !== uid);
         this.#save();

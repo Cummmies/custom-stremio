@@ -1,5 +1,5 @@
 <script lang="ts">
-    // A Lightboxd score: 0 to 10 in tenths, as Lightboxd itself takes it. The
+    // A tracker score: 0 to 10 in tenths, as the tracker itself takes it. The
     // number reads large above a slider; arrow keys (the remote's Left/Right
     // on TV) move a tenth, Page Up/Down a whole point, and Enter saves.
     import type { HTMLInputAttributes } from 'svelte/elements';

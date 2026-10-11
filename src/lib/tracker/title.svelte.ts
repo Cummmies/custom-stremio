@@ -1,20 +1,20 @@
-// A title page's Lightboxd side: what you have for this Stremio title (your
+// A title page's the tracker side: what you have for this Stremio title (your
 // status, lists, watches, score), your lists to choose from, its reviews and
-// related titles, and the actions on them. Loaded while Lightboxd is
+// related titles, and the actions on them. Loaded while the tracker is
 // connected and reachable; everything stays empty (and the page falls back
 // to Stremio alone) when it isn't.
 //
-// An anime can be several Lightboxd titles (its seasons share one IMDb ID);
-// the first stands for the show, as Lightboxd's own Add to Watchlist does.
+// An anime can be several the tracker titles (its seasons share one IMDb ID);
+// the first stands for the show, as the tracker's own Add to Watchlist does.
 
-import { lightboxd } from '$lib/lightboxd.svelte';
+import { tracker } from '$lib/tracker.svelte';
 import { lb, type ListInfo, type RelatedGroup, type Reviews, type Status, type Summary, type WatchFields } from './api';
 
 /** Rated or logged elsewhere meanwhile (the website, another device): picked up this often. */
 const REFRESH_MS = 60_000;
 
-export class LightboxdTitle {
-    /** This title's Lightboxd summaries; [] when Lightboxd doesn't have it, null until known. */
+export class TrackerTitle {
+    /** This title's the tracker summaries; [] when the tracker doesn't have it, null until known. */
     titles = $state<Summary[] | null>(null);
     lists = $state<ListInfo[]>([]);
     reviews = $state<Reviews | null>(null);
@@ -22,10 +22,10 @@ export class LightboxdTitle {
     busy = $state(false);
     error = $state<string | null>(null);
 
-    /** The Lightboxd title that stands for this one. */
+    /** The tracker title that stands for this one. */
     main = $derived<Summary | null>(this.titles?.[0] ?? null);
-    /** Connected and reachable: Lightboxd's controls show (the summary fills in as it loads). */
-    on = $derived(lightboxd.ready);
+    /** Connected and reachable: the tracker's controls show (the summary fills in as it loads). */
+    on = $derived(tracker.ready);
 
     #key = '';
     #title: { id: string; type: string; name: string } | null = null;
@@ -34,7 +34,7 @@ export class LightboxdTitle {
     /** Load for a Stremio title (again only when it changes). */
     load(id: string, type: string, name: string) {
         this.#title = { id, type, name };
-        if (!lightboxd.ready || this.#key === id) return;
+        if (!tracker.ready || this.#key === id) return;
         this.#key = id;
         this.titles = null;
         this.reviews = null;
@@ -51,7 +51,7 @@ export class LightboxdTitle {
         });
     }
 
-    /** Reviews and related titles, once per Lightboxd title (both can be slow: they may ask TMDb or AniList). */
+    /** Reviews and related titles, once per the tracker title (both can be slow: they may ask TMDb or AniList). */
     #loadExtras() {
         const main = this.main;
         if (!main || this.#extrasFor === main.title_id) return;
@@ -68,7 +68,7 @@ export class LightboxdTitle {
     /** Re-read the summary (not while something's being saved). */
     refresh() {
         const id = this.#key;
-        if (!id || this.busy || !lightboxd.ready || document.visibilityState !== 'visible') return;
+        if (!id || this.busy || !tracker.ready || document.visibilityState !== 'visible') return;
         lb.titles(id).then((res) => {
             if (this.#key === id && res && !this.busy) this.titles = res.titles;
         });
@@ -87,7 +87,7 @@ export class LightboxdTitle {
         };
     }
 
-    /** Lightboxd's title for this one, adding it (Plan to Watch) when it doesn't have it yet. */
+    /** The tracker's title for this one, adding it (Plan to Watch) when it doesn't have it yet. */
     async #ensure(): Promise<Summary | null> {
         if (this.main) return this.main;
         const t = this.#title;
@@ -166,7 +166,7 @@ export class LightboxdTitle {
         }, 'Couldn’t make the list.');
     }
 
-    /** Out of Lightboxd: your status, watches and list entries for it. */
+    /** Out of the tracker: your status, watches and list entries for it. */
     remove() {
         return this.#do(async () => {
             const main = this.main;
@@ -181,7 +181,7 @@ export class LightboxdTitle {
     }
 
     /**
-     * Log a watch (every one after your first is a rewatch, as Lightboxd
+     * Log a watch (every one after your first is a rewatch, as the tracker
      * counts them): of this title, or of one of its seasons (`titleId`).
      */
     addWatch(fields: WatchFields, titleId?: number) {

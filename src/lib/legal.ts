@@ -3,7 +3,7 @@
 //
 // PINNED (2026-10-10): placeholders until the app has its own brand. Before a
 // public release, replace OPERATOR with the brand's name and CONTACT with a
-// real address on its own domain (docs/lightboxd.md, "Later").
+// real address on its own domain (docs/tracker.md, "Later").
 
 /** Who runs the app and its server, as people see it (a brand, not a person's name). */
 export const OPERATOR = 'Custom Stremio';

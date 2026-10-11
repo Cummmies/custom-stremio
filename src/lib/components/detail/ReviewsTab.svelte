@@ -1,5 +1,5 @@
 <script lang="ts">
-    // A title page's Reviews tab, from Lightboxd. Aggregate: the reviews it
+    // A title page's Reviews tab, from the tracker. Aggregate: the reviews it
     // gathers (TMDb, Trakt, AniList); Friends: your friends' (as each shares
     // them; rated-only ones on one line); You: your score and review, and each
     // watch (opens it to edit). The scores are in the tab bar on wide windows,
@@ -7,7 +7,7 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import Segmented from '$lib/components/Segmented.svelte';
     import { isTV } from '$lib/platform';
-    import { day, score, type Reviews, type Watch } from '$lib/lightboxd/api';
+    import { day, score, type Reviews, type Watch } from '$lib/tracker/api';
 
     let {
         name,
@@ -53,7 +53,7 @@
         (reviews?.friends ?? []).map((f) => ({
             key: `f${f.handle}`,
             author: f.name,
-            // A video avatar (Lightboxd allows them) shows as the initial.
+            // A video avatar (the tracker allows them) shows as the initial.
             avatar: f.avatar && !/\.(webm|mov|mp4)$/i.test(f.avatar) ? f.avatar : null,
             date: day(f.date),
             sort: f.date ?? '',

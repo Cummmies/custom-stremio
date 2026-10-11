@@ -1,5 +1,5 @@
 // Notifications: new episodes and movies once they're out, new seasons and
-// replies to your reviews (Lightboxd's, /app-api/v1/notifications), listed
+// replies to your reviews (the tracker's, /app-api/v1/notifications), listed
 // under the bell, and shown by the system too:
 //
 // - PC: a Windows notification for each new one, while the app is running
@@ -10,7 +10,7 @@
 //   next two weeks, redone whenever it looks. Those then aren't announced
 //   again when they reach the list.
 //
-// When Lightboxd can't be reached, Stremio is the backup: the new episodes
+// When the tracker can't be reached, Stremio is the backup: the new episodes
 // it found for shows in your Stremio library (what Continue Watching's +N
 // counts), with read and removed kept on this device. New episodes only (no
 // seasons or replies), announced the same way; iPhone keeps what it had
@@ -24,7 +24,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { untrack } from 'svelte';
 import { app } from '$lib/app.svelte';
-import { lightboxd } from '$lib/lightboxd.svelte';
+import { tracker } from '$lib/tracker.svelte';
 import { goto } from '$lib/nav';
 import { core } from '$lib/core';
 import { cleanVideoId } from '$lib/player/deeplink';
@@ -161,8 +161,8 @@ function seasonEpisode(videoId: string | null | undefined): [number, number] | n
 
 class Notify {
     items = $state<AppNotification[]>([]);
-    /** Where the list is from: Lightboxd, or Stremio while Lightboxd can't be reached. */
-    source = $state<'lightboxd' | 'stremio'>('lightboxd');
+    /** Where the list is from: the tracker, or Stremio while the tracker can't be reached. */
+    source = $state<'tracker' | 'stremio'>('tracker');
     unread = $state(0);
     /** The list has come back at least once (for this account). */
     loaded = $state(false);
@@ -195,7 +195,7 @@ class Notify {
             // A new account (or none): its own list; looks once connected.
             $effect(() => {
                 const uid = app.user?._id ?? null;
-                const ready = lightboxd.ready;
+                const ready = tracker.ready;
                 untrack(() => {
                     if (uid !== this.#uid) {
                         this.#uid = uid;
@@ -210,7 +210,7 @@ class Notify {
             // The backup: Stremio's new episodes, kept up to date as Stremio finds them.
             $effect(() => {
                 const uid = app.user?._id ?? null;
-                const down = !lightboxd.ready && lightboxd.status !== 'checking';
+                const down = !tracker.ready && tracker.status !== 'checking';
                 void app.ctx?.notifications;
                 void app.library;
                 if (uid && down) untrack(() => this.#fromStremio(uid));
@@ -260,8 +260,8 @@ class Notify {
     async refresh() {
         const uid = this.#uid;
         if (!uid) return;
-        if (!lightboxd.ready) {
-            if (lightboxd.status !== 'checking') this.#fromStremio(uid);
+        if (!tracker.ready) {
+            if (tracker.status !== 'checking') this.#fromStremio(uid);
             return;
         }
         if (this.#busy) {
@@ -270,14 +270,14 @@ class Notify {
         }
         this.#busy = true;
         try {
-            const res = await lightboxd.request<{ notifications: AppNotification[]; unread: number }>('/notifications?limit=50');
+            const res = await tracker.request<{ notifications: AppNotification[]; unread: number }>('/notifications?limit=50');
             if (uid !== this.#uid) return;
             if (!res) {
                 this.failed = true;
                 return;
             }
             this.failed = false;
-            this.source = 'lightboxd';
+            this.source = 'tracker';
             this.items = res.notifications;
             this.unread = res.unread;
             this.loaded = true;
@@ -292,7 +292,7 @@ class Notify {
         }
     }
 
-    /** Stremio's new episodes, as the list (Lightboxd can't be reached). */
+    /** Stremio's new episodes, as the list (the tracker can't be reached). */
     #fromStremio(uid: string) {
         if (uid !== this.#uid || !app.library) return;
         const found = app.ctx?.notifications?.items ?? {};
@@ -423,8 +423,8 @@ class Notify {
             write(deliveryKey(uid), { ...state, scheduled: kept, ids: [] });
             return;
         }
-        // Can't look (Lightboxd unreachable): what's scheduled stays.
-        const res = await lightboxd.request<{ events: CalendarEvent[] }>(`/calendar?days=${SCHEDULE_DAYS}`);
+        // Can't look (the tracker unreachable): what's scheduled stays.
+        const res = await tracker.request<{ events: CalendarEvent[] }>(`/calendar?days=${SCHEDULE_DAYS}`);
         if (!res || uid !== this.#uid) return;
         // What was scheduled before goes: what's still coming is scheduled again below.
         if (state.ids.length) await plugin.cancel(state.ids).catch(() => {});
@@ -483,7 +483,7 @@ class Notify {
         n.unread = false;
         this.unread = Math.max(0, this.unread - 1);
         if (n.key) this.#remember('read', [n.key]);
-        else await lightboxd.request(`/notifications/${n.id}/read`, { method: 'POST' });
+        else await tracker.request(`/notifications/${n.id}/read`, { method: 'POST' });
     }
 
     async markAllRead() {
@@ -491,14 +491,14 @@ class Notify {
         if (backup) this.#remember('read', this.items.map((n) => n.key));
         for (const n of this.items) n.unread = false;
         this.unread = 0;
-        if (!backup) await lightboxd.request('/notifications/read', { method: 'POST' });
+        if (!backup) await tracker.request('/notifications/read', { method: 'POST' });
     }
 
     async dismiss(n: AppNotification) {
         this.items = this.items.filter((x) => x.id !== n.id);
         if (n.unread) this.unread = Math.max(0, this.unread - 1);
         if (n.key) this.#remember('removed', [n.key]);
-        else await lightboxd.request(`/notifications/${n.id}`, { method: 'DELETE' });
+        else await tracker.request(`/notifications/${n.id}`, { method: 'DELETE' });
     }
 
     async clear() {
@@ -512,7 +512,7 @@ class Notify {
                 core.dispatch({ action: 'Ctx', args: { action: 'DismissNotificationItem', args: metaId } });
             return;
         }
-        await lightboxd.request('/notifications', { method: 'DELETE' });
+        await tracker.request('/notifications', { method: 'DELETE' });
     }
 
     /** Opens what a notification is about (and marks it read). */

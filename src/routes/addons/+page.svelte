@@ -7,7 +7,7 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
-    import { isInternalAddon } from '$lib/internalAddons';
+    import { isInternalAddon } from '$lib/serverIds';
     import Segmented from '$lib/components/Segmented.svelte';
 
     type Source = 'installed' | 'official' | 'community';

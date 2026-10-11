@@ -3,8 +3,8 @@
     import { onMount } from 'svelte';
     import { app } from '$lib/app.svelte';
     import { libraryItemPreview } from '$lib/library';
-    import { lightboxd } from '$lib/lightboxd.svelte';
-    import { lb } from '$lib/lightboxd/api';
+    import { tracker } from '$lib/tracker.svelte';
+    import { lb } from '$lib/tracker/api';
     import { mergeContinueWatching, type TrackerContinue } from '$lib/continueWatching';
     import { isTV } from '$lib/platform';
     import { core } from '$lib/core';
@@ -54,7 +54,7 @@
     // (lib/continueWatching.ts). Looked up again when the app comes back.
     let trackerContinue = $state<TrackerContinue | null>(null);
     $effect(() => {
-        if (!lightboxd.ready) {
+        if (!tracker.ready) {
             trackerContinue = null;
             return;
         }

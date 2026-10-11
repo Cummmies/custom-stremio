@@ -1,11 +1,11 @@
 <script lang="ts">
-    // Library. With Lightboxd connected (docs/lightboxd.md): what you track,
+    // Library. With the tracker connected (docs/tracker.md): what you track,
     // all of it (by status) or one status (Watching, Plan to Watch, Completed
     // by month of your last watch, Dropped); the address says which
     // (?status=watching, which Continue Watching's See All opens). At the
-    // right: Type (a menu: Movies, Series, Anime), Sort (Lightboxd's sorts; picking
+    // right: Type (a menu: Movies, Series, Anime), Sort (the tracker's sorts; picking
     // the current one again flips it) and Edit (select titles, then change
-    // their status, add them to a list or remove them). Without Lightboxd:
+    // their status, add them to a list or remove them). Without the tracker:
     // your Stremio library.
     import { page } from '$app/state';
     import { SvelteSet } from 'svelte/reactivity';
@@ -13,8 +13,8 @@
     import { app } from '$lib/app.svelte';
     import { core } from '$lib/core';
     import { libraryToPoster } from '$lib/library';
-    import { lightboxd } from '$lib/lightboxd.svelte';
-    import { lb, day, score, STATUS_LABEL, type LibraryItem, type Status } from '$lib/lightboxd/api';
+    import { tracker } from '$lib/tracker.svelte';
+    import { lb, day, score, STATUS_LABEL, type LibraryItem, type Status } from '$lib/tracker/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { isTV } from '$lib/platform';
     import PosterCard, { type PosterItem } from '$lib/components/PosterCard.svelte';
@@ -28,14 +28,14 @@
         { value: 'all', label: 'All' },
         { value: 'movie', label: 'Movies' },
         { value: 'series', label: 'Series' },
-        // Only Lightboxd knows which titles are anime.
-        ...(lightboxd.ready ? [{ value: 'anime', label: 'Anime' }] : []),
+        // Only the tracker knows which titles are anime.
+        ...(tracker.ready ? [{ value: 'anime', label: 'Anime' }] : []),
     ]);
     let type = $state<string>('all');
     $effect(() => {
         if (!types.some((t) => t.value === type)) type = 'all';
     });
-    // As Lightboxd does: Movies and Series leave anime out.
+    // As the tracker does: Movies and Series leave anime out.
     const keep = (i: { type: string; anime?: boolean }) =>
         type === 'all' || (type === 'anime' ? !!i.anime : !i.anime && i.type === type);
     const typeLabel = $derived(types.find((t) => t.value === type)?.label ?? 'All');
@@ -48,17 +48,17 @@
     }
     const typeNoun = $derived(type === 'movie' ? 'movies' : type === 'series' ? 'series' : 'anime');
 
-    // --- Stremio's library (no Lightboxd) ---
+    // --- Stremio's library (no tracker) ---
     // The library is already loaded app-wide, so filtering is instant.
     const items = $derived((app.library?.catalog ?? []).filter((i) => keep(i)).map(libraryToPoster));
 
-    // --- Lightboxd ---
+    // --- the tracker ---
     const STATUSES: Status[] = ['watching', 'plan_to_watch', 'completed', 'dropped'];
     const sections = [{ id: 'all', label: 'All' }, ...STATUSES.map((st) => ({ id: st as string, label: STATUS_LABEL[st] }))];
     const ids = sections.map((x) => x.id);
     let section = $state<string>('all');
 
-    // Sort: Lightboxd's, newest / highest / most first; Title A to Z.
+    // Sort: the tracker's, newest / highest / most first; Title A to Z.
     type SortKey = 'recent' | 'added' | 'rating' | 'year' | 'title' | 'episodes' | 'rewatches';
     const SORTS: { key: SortKey; label: string }[] = [
         { key: 'recent', label: 'Recently Watched' },
@@ -113,11 +113,11 @@
     }
     let loaded = $state<Record<string, LibraryItem[] | null | undefined>>({});
 
-    // Each loads when first shown (and again when Lightboxd comes back, or
+    // Each loads when first shown (and again when the tracker comes back, or
     // after an edit).
     $effect(() => {
         const k = section;
-        if (!lightboxd.ready || loaded[k] !== undefined) return;
+        if (!tracker.ready || loaded[k] !== undefined) return;
         loaded = { ...loaded, [k]: null };
         lb.library('titles', k === 'all' ? null : (k as Status)).then((res) => {
             loaded = { ...loaded, [k]: res ? res.items : undefined };
@@ -244,7 +244,7 @@
 
     // --- Edit: select titles, then act on them all ---
     // Not on TV: picking many with a remote is slow, and each title page does it.
-    const canEdit = $derived(lightboxd.ready && !isTV);
+    const canEdit = $derived(tracker.ready && !isTV);
     let editing = $state(false);
     const picked = new SvelteSet<number>();
     // Only what's shown counts (a filter can hide some you picked).
@@ -355,7 +355,7 @@
     function onkeydown(e: KeyboardEvent) {
         if (e.key === 'Escape' && editing && !menu.open && !newListOpen && !e.defaultPrevented) toggleEditing();
     }
-    // Leaving Lightboxd (it went away) leaves Edit too.
+    // Leaving the tracker (it went away) leaves Edit too.
     $effect(() => {
         if (!canEdit && editing) toggleEditing();
     });
@@ -367,15 +367,15 @@
 <div class="page" class:editing>
     <!-- The bar names the page; the title stays for screen readers. -->
     <header>
-        <h1 class:sr-only={lightboxd.ready}>Library</h1>
-        {#if lightboxd.ready}
+        <h1 class:sr-only={tracker.ready}>Library</h1>
+        {#if tracker.ready}
             <div class="status">
                 <Segmented label="Status" options={sections.map((s) => ({ value: s.id, label: s.label }))} value={section} onchange={pick} scroll />
             </div>
         {/if}
         <div class="tools">
             <button class="pill" aria-haspopup="menu" aria-expanded="false" aria-label="Type: {typeLabel}" onclick={openType}>Type: {typeLabel}</button>
-            {#if lightboxd.ready}
+            {#if tracker.ready}
                 <button
                     class="pill sort"
                     aria-haspopup="menu"
@@ -393,7 +393,7 @@
         </div>
     </header>
 
-    {#if lightboxd.ready}
+    {#if tracker.ready}
         {#if current === null}
             <p class="loading" role="status">Loading…</p>
         {:else if current.length === 0}
@@ -472,7 +472,7 @@
         padding-bottom: 120px;
     }
     /* PC: the status bar at the left; Type, Sort and Edit at the right
-       (no Lightboxd: the title, then Type). */
+       (no tracker: the title, then Type). */
     header {
         display: flex;
         align-items: center;

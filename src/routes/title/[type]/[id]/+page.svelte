@@ -5,8 +5,8 @@
     import ReviewPeek from '$lib/components/detail/ReviewPeek.svelte';
     import RelatedTab from '$lib/components/detail/RelatedTab.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
-    import { LightboxdTitle } from '$lib/lightboxd/title.svelte';
-    import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/lightboxd/api';
+    import { TrackerTitle } from '$lib/tracker/title.svelte';
+    import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/tracker/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
@@ -228,13 +228,13 @@
         playVideo(target, replace);
     }
 
-    // --- Lightboxd --------------------------------------------------------------
-    // With Lightboxd connected (docs/lightboxd.md), + sets your status and
+    // --- the tracker --------------------------------------------------------------
+    // With the tracker connected (docs/tracker.md), + sets your status and
     // lists there (and saves to Stremio's library too, a backup for its other
     // apps), ★ is your score, and a movie's eye logs your watches. Your score,
     // friends' and AniList's join IMDb's in the scores row, and Reviews and
     // Related are tabs. Without it, + and the eye are Stremio's, as before.
-    const lbt = new LightboxdTitle();
+    const lbt = new TrackerTitle();
     $effect(() => {
         if (meta) lbt.load(id, type, meta.name);
     });
@@ -243,7 +243,7 @@
     const main = $derived(lbOn ? lbt.main : null);
     const related = $derived(lbOn ? (lbt.related ?? []) : []);
     const watches = $derived(main?.log ?? []);
-    /** An anime that's several Lightboxd titles: each season is scored on its own. */
+    /** An anime that's several the tracker titles: each season is scored on its own. */
     const seasons = $derived(lbOn && (lbt.titles?.length ?? 0) > 1 ? lbt.titles! : []);
     const scoreOf = (t: Summary) => t.rating ?? t.earlier_rating;
     /** "Vinland Saga Season 2" → "Season 2", beside the first season's "Vinland Saga". */
@@ -267,7 +267,7 @@
     }
     const hasTabs = $derived(isSeries || trailers.length > 0 || lbOn);
 
-    // Stremio's library keeps a copy of what you save in Lightboxd.
+    // Stremio's library keeps a copy of what you save in the tracker.
     function addToStremio() {
         if (meta && !meta.inLibrary) core.dispatch({ action: 'Ctx', args: { action: 'AddToLibrary', args: meta } });
     }
@@ -339,7 +339,7 @@
     }
 
     // The rate / log dialog: ★, Log a Watch… and Edit Watch… all open it.
-    // `titleId`: the season it's for (null: the title itself, added to Lightboxd if needed).
+    // `titleId`: the season it's for (null: the title itself, added to the tracker if needed).
     type Log = { mode: LogMode; id: number | null; rewatch: boolean; initial: LogDraft; titleId: number | null; name: string | null; earliest: string | null };
     let log = $state<Log | null>(null);
     /** Your score for this title, or for one of its seasons. */
@@ -350,7 +350,7 @@
             name: seasons.length && target ? target.name : null,
             earliest: target?.earliest_watch_date ?? null,
         };
-        // Lightboxd puts a score on your latest watch; with none yet, rating logs one.
+        // The tracker puts a score on your latest watch; with none yet, rating logs one.
         log = w
             ? { ...base, mode: 'rate', id: w.id, rewatch: w.rewatch, initial: { score: w.rating ?? target?.earlier_rating ?? 5, date: w.date, review: w.review ?? '' } }
             : { ...base, mode: 'watch', id: null, rewatch: false, initial: { score: 5, date: null, review: '' } };
@@ -367,7 +367,7 @@
         ]);
     }
     function openLog() {
-        // As Lightboxd: a first watch starts unscored; a rewatch from your last score (else IMDb's, else 8.5).
+        // As the tracker: a first watch starts unscored; a rewatch from your last score (else IMDb's, else 8.5).
         const rewatch = watches.length > 0;
         const imdb = Number(main?.scores.imdb ?? rating);
         log = {

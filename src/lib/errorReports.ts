@@ -1,12 +1,12 @@
 // Error reports: when something breaks in the app (an uncaught error or a
-// promise nobody handled), what broke goes to the app's server (Lightboxd's
+// promise nobody handled), what broke goes to the app's server (the tracker's
 // POST /app-api/v1/errors, core/error_reports.py), so the person running it
 // can see and fix it. Only the error itself, where in the app (the page, no
 // query), the app's version and platform: nothing about the account or what's
 // being watched. Settings turns it off (on this device). A few per launch at
 // most, each distinct error once.
 
-import { lightboxd } from '$lib/lightboxd.svelte';
+import { tracker } from '$lib/tracker.svelte';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
 
 const OFF_KEY = 'error-reports-off';
@@ -39,7 +39,7 @@ function report(error: unknown) {
     const message = (error instanceof Error ? `${error.name}: ${error.message}` : String(error ?? '')).trim().slice(0, 500);
     if (!message || IGNORE.some((re) => re.test(message)) || sent.has(message)) return;
     sent.add(message);
-    const server = lightboxd.reportsServer;
+    const server = tracker.reportsServer;
     if (!server) return;
     // The page, never its query (it can hold a search) or a hash's.
     const where = isTV ? location.hash.replace(/^#/, '').split('?')[0] || '/' : location.pathname;

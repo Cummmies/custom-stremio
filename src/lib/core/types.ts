@@ -17,7 +17,7 @@ export type MetaItemPreview = {
     logo: string | null;
     posterShape: PosterShape;
     releaseInfo: string | null;
-    /** When it came out (an ISO date-time); Lightboxd's Airing This Week puts the air moment here. */
+    /** When it came out (an ISO date-time); the tracker's Airing This Week puts the air moment here. */
     released?: string | null;
     runtime?: string | null;
     imdbRating?: string | null;

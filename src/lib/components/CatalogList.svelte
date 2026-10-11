@@ -1,9 +1,9 @@
 <script lang="ts" module>
     import type { Catalog } from '$lib/core/types';
-    import { TRACKER_ROW_TYPE } from '$lib/internalAddons';
+    import { TRACKER_ROW, TRACKER_ROWS_ADDON, TRACKER_ROW_TYPE } from '$lib/serverIds';
 
     export const isEmptyCatalog = (c: Catalog) => c.content?.type === 'Err';
-    // The tracker's rows are one mixed type: just their names (lib/internalAddons.ts).
+    // The tracker's rows are one mixed type: just their names (lib/serverIds.ts).
     export const catalogTitle = (c: Catalog) =>
         [c.name, c.type === TRACKER_ROW_TYPE ? null : c.type]
             .filter(Boolean)
@@ -43,11 +43,11 @@
     } = $props();
 
     /**
-     * Lightboxd's Airing This Week: when each release airs goes on its picture
+     * The tracker's Airing This Week: when each release airs goes on its picture
      * ("Tomorrow · 5:30 PM"), what airs under the title. Only that row, and
      * only on its own (not combined with other catalogs).
      */
-    const AIRING = 'cat:app.lightboxd.rows/Lightboxd/lightboxd.airing';
+    const AIRING = `cat:${TRACKER_ROWS_ADDON}/${TRACKER_ROW_TYPE}/${TRACKER_ROW.airing}`;
     const timeOnArt = (indices: number[]) =>
         indices.length > 0 && indices.every((i) => catalogs[i] && catalogKey(catalogs[i] as BoardCatalog) === AIRING);
 

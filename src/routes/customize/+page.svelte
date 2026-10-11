@@ -17,7 +17,7 @@
     import Icon from '$lib/components/Icon.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
-    import { TRACKER_ROWS_ADDON, TRACKER_ROW_DETAIL } from '$lib/internalAddons';
+    import { TRACKER_ROWS_ADDON, TRACKER_ROW_DETAIL } from '$lib/serverIds';
 
     let board = $state<Board | null>(null);
     let cw = $state<ContinueWatchingPreview | null>(null);

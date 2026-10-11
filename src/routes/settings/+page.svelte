@@ -36,8 +36,8 @@
     import { titleTracks } from '$lib/player/titleTracks.svelte';
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
-    import { lightboxd } from '$lib/lightboxd.svelte';
-    import { lb, today, type BackupConflict } from '$lib/lightboxd/api';
+    import { tracker } from '$lib/tracker.svelte';
+    import { lb, today, type BackupConflict } from '$lib/tracker/api';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
 
@@ -126,7 +126,7 @@
     }
 
     // Anime: which release of a new episode counts (subtitled or dubbed), kept
-    // with the account (Lightboxd), for the calendar, new-episode counts and
+    // with the account (the tracker), for the calendar, new-episode counts and
     // notifications.
     type AnimeTrack = 'sub' | 'dub';
     const animeTrackOptions: { value: AnimeTrack; label: string }[] = [
@@ -136,8 +136,8 @@
     let animeTrack = $state<AnimeTrack | null>(null);
     let animeTrackFailed = $state(false);
     $effect(() => {
-        if (!lightboxd.ready || !app.user) return;
-        lightboxd.request<{ anime_track: AnimeTrack }>('/preferences').then((res) => {
+        if (!tracker.ready || !app.user) return;
+        tracker.request<{ anime_track: AnimeTrack }>('/preferences').then((res) => {
             if (res) animeTrack = res.anime_track;
         });
     });
@@ -145,14 +145,14 @@
         const before = animeTrack;
         animeTrack = track;
         animeTrackFailed = false;
-        const res = await lightboxd.request<{ anime_track: AnimeTrack }>('/preferences', { method: 'PUT', body: { anime_track: track } });
+        const res = await tracker.request<{ anime_track: AnimeTrack }>('/preferences', { method: 'PUT', body: { anime_track: track } });
         if (!res) {
             animeTrack = before;
             animeTrackFailed = true;
             return;
         }
         // What's new and when changes with it.
-        void lightboxd.check();
+        void tracker.check();
         void notify.refresh();
     }
 
@@ -645,7 +645,7 @@
             </section>
         {/if}
 
-        {#if app.user && lightboxd.ready && animeTrack}
+        {#if app.user && tracker.ready && animeTrack}
             <section>
                 <h2>Anime</h2>
                 <div class="group">
@@ -715,7 +715,7 @@
                             <div class="title">Download a Backup</div>
                             <div class="sub">Your watchlist, watches, scores and lists, as a file to keep.</div>
                         </div>
-                        <button class="btn" onclick={downloadBackup} disabled={!!dataBusy || !lightboxd.ready}>
+                        <button class="btn" onclick={downloadBackup} disabled={!!dataBusy || !tracker.ready}>
                             {dataBusy === 'download' ? 'Preparing…' : 'Download'}
                         </button>
                     </div>
@@ -724,7 +724,7 @@
                             <div class="title">Import a Backup</div>
                             <div class="sub">Adds what’s in a backup file. Nothing here is removed.</div>
                         </div>
-                        <button class="btn" onclick={() => importInput?.click()} disabled={!!dataBusy || !lightboxd.ready}>
+                        <button class="btn" onclick={() => importInput?.click()} disabled={!!dataBusy || !tracker.ready}>
                             {dataBusy === 'import' ? 'Importing…' : 'Import…'}
                         </button>
                         <input bind:this={importInput} type="file" accept="application/json,.json" onchange={importBackup} hidden />
@@ -742,9 +742,9 @@
                             </div>
                         </div>
                     {/if}
-                    {#if dataNote || !lightboxd.ready}
+                    {#if dataNote || !tracker.ready}
                         <div class="row">
-                            <div class="sub" class:sync-error={dataError || !lightboxd.ready} role="status">
+                            <div class="sub" class:sync-error={dataError || !tracker.ready} role="status">
                                 {dataNote ?? 'Couldn’t connect. Try again in a moment.'}
                             </div>
                         </div>

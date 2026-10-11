@@ -1,5 +1,5 @@
 <script lang="ts">
-    // Your Lightboxd review, written with a score. Grows with what you write;
+    // Your tracker review, written with a score. Grows with what you write;
     // Ctrl+Enter saves.
     let {
         value = $bindable(''),
@@ -7,7 +7,7 @@
         onsubmit,
     }: { value?: string; disabled?: boolean; onsubmit?: () => void } = $props();
 
-    /** Lightboxd's limit for a review sent from the app. */
+    /** The tracker's limit for a review sent from the app. */
     const MAX = 5000;
 
     function onkeydown(e: KeyboardEvent) {

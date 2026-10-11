@@ -5,8 +5,8 @@
     import { releasedDate } from '$lib/released';
     import { itemMenu } from '$lib/contextmenu';
     import type { MenuEntry } from '$lib/menu.svelte';
-    import { score } from '$lib/lightboxd/api';
-    import type { EpisodeLog } from '$lib/lightboxd/api';
+    import { score } from '$lib/tracker/api';
+    import type { EpisodeLog } from '$lib/tracker/api';
     import { isTV } from '$lib/platform';
 
     let {

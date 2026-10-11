@@ -36,7 +36,7 @@
     import { fmtTime } from '$lib/player/format';
     import { subtitleBottom, subtitleCss } from '$lib/player/subtitleStyle';
     import { titleHref } from '$lib/links';
-    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { tracker } from '$lib/tracker.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import SeekBar from '$lib/player/SeekBar.svelte';
     import SeekPreview from '$lib/player/SeekPreview.svelte';
@@ -835,38 +835,38 @@
         showNext = !!model?.nextVideo && !!d && (inCredits || d - player.time <= nextThreshold) && !nextDismissed && !pip;
     });
 
-    // Lightboxd (docs/lightboxd.md): tells it you started this (a minute in) and
+    // The tracker (docs/tracker.md): tells it you started this (a minute in) and
     // finished it (when the credits start, or 90% in when where they are isn't
     // known), once each per episode or movie. Nothing when it isn't connected.
-    const LIGHTBOXD_STARTED_S = 60;
-    const LIGHTBOXD_FINISHED_SHARE = 0.9;
-    let lightboxdSent = { key: '', started: false, finished: false };
+    const TRACKER_STARTED_S = 60;
+    const TRACKER_FINISHED_SHARE = 0.9;
+    let trackerSent = { key: '', started: false, finished: false };
     $effect(() => {
         const t = player.time;
         const d = player.duration;
         const inCredits = currentSegment?.kind === 'credits';
         untrack(() => {
             // This video's own file: not the last episode's, still playing as the next one opens.
-            if (!lightboxd.saved?.token || !firstFrameSeen || !fileReady || !id) return;
+            if (!tracker.saved?.token || !firstFrameSeen || !fileReady || !id) return;
             if (type !== 'movie' && type !== 'series') return;
             if (!/^(tt\d+|kitsu:\d+)$/.test(id) || (type === 'series' && !videoId)) return;
             if (d != null && d < ERROR_CLIP_MAX_S) return; // an addon's error clip
             const key = `${id}|${videoId ?? ''}`;
-            if (lightboxdSent.key !== key) lightboxdSent = { key, started: false, finished: false };
-            if (!lightboxdSent.finished && d && (inCredits || t >= d * LIGHTBOXD_FINISHED_SHARE)) {
-                lightboxdSent.finished = lightboxdSent.started = true;
-                sendToLightboxd('finished', type, id, videoId);
-            } else if (!lightboxdSent.started && t >= LIGHTBOXD_STARTED_S) {
-                lightboxdSent.started = true;
-                sendToLightboxd('started', type, id, videoId);
+            if (trackerSent.key !== key) trackerSent = { key, started: false, finished: false };
+            if (!trackerSent.finished && d && (inCredits || t >= d * TRACKER_FINISHED_SHARE)) {
+                trackerSent.finished = trackerSent.started = true;
+                sendToTracker('finished', type, id, videoId);
+            } else if (!trackerSent.started && t >= TRACKER_STARTED_S) {
+                trackerSent.started = true;
+                sendToTracker('started', type, id, videoId);
             }
         });
     });
 
-    async function sendToLightboxd(kind: 'started' | 'finished', type: 'movie' | 'series', id: string, video: string | null) {
+    async function sendToTracker(kind: 'started' | 'finished', type: 'movie' | 'series', id: string, video: string | null) {
         const at = new Date().toISOString();
         const name = metaName ?? undefined;
-        // A movie's watch count from the stored library record; Lightboxd's own
+        // A movie's watch count from the stored library record; the tracker's own
         // Stremio sync counts with the same number, so the two never log it twice.
         let times: number | undefined;
         if (type === 'movie') {
@@ -875,15 +875,15 @@
                 .catch(() => null);
             times = state?.libraryItem?.state?.timesWatched || undefined;
         }
-        lightboxd.track({ kind, type, id, video_id: type === 'series' ? (video ?? undefined) : undefined, name, times_watched: times, at });
+        tracker.track({ kind, type, id, video_id: type === 'series' ? (video ?? undefined) : undefined, name, times_watched: times, at });
     }
 
-    // Lightboxd's rating prompt: when finishing this logged something new and
+    // The tracker's rating prompt: when finishing this logged something new and
     // unscored there (a movie, or the last episode of a show), ask for a score
-    // during the credits. Closing it is fine: it waits on Lightboxd's Home.
+    // during the credits. Closing it is fine: it waits on the tracker's Home.
     type RatePrompt = { logId: number; name: string; state: 'ask' | 'saving' | 'done' | 'failed'; score?: number };
     let ratePrompt = $state<RatePrompt | null>(null);
-    /** The score on the prompt's slider; Lightboxd's own starts at 5. */
+    /** The score on the prompt's slider; the tracker's own starts at 5. */
     let rateScore = $state(5);
     let rateReview = $state('');
     /** Typing the review (touch: the prompt moves up, clear of the keyboard). */
@@ -892,7 +892,7 @@
     /** A result for an event from long ago (sent late from the queue) doesn't ask. */
     const RATE_FRESH_MS = 30 * 60_000;
     $effect(() => {
-        const last = lightboxd.lastResult;
+        const last = tracker.lastResult;
         untrack(() => {
             const logId = last?.result.log_id;
             if (!last || !logId || !last.result.needs_rating || rateAsked.has(logId)) return;
@@ -902,7 +902,7 @@
             rateScore = 5;
             rateReview = '';
             rateTyping = false;
-            // The title Lightboxd logged: for an anime, the season just finished ("… Season 2").
+            // The title the tracker logged: for an anime, the season just finished ("… Season 2").
             ratePrompt = { logId, name: last.result.title_name ?? last.event.name ?? heading, state: 'ask' };
         });
     });
@@ -917,10 +917,10 @@
         const asked = ratePrompt;
         if (!asked || asked.state !== 'ask') return;
         ratePrompt = { ...asked, state: 'saving' };
-        const result = await lightboxd.answerRating(asked.logId, answer, rateReview);
+        const result = await tracker.answerRating(asked.logId, answer, rateReview);
         if (ratePrompt?.logId !== asked.logId) return;
         if (!result) ratePrompt = { ...asked, state: 'failed' };
-        // Already rated in Lightboxd: nothing to confirm, so it just goes.
+        // Already rated in the tracker: nothing to confirm, so it just goes.
         else if (result === 'saved' && typeof answer === 'number') ratePrompt = { ...asked, state: 'done', score: answer };
         else ratePrompt = null;
         if (ratePrompt) setTimeout(() => ratePrompt?.logId === asked.logId && (ratePrompt = null), 3000);
@@ -2239,7 +2239,7 @@
         background: linear-gradient(to right, white calc((1 - var(--left)) * 100%), rgb(255 255 255 / 0.72) 0);
     }
 
-    /* Rate in Lightboxd: bottom left, clear of Skip and Up Next on the right. */
+    /* Rate in the tracker: bottom left, clear of Skip and Up Next on the right. */
     .rate {
         position: absolute;
         left: 24px;
@@ -2531,7 +2531,7 @@
         right: 60px;
         bottom: 144px;
     }
-    /* Rate in Lightboxd: across from Up Next, read from the couch. */
+    /* Rate in the tracker: across from Up Next, read from the couch. */
     :global(html.tv) .rate {
         left: 60px;
         bottom: 144px;
@@ -2581,7 +2581,7 @@
         .touch.hidden .next {
             bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
         }
-        /* Rate in Lightboxd: 44 pt scores, inside the safe area, down to the
+        /* Rate in the tracker: 44 pt scores, inside the safe area, down to the
            corner with the controls hidden, as Up Next. */
         .touch .rate {
             left: max(16px, env(safe-area-inset-left));

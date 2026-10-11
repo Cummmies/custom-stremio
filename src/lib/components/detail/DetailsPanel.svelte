@@ -1,5 +1,5 @@
 <script lang="ts">
-    // A title's Cast and Details. With Lightboxd, your status and lists are
+    // A title's Cast and Details. With the tracker, your status and lists are
     // rows like any other. IMDb is in the scores above, genres and runtime in
     // the tags under the title: nothing here repeats them.
     import type { MetaItem } from '$lib/core/types';

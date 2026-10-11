@@ -1,9 +1,9 @@
 <script lang="ts">
     // Last in the Details column (Cast, Details, Reviews): your friends'
-    // reviews, then the ones Lightboxd gathers, filling the column's remaining
+    // reviews, then the ones the tracker gathers, filling the column's remaining
     // height: as many as fit, fading out at the bottom. See All opens the
     // Reviews tab. Not shown until there's at least one.
-    import { day, score, type Reviews } from '$lib/lightboxd/api';
+    import { day, score, type Reviews } from '$lib/tracker/api';
 
     let { reviews, onseeall }: { reviews: Reviews; onseeall: () => void } = $props();
 

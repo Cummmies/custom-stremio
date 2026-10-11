@@ -1,4 +1,4 @@
-// Continue Watching, from Stremio and the tracker together (docs/lightboxd.md):
+// Continue Watching, from Stremio and the tracker together (docs/tracker.md):
 // Stremio's row knows only what was started in a Stremio app; the tracker
 // (GET /app-api/v1/continue) knows what you've watched anywhere. So:
 //

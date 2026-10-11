@@ -1,58 +1,59 @@
-// Lightboxd: your own movie, TV and anime tracker, running on a server of
-// yours (docs/lightboxd.md). Each profile connects its own Lightboxd account,
+// The tracker: your own movie, TV and anime tracker, running on a server of
+// yours (docs/tracker.md). Each profile connects its own tracker account,
 // saved on this device.
 //
-// Connecting is pairing: Lightboxd gives this app a code, you approve it in a
-// browser where you're signed in to Lightboxd, and the app gets a token (never
-// your password). Lightboxd can remove it in Settings > Connected Accounts.
+// Connecting is pairing: the tracker gives this app a code, you approve it in a
+// browser where you're signed in to the tracker, and the app gets a token (never
+// your password). The tracker can remove it in Settings > Connected Accounts.
 //
-// Lightboxd is optional and may be off or asleep: every call here gives up
+// The tracker is optional and may be off or asleep: every call here gives up
 // after a few seconds and returns null instead of throwing, and `ready` says
-// whether Lightboxd features should show at all. They hide, never error.
+// whether the tracker features should show at all. They hide, never error.
 //
 // What you watch is sent as it happens (`track`, from the player): started,
 // and finished at the credits. Events wait in a queue on this device while
-// Lightboxd can't be reached, and go once it's back. Lightboxd applies each one
+// The tracker can't be reached, and go once it's back. The tracker applies each one
 // once, whatever the app resends, and agrees with its own Stremio sync.
 //
 // The connection belongs to the Stremio account, not the device: its address,
 // token and rows link follow the profile to its other devices through the
-// Settings sync addon (cloudSync.svelte.ts, part "lightboxd"), so a device
-// signed in to the account is connected without pairing, and Lightboxd lists
+// Settings sync addon (cloudSync.svelte.ts, part "tracker"), so a device
+// signed in to the account is connected without pairing, and the tracker lists
 // the account once. A device that had paired on its own moves over to the
 // account's token and drops its own. A `localhost` address means nothing on
 // another device, so it isn't shared: that device looks in the usual places.
 //
-// Lightboxd's rows (Recently Watched, Airing This Week) come as a Stremio
-// addon Lightboxd serves, with a read-only link of the account's token. It's
+// The tracker's rows (Recently Watched, Airing This Week) come as a Stremio
+// addon the tracker serves, with a read-only link of the account's token. It's
 // installed on connecting, so Customize Home treats them like any other row,
-// and when Lightboxd is down their catalogs fail and Home leaves them out.
+// and when the tracker is down their catalogs fail and Home leaves them out.
 import { untrack } from 'svelte';
 import { app } from '$lib/app.svelte';
 import { core } from '$lib/core';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
+import { NAME_BEFORE, TRACKER_LOCAL_HOST } from '$lib/serverIds';
 
-/** What kind of device this is, for Lightboxd ("windows", "ios", "tv"). */
+/** What kind of device this is, for the tracker ("windows", "ios", "tv"). */
 const PLATFORM = isDesktop ? 'windows' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
-/** What Lightboxd's approval page says is asking to connect. */
+/** What the tracker's approval page says is asking to connect. */
 const DEVICE_NAME = isDesktop ? 'PC' : isIOS ? 'iPhone' : isTV ? 'TV' : 'Browser';
 /** What the account's connection is called, once every device shares it. */
 const CONNECTION_NAME = 'Custom Stremio';
-/** The Stremio account this device is signed in to (Lightboxd groups devices by it). */
+/** The Stremio account this device is signed in to (the tracker groups devices by it). */
 const stremioAccount = () => app.ctx?.profile.auth?.user.email ?? null;
-/** This profile's Stremio sign-in, for signing in to Lightboxd with it (never kept there). */
+/** This profile's Stremio sign-in, for signing in to the tracker with it (never kept there). */
 const stremioKey = () => app.ctx?.profile.auth?.key ?? null;
 /** Turned off here by Disconnect: no signing in by itself until Connect. */
-const offKey = (uid: string) => `lightboxd-off:${uid}`;
+const offKey = (uid: string) => `tracker-off:${uid}`;
 /** Signing in by itself is tried at most this often (each focus re-checks). */
 const AUTO_SIGN_IN_MS = 5 * 60_000;
 /**
- * Where Lightboxd usually is, tried in order when no address is given. Only
+ * Where the tracker usually is, tried in order when no address is given. Only
  * the PC can be running it itself; a phone or TV finds it on the network.
  */
-const LOCAL_SERVERS = isDesktop ? ['http://localhost:8000', 'http://lightboxd.local:8000'] : ['http://lightboxd.local:8000'];
-/** The hosted Lightboxd this build signs in to, if it has one; then the local places. */
-const BUILT_IN_SERVER = (import.meta.env.VITE_LIGHTBOXD_SERVER || '').trim().replace(/\/+$/, '') || null;
+const LOCAL_SERVERS = isDesktop ? ['http://localhost:8000', `http://${TRACKER_LOCAL_HOST}:8000`] : [`http://${TRACKER_LOCAL_HOST}:8000`];
+/** The hosted tracker this build signs in to, if it has one; then the local places. */
+const BUILT_IN_SERVER = (import.meta.env.VITE_TRACKER_SERVER || '').trim().replace(/\/+$/, '') || null;
 /** This build has its server built in: nothing about it shows (no address, no Disconnect); it's just the app. */
 export const hasBuiltInServer = !!BUILT_IN_SERVER;
 const DEFAULT_SERVERS = BUILT_IN_SERVER ? [BUILT_IN_SERVER, ...LOCAL_SERVERS] : LOCAL_SERVERS;
@@ -61,12 +62,12 @@ const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
 const RETRY_MS = 60_000;
 
-export type LightboxdUser = { name: string; handle: string | null; avatar_url: string | null };
+export type TrackerUser = { name: string; handle: string | null; avatar_url: string | null };
 type Saved = {
     server: string;
-    /** null once Lightboxd removed this device (the server is kept for reconnecting). */
+    /** null once the tracker removed this device (the server is kept for reconnecting). */
     token: string | null;
-    user?: LightboxdUser;
+    user?: TrackerUser;
     /** The account's addon link for the rows, once made. */
     addonUrl?: string;
     /** Whether the rows are wanted (unset until first connected). */
@@ -100,16 +101,34 @@ export type WatchEvent = {
 export type EventResult = {
     result: 'applied' | 'unchanged' | 'unmatched';
     title_id: number | null;
-    /** The Lightboxd title's own name (an anime's season); older Lightboxd leaves it out. */
+    /** The tracker title's own name (an anime's season); older the tracker leaves it out. */
     title_name?: string | null;
     note: string;
     log_id: number | null;
     needs_rating: boolean;
 };
 
-const storageKey = (uid: string) => `lightboxd:${uid}`;
-const queueKey = (uid: string) => `lightboxd-queue:${uid}`;
-const sharedKey = (uid: string) => `lightboxd-shared:${uid}`;
+const storageKey = (uid: string) => `tracker:${uid}`;
+/**
+ * This device's tracker sign-in, queue, shared connection and Disconnect, kept
+ * under the tracker's old name before it was renamed (serverIds.ts): moved
+ * over once, so nobody is signed out.
+ */
+function moveFromBefore(uid: string) {
+    try {
+        for (const kind of ['', '-queue', '-shared', '-off']) {
+            const before = `${NAME_BEFORE}${kind}:${uid}`;
+            const value = localStorage.getItem(before);
+            if (value == null) continue;
+            if (localStorage.getItem(`tracker${kind}:${uid}`) == null) localStorage.setItem(`tracker${kind}:${uid}`, value);
+            localStorage.removeItem(before);
+        }
+    } catch {
+        /* storage blocked: it signs in again by itself */
+    }
+}
+const queueKey = (uid: string) => `tracker-queue:${uid}`;
+const sharedKey = (uid: string) => `tracker-shared:${uid}`;
 
 /** An address another device could reach (not this machine's loopback). */
 export function shareableServer(server: string | null | undefined): string | null {
@@ -124,11 +143,11 @@ export function shareableServer(server: string | null | undefined): string | nul
 /** Older events are dropped rather than logged weeks late; so is anything past this many. */
 const QUEUE_MAX_AGE_MS = 30 * 86_400_000;
 const QUEUE_MAX = 200;
-/** An event may wait while Lightboxd adds a new title from TMDb. */
+/** An event may wait while the tracker adds a new title from TMDb. */
 const EVENT_TIMEOUT_MS = 30_000;
 
 /**
- * "lightboxd.local:8000", "http://192.168.1.5:8000/" → "http://…:8000".
+ * "server.local:8000", "http://192.168.1.5:8000/" → "http://…:8000".
  * null if it isn't an address.
  */
 export function normalizeServer(input: string): string | null {
@@ -150,7 +169,7 @@ function onServer(url: string, server: string): string | null {
     try {
         const u = new URL(url);
         const base = new URL(server.endsWith('/') ? server : `${server}/`);
-        // A Lightboxd under a path (reverse proxy) keeps its prefix.
+        // A tracker under a path (reverse proxy) keeps its prefix.
         return new URL(u.pathname.replace(/^\//, '') + u.search, base).toString();
     } catch {
         return null;
@@ -172,7 +191,7 @@ async function fetchManifest(url: string): Promise<unknown> {
     }
 }
 
-/** One request to Lightboxd. Never throws: `status` is null when it couldn't be reached. */
+/** One request to the tracker. Never throws: `status` is null when it couldn't be reached. */
 async function call<T>(
     server: string,
     path: string,
@@ -199,7 +218,7 @@ async function call<T>(
     }
 }
 
-class Lightboxd {
+class Tracker {
     #uid: string | null = null;
     saved = $state<Saved | null>(null);
     status = $state<Status>('off');
@@ -207,10 +226,10 @@ class Lightboxd {
     /** Why the last Connect didn't get a code. */
     error = $state<string | null>(null);
     connecting = $state(false);
-    /** Lightboxd was reached but has no one with this Stremio account connected: it took a code instead. */
+    /** The tracker was reached but has no one with this Stremio account connected: it took a code instead. */
     stremioNotLinked = $state(false);
 
-    /** Connected and reachable: Lightboxd features show. */
+    /** Connected and reachable: the tracker features show. */
     ready = $derived(this.status === 'ok');
     /** The rows' addon is installed in this profile. */
     rowsInstalled = $derived(!!this.saved?.addonUrl && !!this.#installedRows(this.saved.addonUrl));
@@ -224,17 +243,17 @@ class Lightboxd {
     #lastCheck = 0;
     /** Bumped to cancel a pairing in progress (a new one, Cancel, or another profile). */
     #pairRun = 0;
-    /** This profile's watch events not yet taken by Lightboxd, oldest first. */
+    /** This profile's watch events not yet taken by the tracker, oldest first. */
     #queue: WatchEvent[] = [];
     #flushing = false;
     /**
      * New episodes for anime you're watching, by your sub/dub preference:
-     * {stremio id: N}, zeros included (Lightboxd has the say for those; the
+     * {stremio id: N}, zeros included (the tracker has the say for those; the
      * rest keep Stremio's count, which follows the Japanese release).
      */
     newEpisodes = $state<Record<string, number>>({});
 
-    /** The last event Lightboxd applied (for the rating prompt, Phase 4). */
+    /** The last event the tracker applied (for the rating prompt, Phase 4). */
     lastResult = $state<{ event: WatchEvent; result: EventResult } | null>(null);
 
     start() {
@@ -265,6 +284,7 @@ class Lightboxd {
     #switchTo(uid: string | null) {
         if (uid === this.#uid) return;
         this.#uid = uid;
+        if (uid) moveFromBefore(uid);
         this.cancelPairing();
         this.error = null;
         this.saved = uid ? this.#load(uid) : null;
@@ -294,7 +314,7 @@ class Lightboxd {
         try {
             const candidates = [this.saved?.server, shared.server, ...DEFAULT_SERVERS].filter((s): s is string => !!s);
             for (const server of new Set(candidates)) {
-                const res = await call<{ user: LightboxdUser }>(server, '/me', { token });
+                const res = await call<{ user: TrackerUser }>(server, '/me', { token });
                 if (uid !== this.#uid) return;
                 if (res.ok) {
                     const old = this.saved;
@@ -314,7 +334,7 @@ class Lightboxd {
                     return;
                 }
                 if (res.status === 401) {
-                    // Removed in Lightboxd: no device should try it again.
+                    // Removed in the tracker: no device should try it again.
                     const now = this.sharedFor(uid);
                     if (now.token === token) this.setShared(uid, { ...now, token: null, addonUrl: null });
                     return;
@@ -391,7 +411,7 @@ class Lightboxd {
         if (s === 'ok') this.#flush();
     }
 
-    /** Is Lightboxd there, and does it still know this device? */
+    /** Is the tracker there, and does it still know this device? */
     async check() {
         const saved = this.saved;
         const uid = this.#uid;
@@ -399,15 +419,15 @@ class Lightboxd {
         if (!saved?.token) {
             this.#setStatus(saved ? 'removed' : 'off');
             // Connected on another device signed in to this account: so is this one.
-            // Else, the Stremio account is the Lightboxd login: sign in with it
-            // (not after Lightboxd removed this device, or Disconnect here).
+            // Else, the Stremio account is the tracker login: sign in with it
+            // (not after the tracker removed this device, or Disconnect here).
             this.#followShared().then(() => {
                 if (!saved && !this.saved?.token && uid === this.#uid) this.#autoSignIn();
             });
             return;
         }
         if (this.status !== 'ok') this.status = 'checking';
-        const res = await call<{ user: LightboxdUser }>(saved.server, '/me', { token: saved.token });
+        const res = await call<{ user: TrackerUser }>(saved.server, '/me', { token: saved.token });
         if (uid !== this.#uid || saved !== this.saved) return; // switched meanwhile
         if (res.ok) {
             const { name, handle, avatar_url } = res.data.user;
@@ -429,7 +449,7 @@ class Lightboxd {
     }
 
     /**
-     * The profile's Lightboxd connection, as synced between its devices.
+     * The profile's the tracker connection, as synced between its devices.
      * Reactive. Read per profile, so the Settings sync can ask about the
      * profile it's syncing before this switches to it.
      */
@@ -490,7 +510,7 @@ class Lightboxd {
         if (res && uid === this.#uid) this.newEpisodes = res.counts ?? {};
     }
 
-    /** Lightboxd removed this connection: keep the address for reconnecting. */
+    /** The tracker removed this connection: keep the address for reconnecting. */
     #forgetToken() {
         this.newEpisodes = {};
         // The account's too, so no other device tries it.
@@ -507,10 +527,10 @@ class Lightboxd {
      * An authenticated request for later phases (events, calendar, title info).
      * null when not connected, unreachable, or refused.
      */
-    /** What Lightboxd last heard from this device, per token (sent again only when it changes). */
+    /** What the tracker last heard from this device, per token (sent again only when it changes). */
     #reported = new Map<string, string>();
 
-    /** Tells Lightboxd which Stremio account this connection is for. Best effort. */
+    /** Tells the tracker which Stremio account this connection is for. Best effort. */
     #reportDevice(saved: { server: string; token: string | null }) {
         if (!saved.token) return;
         const body = { stremio_account: stremioAccount(), name: CONNECTION_NAME };
@@ -541,7 +561,7 @@ class Lightboxd {
         return res;
     }
 
-    /** Something was started or finished: tell Lightboxd now, or once it's reachable. */
+    /** Something was started or finished: tell the tracker now, or once it's reachable. */
     track(event: WatchEvent) {
         if (!this.saved?.token) return; // not connected: nothing to tell
         this.#queue.push(event);
@@ -550,11 +570,11 @@ class Lightboxd {
     }
 
     /**
-     * Answers the rating prompt for a log Lightboxd just made: a score out of 10
-     * (with your review, if you wrote one), 'later' (it waits on Lightboxd's
+     * Answers the rating prompt for a log the tracker just made: a score out of 10
+     * (with your review, if you wrote one), 'later' (it waits on the tracker's
      * Home instead) or 'skip' (never asked again).
-     * 'saved' once Lightboxd has it; 'gone' when the log no longer needs a score
-     * (rated in Lightboxd, or removed, meanwhile); false when it couldn't reach it.
+     * 'saved' once the tracker has it; 'gone' when the log no longer needs a score
+     * (rated in the tracker, or removed, meanwhile); false when it couldn't reach it.
      */
     async answerRating(logId: number, answer: number | 'later' | 'skip', review = ''): Promise<'saved' | 'gone' | false> {
         const res =
@@ -576,8 +596,8 @@ class Lightboxd {
     }
 
     /**
-     * Puts Lightboxd's rows on Home (a fresh addon link, installed) or takes
-     * them off. False when Lightboxd couldn't be reached to make the link.
+     * Puts the tracker's rows on Home (a fresh addon link, installed) or takes
+     * them off. False when the tracker couldn't be reached to make the link.
      */
     async setRows(on: boolean): Promise<boolean> {
         if (!on) {
@@ -590,7 +610,7 @@ class Lightboxd {
         if (!res || uid !== this.#uid) return false;
         // The addon is saved in the Stremio account, so every device signed in
         // to it asks this address for the rows. Connected through localhost
-        // (Lightboxd on this PC), that address means nothing elsewhere: use the
+        // (the tracker on this PC), that address means nothing elsewhere: use the
         // profile's shared one instead, when it serves this account's rows.
         let url = res.manifest_url;
         let manifest: unknown = null;
@@ -670,10 +690,10 @@ class Lightboxd {
     #autoSigningIn = false;
 
     /**
-     * Signs this profile in to Lightboxd with its Stremio account, with no
-     * one asked anything: the account is the login (Lightboxd makes its side
-     * the first time). Tries the built-in Lightboxd, the account's address,
-     * then the usual places; stops at the first that answers. A Lightboxd that
+     * Signs this profile in to the tracker with its Stremio account, with no
+     * one asked anything: the account is the login (the tracker makes its side
+     * the first time). Tries the built-in the tracker, the account's address,
+     * then the usual places; stops at the first that answers. A tracker that
      * says no (another account has the email, or it only lets in connected
      * accounts) leaves Connect, with its code, in Settings.
      */
@@ -711,7 +731,7 @@ class Lightboxd {
     /**
      * Connects to the server at `address`, or, if that's empty, to the first
      * of the usual places that answers: signed in with this profile's Stremio
-     * account when Lightboxd has that account connected (no code), else with a
+     * account when the tracker has that account connected (no code), else with a
      * pairing code to approve there.
      */
     async connect(address: string) {
@@ -769,8 +789,8 @@ class Lightboxd {
                 : server
                   ? `Couldn’t reach a server at ${server.replace(/^https?:\/\//, '')}. Check that it’s running and the address is right.`
                   : isDesktop
-                  ? 'Couldn’t find a server on this PC or at lightboxd.local. Enter its address.'
-                  : 'Couldn’t find a server at lightboxd.local. Enter its address.';
+                  ? 'Couldn’t find a server on this PC or your home network. Enter its address.'
+                  : 'Couldn’t find a server on your home network. Enter its address.';
             return;
         }
         const { server: at, start } = found;
@@ -813,8 +833,8 @@ class Lightboxd {
     }
 
     /**
-     * Signing out of a Stremio account signs it out of Lightboxd on this
-     * device too: one sign-in. Its token goes from here (and ends at Lightboxd,
+     * Signing out of a Stremio account signs it out of the tracker on this
+     * device too: one sign-in. Its token goes from here (and ends at the tracker,
      * unless it's the account's shared one, which its other devices use).
      * Watches not sent yet wait for the next sign-in.
      */
@@ -834,7 +854,7 @@ class Lightboxd {
 
     /**
      * Disconnect: the account's connection ends, on every device signed in to
-     * it. Lightboxd forgets the token (when it's reachable), and so does this
+     * it. The tracker forgets the token (when it's reachable), and so does this
      * profile; the address stays shared, for connecting again.
      */
     async disconnect() {
@@ -857,4 +877,4 @@ class Lightboxd {
     }
 }
 
-export const lightboxd = new Lightboxd();
+export const tracker = new Tracker();

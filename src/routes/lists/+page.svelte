@@ -1,13 +1,13 @@
 <script lang="ts">
-    // Lists: your Lightboxd lists (docs/lightboxd.md), each as a stack of its
+    // Lists: your tracker lists (docs/tracker.md), each as a stack of its
     // first posters; one opens in place (?id=, so Back returns to them all).
     // New List makes one; Share gives an open list a link anyone can open
-    // (and Stop Sharing turns it off). Without Lightboxd connected, says so.
+    // (and Stop Sharing turns it off). Without the tracker connected, says so.
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
-    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { tracker } from '$lib/tracker.svelte';
     import { app } from '$lib/app.svelte';
-    import { lb, STATUS_SHORT, score, type ListDetail, type ListInfo } from '$lib/lightboxd/api';
+    import { lb, STATUS_SHORT, score, type ListDetail, type ListInfo } from '$lib/tracker/api';
     import PosterCard from '$lib/components/PosterCard.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
@@ -22,7 +22,7 @@
     let failed = $state(false);
 
     $effect(() => {
-        if (!lightboxd.ready || lists !== null) return;
+        if (!tracker.ready || lists !== null) return;
         lb.lists().then((res) => {
             if (res) lists = res.lists;
             else failed = true;
@@ -32,7 +32,7 @@
     $effect(() => {
         const listId = openId;
         detail = undefined;
-        if (!listId || !lightboxd.ready) return;
+        if (!listId || !tracker.ready) return;
         lb.list(listId).then((res) => {
             if (openId === listId) detail = res;
         });
@@ -119,7 +119,7 @@
 <svelte:head><title>{detail?.name ?? 'Lists'} · Stremio</title></svelte:head>
 
 <div class="page">
-    {#if !lightboxd.ready}
+    {#if !tracker.ready}
         <header><h1>Lists</h1></header>
         {#if !app.user}
             <EmptyState icon="list" title="Keep lists of what to watch">

@@ -1,6 +1,6 @@
 // Keeps this app's own data with your Stremio account: your profile's name,
 // color and picture, your Home layout (Customize Home), all its settings, and
-// your Lightboxd connection (its address and token, so a device signed in to
+// your tracker connection (its address and token, so a device signed in to
 // the account is connected too).
 // Log in on another PC or your phone and it's there. Settings about the device
 // (upscaling, HDR/audio passthrough, volume, window pausing) are kept per kind
@@ -22,7 +22,8 @@ import { nameFromEmail, profiles } from '$lib/profiles.svelte';
 import { homeLayout, type Layout } from '$lib/homeLayout.svelte';
 import { playerPrefs, type DevicePrefs, type SyncedPrefs } from '$lib/player/prefs.svelte';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
-import { lightboxd } from '$lib/lightboxd.svelte';
+import { tracker } from '$lib/tracker.svelte';
+import { NAME_BEFORE } from '$lib/serverIds';
 
 /** Which kind of device this is, for device settings. */
 const DEVICE_KIND = isDesktop ? 'desktop' : isIOS ? 'ios' : isTV ? 'tv' : 'web';
@@ -48,13 +49,13 @@ type Payload = {
     profile?: { name: string; color: string; avatar?: string };
     home?: Layout;
     prefs?: SyncedPrefs;
-    /** This profile's Lightboxd connection (lightboxd.svelte.ts); older data has only the server. */
-    lightboxd?: { server: string | null; token?: string | null; addonUrl?: string | null };
+    /** This profile's tracker connection (tracker.svelte.ts); older data has only the server. */
+    tracker?: { server: string | null; token?: string | null; addonUrl?: string | null };
     /** Device settings, by kind of device ('desktop', 'ios', …). */
     devices?: Record<string, DevicePrefs>;
 };
 
-const PARTS = ['profile', 'home', 'prefs', 'lightboxd'] as const;
+const PARTS = ['profile', 'home', 'prefs', 'tracker'] as const;
 type Part = (typeof PARTS)[number];
 type Stamps = Record<Part | 'devices', number>;
 
@@ -112,18 +113,31 @@ const stampKey = (uid: string) => `cloudSync:${uid}`;
 const partsKey = (uid: string) => `cloudSync:${uid}:parts`;
 
 function remoteOf(addons: Descriptor[] | undefined) {
-    return decode(addons?.find((a) => a.transportUrl === SYNC_ADDON_URL)?.manifest.contactEmail);
+    return fromBefore(decode(addons?.find((a) => a.transportUrl === SYNC_ADDON_URL)?.manifest.contactEmail));
+}
+
+/** A copy from before the rename keeps the tracker under its old name (serverIds.ts): read it as this one. */
+function fromBefore(r: ReturnType<typeof decode>): ReturnType<typeof decode> {
+    if (!r) return r;
+    const old = r as typeof r & Record<string, unknown>;
+    const before = old[NAME_BEFORE] as Payload['tracker'] | undefined;
+    const beforeStamp = (old.stamps as Record<string, number> | undefined)?.[NAME_BEFORE];
+    return {
+        ...r,
+        tracker: r.tracker ?? before,
+        ...(r.stamps ? { stamps: { ...r.stamps, tracker: r.stamps.tracker ?? beforeStamp } } : {}),
+    };
 }
 
 /** When each part of the account's copy last changed. */
 function remoteStamps(r: Payload): Stamps {
     const s = r.stamps ?? {};
-    // Data from before Lightboxd was synced has none: never set (0).
+    // Data from before the tracker was synced has none: never set (0).
     return {
         profile: s.profile ?? r.updated,
         home: s.home ?? r.updated,
         prefs: s.prefs ?? r.updated,
-        lightboxd: s.lightboxd ?? 0,
+        tracker: s.tracker ?? 0,
         devices: r.updated,
     };
 }
@@ -131,7 +145,7 @@ function remoteStamps(r: Payload): Stamps {
 class CloudSync {
     #uid: string | null = null;
     /** Each part as last sent or received, as JSON; a difference is a change made here. */
-    #lastParts: Record<Part | 'devices', string | null> = { profile: null, home: null, prefs: null, lightboxd: null, devices: null };
+    #lastParts: Record<Part | 'devices', string | null> = { profile: null, home: null, prefs: null, tracker: null, devices: null };
     /** Other kinds of devices' settings from the account, passed along untouched. */
     #devices: Record<string, DevicePrefs> = {};
     #timer: ReturnType<typeof setTimeout> | undefined;
@@ -166,7 +180,7 @@ class CloudSync {
                         homeLayout.sync();
                         // What's here now is where changes are measured from: a new
                         // device's defaults aren't changes to send.
-                        this.#lastParts = uid ? this.#parts(uid) : { profile: null, home: null, prefs: null, lightboxd: null, devices: null };
+                        this.#lastParts = uid ? this.#parts(uid) : { profile: null, home: null, prefs: null, tracker: null, devices: null };
                     });
                 }
                 if (uid) untrack(() => this.#pull(uid, addons));
@@ -206,7 +220,7 @@ class CloudSync {
             home: JSON.stringify($state.snapshot(homeLayout.layout)),
             prefs: JSON.stringify(playerPrefs.synced()),
             // Always a value, so connecting (from none) counts as a change to send.
-            lightboxd: JSON.stringify(lightboxd.sharedFor(uid)),
+            tracker: JSON.stringify(tracker.sharedFor(uid)),
             devices: JSON.stringify(playerPrefs.device()),
         };
     }
@@ -215,11 +229,11 @@ class CloudSync {
     #stamps(uid: string): Stamps {
         try {
             const s = JSON.parse(localStorage.getItem(partsKey(uid)) ?? 'null');
-            if (s) return { profile: 0, home: 0, prefs: 0, lightboxd: 0, devices: 0, ...s };
+            if (s) return { profile: 0, home: 0, prefs: 0, tracker: 0, devices: 0, ...s };
         } catch {}
         // From before parts had their own: everything as of the last sync.
         const all = Number(localStorage.getItem(stampKey(uid))) || 0;
-        return { profile: all, home: all, prefs: all, lightboxd: 0, devices: all };
+        return { profile: all, home: all, prefs: all, tracker: 0, devices: all };
     }
 
     #saveStamps(uid: string, s: Stamps) {
@@ -264,9 +278,9 @@ class CloudSync {
             mine.prefs = theirs.prefs;
             took = true;
         }
-        if (remote.lightboxd && theirs.lightboxd > mine.lightboxd) {
-            lightboxd.setShared(uid, remote.lightboxd);
-            mine.lightboxd = theirs.lightboxd;
+        if (remote.tracker && theirs.tracker > mine.tracker) {
+            tracker.setShared(uid, remote.tracker);
+            mine.tracker = theirs.tracker;
             took = true;
         }
         this.#devices = remote.devices ?? {};
@@ -299,7 +313,7 @@ class CloudSync {
             profile: here.profile ? JSON.parse(here.profile) : undefined,
             home: here.home ? JSON.parse(here.home) : undefined,
             prefs: here.prefs ? JSON.parse(here.prefs) : undefined,
-            lightboxd: here.lightboxd ? JSON.parse(here.lightboxd) : undefined,
+            tracker: here.tracker ? JSON.parse(here.tracker) : undefined,
         };
 
         // Each part: this device's copy if it has one at least as new as the

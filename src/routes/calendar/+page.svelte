@@ -1,13 +1,13 @@
 <script lang="ts">
     // Calendar: a month at a time, with the selected day's releases beside it.
-    // From Lightboxd while it's connected and reachable (new episodes of what
+    // From the tracker while it's connected and reachable (new episodes of what
     // you're watching, premieres from your watchlist, in your sub/dub
     // preference, with air times); otherwise Stremio's own calendar (new
     // episodes of the shows in your library, by date). Same view either way.
     import { onMount, untrack } from 'svelte';
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
-    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { tracker } from '$lib/tracker.svelte';
     import { titleHref } from '$lib/links';
     import Icon from '$lib/components/Icon.svelte';
     import Segmented from '$lib/components/Segmented.svelte';
@@ -73,15 +73,15 @@
 
     // --- where the releases come from ---------------------------------------------
 
-    // 'pending': Lightboxd is set up and being checked, so neither source shows yet
-    // (no flash of Stremio's calendar on the way to Lightboxd's).
-    const source = $derived<'lightboxd' | 'stremio' | 'pending'>(
-        lightboxd.ready ? 'lightboxd' : lightboxd.saved?.token && lightboxd.status === 'checking' ? 'pending' : 'stremio'
+    // 'pending': the tracker is set up and being checked, so neither source shows yet
+    // (no flash of Stremio's calendar on the way to the tracker's).
+    const source = $derived<'tracker' | 'stremio' | 'pending'>(
+        tracker.ready ? 'tracker' : tracker.saved?.token && tracker.status === 'checking' ? 'pending' : 'stremio'
     );
-    /** Lightboxd is set up for this profile but can't be reached right now. */
-    const lightboxdDown = $derived(!!lightboxd.saved?.token && !lightboxd.ready && lightboxd.status !== 'checking');
+    /** The tracker is set up for this profile but can't be reached right now. */
+    const trackerDown = $derived(!!tracker.saved?.token && !tracker.ready && tracker.status !== 'checking');
 
-    // Lightboxd: a day either side of the month, since a release with a time
+    // The tracker: a day either side of the month, since a release with a time
     // can land on another day in this time zone.
     type LbEvent = {
         date: string;
@@ -100,24 +100,24 @@
     let lbFailed = $state(false);
     let lbLoadedFor = '';
 
-    async function loadLightboxd(force = false) {
+    async function loadTracker(force = false) {
         const key = `${year}-${month}`;
         if (!force && lbLoadedFor === key) return;
         lbLoadedFor = key;
         lbFailed = false;
         const first = new Date(year, month - 1, 0);
         const last = new Date(year, month, 1);
-        const res = await lightboxd.request<{ events: LbEvent[] }>(`/calendar?start=${dayKey(first)}&end=${dayKey(last)}`);
+        const res = await tracker.request<{ events: LbEvent[] }>(`/calendar?start=${dayKey(first)}&end=${dayKey(last)}`);
         if (lbLoadedFor !== key) return;
         if (res) lbEvents = res.events;
         else lbFailed = true;
     }
 
     $effect(() => {
-        if (source !== 'lightboxd') return;
+        if (source !== 'tracker') return;
         void year;
         void month;
-        untrack(() => loadLightboxd());
+        untrack(() => loadTracker());
     });
 
     // Stremio: core's Calendar model, a month at a time.
@@ -150,7 +150,7 @@
 
     function refresh() {
         if (source === 'pending') return;
-        if (source === 'lightboxd') loadLightboxd(true);
+        if (source === 'tracker') loadTracker(true);
         else core.dispatch({ action: 'Load', args: { model: 'Calendar', args: { year, month } } }, 'calendar');
     }
 
@@ -162,7 +162,7 @@
         return id.startsWith('kitsu:') ? `${id}:${episode}` : season != null ? `${id}:${season}:${episode}` : null;
     }
 
-    function fromLightboxd(e: LbEvent, i: number): CalEvent {
+    function fromTracker(e: LbEvent, i: number): CalEvent {
         const moment = e.datetime ? new Date(e.datetime) : null;
         const timed = moment && !isNaN(moment.getTime()) ? moment : null;
         const tags: string[] = [];
@@ -205,7 +205,7 @@
     const byDay = $derived.by(() => {
         const map = new Map<string, CalEvent[]>();
         let list: CalEvent[] = [];
-        if (source === 'lightboxd') list = (lbEvents ?? []).map(fromLightboxd);
+        if (source === 'tracker') list = (lbEvents ?? []).map(fromTracker);
         else if (stremio?.selected?.year === year && stremio.selected.month === month)
             list = stremio.items.flatMap((d) => d.items.map((it, i) => fromStremio(d.date, it, i)));
         for (const e of list) {
@@ -221,7 +221,7 @@
     const loading = $derived(
         source === 'pending'
             ? true
-            : source === 'lightboxd'
+            : source === 'tracker'
               ? lbEvents === null && !lbFailed
               : !(stremio?.selected?.year === year && stremio.selected.month === month)
     );
@@ -241,9 +241,9 @@
     const sourceNote = $derived(
         source === 'pending'
             ? 'Updating…'
-            : source === 'lightboxd'
+            : source === 'tracker'
             ? 'Shows you’re watching or plan to watch'
-            : lightboxdDown
+            : trackerDown
               ? 'Couldn’t connect. Using backup.'
               : 'Shows in your library'
     );
@@ -258,7 +258,7 @@
         <header class="toolbar">
             <div class="heading">
                 <h1 aria-live="polite">{monthTitle}</h1>
-                <p class="note" class:warn={lightboxdDown && source === 'stremio'}>{sourceNote}</p>
+                <p class="note" class:warn={trackerDown && source === 'stremio'}>{sourceNote}</p>
             </div>
             <div class="controls">
                 <div class="stepper" role="group" aria-label="Month">
@@ -335,7 +335,7 @@
 
                 {#if source === 'stremio' && !app.user}
                     <p class="empty">Log in to see new episodes of the shows in your library.</p>
-                {:else if source === 'lightboxd' && lbFailed}
+                {:else if source === 'tracker' && lbFailed}
                     <p class="empty">Couldn’t load the calendar. <button class="link" onclick={refresh}>Try again</button></p>
                 {:else if !loading && view === 'day' && !selectedEvents.length}
                     <p class="empty">Nothing comes out on this day.</p>

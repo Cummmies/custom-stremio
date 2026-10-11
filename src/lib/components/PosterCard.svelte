@@ -39,7 +39,7 @@
 
     // Catalog items are full previews (addable to the library); library items aren't.
     const preview = $derived('posterShape' in item ? item : undefined);
-    // An air time with its exact moment (Lightboxd sends it, UTC) is shown in
+    // An air time with its exact moment (the tracker sends it, UTC) is shown in
     // this device's time zone; releaseInfo is the server's wording, kept for a
     // date-only release and for other Stremio apps.
     const when = $derived(timeOnArt ? (localAirTime((preview as MetaItemPreview | undefined)?.released) ?? item.releaseInfo) : null);

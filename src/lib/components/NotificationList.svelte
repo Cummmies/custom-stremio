@@ -5,7 +5,7 @@
     // iPhone. Offers to turn system notifications on where the system asks
     // (iPhone), once, until it's answered or put off.
     import { notify, type AppNotification } from '$lib/notify.svelte';
-    import { lightboxd } from '$lib/lightboxd.svelte';
+    import { tracker } from '$lib/tracker.svelte';
     import { menu } from '$lib/menu.svelte';
     import { goto } from '$lib/nav';
     import Icon from './Icon.svelte';
@@ -102,7 +102,7 @@
     {/if}
 
     {#if !notify.loaded}
-        <p class="note" role="status">{lightboxd.ready || lightboxd.status === 'checking' ? 'Loading…' : 'Couldn’t connect. Try again in a moment.'}</p>
+        <p class="note" role="status">{tracker.ready || tracker.status === 'checking' ? 'Loading…' : 'Couldn’t connect. Try again in a moment.'}</p>
     {:else if !notify.items.length}
         <div class="empty">
             <span class="empty-icon"><Icon name="bell" size={34} /></span>

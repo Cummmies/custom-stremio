@@ -1,5 +1,5 @@
 <script lang="ts">
-    // Name a new Lightboxd list. A modal <dialog>: focus stays inside, Escape
+    // Name a new the tracker list. A modal <dialog>: focus stays inside, Escape
     // (the TV remote's Back) closes it; on iPhone a sheet with Cancel and
     // Create in its top bar, as the rating sheet.
     let {
