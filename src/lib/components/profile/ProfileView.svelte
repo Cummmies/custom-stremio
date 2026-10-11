@@ -206,9 +206,9 @@
     let rowW = $state(0);
     let posterW = $state(0);
     const GAP = 16;
-    const LIST_W = 220;
     const cols = $derived(rowW && posterW ? Math.max(2, Math.floor((rowW + GAP) / (posterW + GAP))) : 6);
-    const listCols = $derived(rowW ? Math.max(1, Math.floor((rowW + 24) / (LIST_W + 24))) : 4);
+    /** A list is three posters fanned out, the front one poster-sized: about one and a half posters wide. */
+    const listCols = $derived(rowW && posterW ? Math.max(1, Math.floor((rowW + 24) / (posterW * 1.45 + 24))) : 4);
 
     const thisYear = String(new Date().getFullYear());
     function recentLine(i: LibraryItem) {
@@ -226,15 +226,19 @@
     </div>
 
     {#if editing}
-        <!-- Over the banner's top corner, as on the website. -->
+        <!-- PC: hover the banner to change it, as on the website. Touch: the buttons on it. -->
+        <button class="cover-hover" onclick={() => bannerInput?.click()} aria-label={shownBanner ? 'Change Banner' : 'Add Banner'}>
+            <span class="hover-label" aria-hidden="true"><Icon name="camera" size={24} />{shownBanner ? 'Change Banner' : 'Add Banner'}</span>
+        </button>
         <div class="cover-edit">
-            <button class="glass-pill" onclick={() => bannerInput?.click()}><Icon name="camera" size={15} /> {shownBanner ? 'Change Banner' : 'Add Banner'}</button>
-            {#if shownBanner}<button class="glass-pill" onclick={() => (banner = '')}>Remove</button>{/if}
+            <button class="glass-pill change" onclick={() => bannerInput?.click()}><Icon name="camera" size={15} /> {shownBanner ? 'Change Banner' : 'Add Banner'}</button>
+            {#if shownBanner}<button class="glass-pill" onclick={() => (banner = '')}>Remove Banner</button>{/if}
         </div>
         <input bind:this={avatarInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'avatar')} />
         <input bind:this={bannerInput} type="file" accept="image/*" hidden onchange={(e) => pickImage(e, 'banner')} />
     {/if}
 
+    <div class="content">
     <div class="top">
         <!-- The picture across the banner's edge; on the right, under the numbers, Edit Profile (or Cancel and Save). -->
         <div class="avatar-row">
@@ -242,7 +246,7 @@
                 {#if editing}
                     <button class="avatar" onclick={() => avatarInput?.click()} aria-label={shownAvatar ? 'Change Picture' : 'Add Picture'}>
                         {#if shownAvatar}<ProfileMedia src={shownAvatar} />{:else}<span>{initial}</span>{/if}
-                        <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /></span>
+                        <span class="avatar-edit" aria-hidden="true"><Icon name="camera" size={22} /><span class="avatar-edit-label">Change</span></span>
                     </button>
                     {#if shownAvatar}
                         <button class="remove" onclick={() => (avatar = '')} aria-label="Remove Picture"><Icon name="close" size={12} /></button>
@@ -378,7 +382,7 @@
                 </ol>
             {:else if profile.favorites?.length || canEdit}
                 <!-- Yours keeps room for five: an empty place adds one. -->
-                <ol class="favorites" style="--n: {canEdit ? SLOTS : profile.favorites?.length}">
+                <ol class="favorites">
                     {#each profile.favorites ?? [] as f (f.id)}<li><PosterCard item={poster(f, f.year)} /></li>{/each}
                     {#if canEdit}
                         {#each Array.from({ length: SLOTS - (profile.favorites?.length ?? 0) }, (_, i) => i) as i (i)}
@@ -433,6 +437,7 @@
             </div>
         {/if}
     {/if}
+    </div>
 </div>
 
 {#if picking !== null}
@@ -448,8 +453,8 @@
            phone it keeps a usable height under the bar. */
         --cover-h: clamp(calc(var(--nav-h) + 100px), 19.643vw, 440px);
         --avatar: 120px;
-        --fav-w: clamp(120px, 12.5vw, 200px);
-        --fav-gap: clamp(16px, 2.6vw, 40px);
+        /* Everything under the banner sits in one centred column on wide screens. */
+        --content-w: 1240px;
         position: relative;
         padding: 0 var(--gutter) 64px;
     }
@@ -470,21 +475,75 @@
     }
     .cover-edit {
         position: absolute;
-        z-index: 2;
+        z-index: 3;
         top: calc(var(--nav-h) + 12px);
-        right: var(--gutter);
+        right: max(var(--gutter), calc((100% - var(--content-w)) / 2));
         display: flex;
         gap: 8px;
+    }
+    /* The banner as a button while editing: on PC, a frosted scrim says what a click does. */
+    .cover-hover {
+        position: absolute;
+        z-index: 2;
+        inset: 0 0 auto;
+        height: var(--cover-h);
+        display: none;
+        place-items: center;
+        padding: var(--nav-h) 0 0;
+        border: 0;
+        background: transparent;
+        color: var(--on-media);
+        cursor: pointer;
+    }
+    .hover-label {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity var(--fast);
+    }
+    .cover-hover::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--scrim-strong);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        opacity: 0;
+        transition: opacity var(--fast);
+    }
+    .hover-label {
+        position: relative;
+    }
+    .cover-hover:hover::before,
+    .cover-hover:hover .hover-label,
+    .cover-hover:focus-visible::before,
+    .cover-hover:focus-visible .hover-label {
+        opacity: 1;
+    }
+    .content {
+        position: relative;
+        max-width: var(--content-w);
+        margin-inline: auto;
     }
 
     .top {
         position: relative;
-        z-index: 1;
+        z-index: 3;
+        /* Over the banner, only its controls take clicks (the banner itself can be one). */
+        pointer-events: none;
         display: flex;
         flex-direction: column;
         gap: 12px;
         padding-top: calc(var(--cover-h) - var(--avatar) / 2);
         margin-bottom: 40px;
+    }
+    .top > :not(.avatar-row),
+    .avatar-row > * {
+        pointer-events: auto;
     }
     .avatar-row {
         display: flex;
@@ -497,6 +556,17 @@
         position: relative;
         flex: none;
     }
+    /* A ring only where the picture meets the page: its lower half, a U under the banner. */
+    .avatar-wrap::before {
+        content: '';
+        position: absolute;
+        z-index: 1;
+        inset: -6px;
+        border: 2px solid var(--label-3);
+        border-radius: 50%;
+        clip-path: inset(50% 0 0 0);
+        pointer-events: none;
+    }
     .avatar {
         position: relative;
         display: grid;
@@ -508,7 +578,7 @@
         border-radius: 50%;
         overflow: hidden;
         background: var(--accent);
-        box-shadow: 0 0 0 4px var(--bg), var(--shadow-m);
+        box-shadow: var(--shadow-m);
         color: var(--on-accent);
         font-family: var(--font-display);
         font-size: calc(var(--avatar) * 0.4);
@@ -520,14 +590,55 @@
     .avatar-edit {
         position: absolute;
         inset: 0;
-        display: grid;
-        place-items: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
         background: var(--scrim);
         color: var(--on-media);
         transition: background var(--fast);
     }
     button.avatar:hover .avatar-edit {
         background: var(--scrim-strong);
+    }
+    .avatar-edit-label {
+        display: none;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .remove {
+        z-index: 2;
+    }
+    /* PC (a pointer that hovers): as on the website, the picture and banner say
+       "Change" when you point at them; the banner's own buttons come with it. */
+    @media (hover: hover) and (pointer: fine) {
+        .cover-hover {
+            display: grid;
+        }
+        .cover-edit .change {
+            display: none;
+        }
+        .cover-edit {
+            opacity: 0;
+            transition: opacity var(--fast);
+        }
+        .profile:has(.cover-hover:hover, .cover-hover:focus-visible, .cover-edit:hover, .cover-edit:focus-within) .cover-edit {
+            opacity: 1;
+        }
+        .avatar-edit {
+            opacity: 0;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            transition: opacity var(--fast);
+        }
+        .avatar-edit-label {
+            display: block;
+        }
+        button.avatar:hover .avatar-edit,
+        button.avatar:focus-visible .avatar-edit {
+            opacity: 1;
+        }
     }
     /* Remove: a small glass button on the picture's (or poster's) corner. */
     .remove {
@@ -557,23 +668,24 @@
     .stats {
         position: absolute;
         right: 0;
-        top: calc(var(--cover-h) - 76px);
+        top: calc(var(--cover-h) - 96px);
         display: flex;
-        gap: 36px;
+        gap: 40px;
         margin: 0;
-        text-align: right;
-        text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+        text-align: center;
+        text-shadow: 0 1px 10px rgb(0 0 0 / 0.7);
     }
     .stats dd {
         margin: 0;
         font-family: var(--font-display);
-        font-size: var(--text-title3);
+        font-size: var(--text-title1);
         font-weight: 700;
         line-height: 1.1;
         font-variant-numeric: tabular-nums;
     }
     .stats dt {
-        font-size: 11px;
+        margin-top: 2px;
+        font-size: var(--text-caption);
         color: var(--label-2);
     }
     h1 {
@@ -735,18 +847,11 @@
         margin: 0;
         color: var(--label-2);
     }
-    /* Centred as one block, so its title lines up with the first poster. */
-    .showcase {
-        width: fit-content;
-        min-width: min(100%, 520px);
-        margin-inline: auto;
-    }
-    /* Five across, with room between. */
+    /* Five across the column, with room between. */
     .favorites {
         display: grid;
-        grid-template-columns: repeat(var(--n, 5), var(--fav-w));
-        justify-content: center;
-        gap: var(--fav-gap);
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: clamp(12px, 2.2vw, 28px);
         margin: 0;
         padding: 0;
         list-style: none;
@@ -837,14 +942,20 @@
         width: var(--poster-w);
         height: 0;
     }
-    .shelf,
-    .lists {
+    .shelf {
         display: grid;
         grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
         gap: 16px;
     }
+    /* Lists keep their size (the front poster as large as a row's): as many as fit, from the left. */
     .lists {
+        display: flex;
         gap: 24px;
+    }
+    .lists .list {
+        flex: none;
+        width: calc(var(--poster-w) / 0.69);
+        max-width: 100%;
     }
     .list {
         display: flex;
@@ -854,17 +965,20 @@
         color: inherit;
         text-decoration: none;
     }
+    /* Three posters fanned out, the front one as large as a poster in a row. */
     .stack {
         position: relative;
-        height: 120px;
+        aspect-ratio: 1 / 1.03;
         margin-bottom: 6px;
     }
     .stack img,
     .blank {
         position: absolute;
-        left: calc(var(--i, 0) * 34px);
-        width: 80px;
-        height: 120px;
+        z-index: calc(3 - var(--i, 0));
+        top: 0;
+        left: calc(var(--i, 0) * 15%);
+        width: 69%;
+        height: 100%;
         border-radius: var(--radius-s);
         object-fit: cover;
         background: var(--elevated-2);
@@ -927,11 +1041,7 @@
         .stats dt {
             font-size: var(--text-caption);
         }
-        .showcase {
-            width: auto;
-        }
         .favorites {
-            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 8px;
         }
         .cover-edit {

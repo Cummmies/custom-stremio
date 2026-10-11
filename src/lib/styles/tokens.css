@@ -63,6 +63,7 @@
     --text-callout: 15px;
     --text-title3: 17px;
     --text-title2: 22px;
+    --text-title1: 28px;
     --text-large: clamp(28px, 3.2vw, 40px);
 
     /* Space, radius, motion */
