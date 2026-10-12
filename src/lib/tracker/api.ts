@@ -185,6 +185,9 @@ export const lb = {
     /** The saved profile, or why not (409: the handle is taken; 400: not valid; null: no connection). */
     updateProfile: (fields: ProfileFields) => tracker.requestOrStatus<Profile>('/profile', { method: 'PUT', body: fields, timeout: 60_000 }),
     userProfile: (handle: string) => tracker.request<Profile>(`/users/${enc(handle.replace(/^@/, ''))}`),
+    /** Recommends a title to friends: they get a notification and it shows in their Home row. */
+    recommend: (to: number[], id: string, type: string, name: string, note = '') =>
+        tracker.requestOrStatus<{ sent: number }>('/recommendations', { method: 'POST', body: { to, id, type, name, ...(note && { note }) } }),
     // Friends (each answers with status, or the error's detail to show).
     friends: () => tracker.request<FriendsOverview>('/friends'),
     addFriend: (handle: string) =>

@@ -17,6 +17,7 @@ export const TRACKER_ROW = {
     airing: 'lightboxd.airing',
     newSeasons: 'lightboxd.new_seasons',
     forYou: 'lightboxd.for_you',
+    recommended: 'lightboxd.recommended',
 } as const;
 /** The server's name on a home network (it announces itself by mDNS). */
 export const TRACKER_LOCAL_HOST = 'lightboxd.local';
@@ -31,6 +32,7 @@ export const TRACKER_ROW_DETAIL: Record<string, string> = {
     [TRACKER_ROW.airing]: 'What you track, airing this week',
     [TRACKER_ROW.newSeasons]: 'New seasons of what you track',
     [TRACKER_ROW.forYou]: 'Picked from what you like',
+    [TRACKER_ROW.recommended]: 'What your friends recommended you',
 };
 
 /**

@@ -9,6 +9,7 @@
     import { tracker } from '$lib/tracker.svelte';
     import { undo } from '$lib/undo.svelte';
     import { shareLink, titleLink } from '$lib/share';
+    import RecommendDialog from '$lib/components/RecommendDialog.svelte';
     import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/tracker/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
@@ -450,9 +451,22 @@
 
     // Share: the title's link, or your latest scored or reviewed watch's.
     const reviewToShare = $derived(watches.find((w) => w.rating != null || w.review) ?? null);
-    function shareTitle() {
-        if (meta) void shareLink(titleLink(meta.type, meta.id), meta.name);
+    function shareTitle(e: MouseEvent) {
+        if (!meta) return;
+        const m = meta;
+        const link = () => void shareLink(titleLink(m.type, m.id), m.name);
+        // With the tracker: a link, or Recommend to Friends.
+        if (!lbOn) return link();
+        menu.toggleFor(
+            e.currentTarget as HTMLElement,
+            [
+                { label: 'Share Link…', icon: 'link', onselect: link },
+                { label: 'Recommend to Friends…', icon: 'users', onselect: () => (recommending = true) },
+            ],
+            'start'
+        );
     }
+    let recommending = $state(false);
     async function shareReview() {
         const w = reviewToShare;
         if (!w || !meta) return;
@@ -690,7 +704,7 @@
                         </button>
                     {/if}
                     {#if !isTV}
-                        <button class="round" onclick={shareTitle} aria-label="Share" title="Share">
+                        <button class="round" onclick={shareTitle} aria-label="Share" title="Share" aria-haspopup={lbOn ? 'menu' : undefined}>
                             <Icon name="share" size={18} />
                         </button>
                     {/if}
@@ -877,6 +891,14 @@
 
 {#if trailer && meta}
     <TrailerDialog ytId={trailer} title={meta.name} onclose={() => (trailer = null)} />
+{/if}
+
+{#if recommending && meta}
+    <RecommendDialog
+        title={{ id: meta.id, type: meta.type, name: meta.name }}
+        onsend={(n) => ((recommending = false), undo.note(n === 1 ? 'Recommended.' : `Recommended to ${n} friends.`))}
+        onclose={() => (recommending = false)}
+    />
 {/if}
 
 <style>
