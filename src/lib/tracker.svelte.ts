@@ -56,7 +56,15 @@ const LOCAL_SERVERS = isDesktop ? ['http://localhost:8000', `http://${TRACKER_LO
 const BUILT_IN_SERVER = (import.meta.env.VITE_TRACKER_SERVER || '').trim().replace(/\/+$/, '') || null;
 /** This build has its server built in: nothing about it shows (no address, no Disconnect); it's just the app. */
 export const hasBuiltInServer = !!BUILT_IN_SERVER;
-const DEFAULT_SERVERS = BUILT_IN_SERVER ? [BUILT_IN_SERVER, ...LOCAL_SERVERS] : LOCAL_SERVERS;
+/**
+ * With a server built in, it's the only one: a connection this device or the
+ * profile kept from elsewhere (the tracker on a PC at home, before it moved)
+ * is let go, and the app signs in to the built-in one with the Stremio
+ * account. Nor is the PC's own localhost tried: an old server still running
+ * there isn't where everyone else is.
+ */
+const isOurServer = (server: string | null | undefined) => !BUILT_IN_SERVER || server === BUILT_IN_SERVER;
+const DEFAULT_SERVERS = BUILT_IN_SERVER ? [BUILT_IN_SERVER] : LOCAL_SERVERS;
 const TIMEOUT_MS = 4000;
 const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
@@ -452,7 +460,7 @@ class Tracker {
     #load(uid: string): Saved | null {
         try {
             const v = JSON.parse(localStorage.getItem(storageKey(uid)) ?? 'null');
-            if (v && typeof v.server === 'string') return v;
+            if (v && typeof v.server === 'string' && isOurServer(v.server)) return v;
         } catch {}
         return null;
     }
@@ -523,8 +531,9 @@ class Tracker {
             const raw = localStorage.getItem(sharedKey(uid));
             if (!raw) return NO_SHARED;
             // Before the token was shared, only the address was kept (as is).
-            if (!raw.startsWith('{')) return { ...NO_SHARED, server: raw };
+            if (!raw.startsWith('{')) return isOurServer(raw) ? { ...NO_SHARED, server: raw } : NO_SHARED;
             const v = JSON.parse(raw);
+            if (!isOurServer(v.server)) return NO_SHARED;
             return { server: v.server ?? null, token: v.token ?? null, addonUrl: v.addonUrl ?? null };
         } catch {
             return NO_SHARED;
@@ -796,7 +805,7 @@ class Tracker {
         this.#autoAt = Date.now();
         this.#autoSigningIn = true;
         try {
-            const candidates = [BUILT_IN_SERVER, this.sharedServerFor(uid), ...LOCAL_SERVERS].filter((s): s is string => !!s);
+            const candidates = (BUILT_IN_SERVER ? [BUILT_IN_SERVER] : [this.sharedServerFor(uid), ...LOCAL_SERVERS]).filter((s): s is string => !!s);
             for (const server of new Set(candidates)) {
                 const res = await call<{ token: string }>(server, '/pair/stremio', {
                     method: 'POST',
