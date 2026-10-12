@@ -11,6 +11,12 @@ import { tracker } from '$lib/tracker.svelte';
 import { lb, STATUS_LABEL, type ListInfo, type RelatedGroup, type Reviews, type Status, type Summary, type WatchFields } from './api';
 import { undo } from '$lib/undo.svelte';
 
+/** Kept on this device to send later: said once, and treated as done. */
+function offline(): 'kept' {
+    undo.note('You’re offline. It’ll be sent when you’re back.');
+    return 'kept';
+}
+
 /** Rated or logged elsewhere meanwhile (the website, another device): picked up this often. */
 const REFRESH_MS = 60_000;
 
@@ -200,7 +206,9 @@ export class TrackerTitle {
         return this.#do(async () => {
             const target = titleId ?? (await this.#ensure())?.title_id;
             if (target == null) return null;
-            const res = await lb.addWatch(target, fields);
+            const sent = await lb.addWatch(target, fields);
+            if (sent === 'kept') return offline();
+            const res = sent;
             this.#put(res?.title);
             const made = res?.title.log[0];
             if (made) undo.show(made.rewatch ? 'Logged a rewatch' : 'Logged a watch', () => this.deleteWatch(made.id));
@@ -211,6 +219,7 @@ export class TrackerTitle {
     editWatch(logId: number, fields: WatchFields) {
         return this.#do(async () => {
             const res = await lb.editWatch(logId, fields);
+            if (res === 'kept') return offline();
             this.#put(res?.title);
             return res;
         }, 'Couldn’t save the watch.');

@@ -6,12 +6,12 @@
 const SHOW_MS = 6000;
 
 class UndoState {
-    current = $state<{ text: string; run: () => unknown; id: number } | null>(null);
+    current = $state<{ text: string; run: (() => unknown) | null; id: number } | null>(null);
     #timer: ReturnType<typeof setTimeout> | undefined;
     #next = 0;
 
-    /** Says what just happened; `run` takes it back. */
-    show(text: string, run: () => unknown) {
+    /** Says what just happened; `run` takes it back (null: nothing to take back). */
+    show(text: string, run: (() => unknown) | null) {
         clearTimeout(this.#timer);
         const id = ++this.#next;
         this.current = { text, run, id };
@@ -20,10 +20,15 @@ class UndoState {
         }, SHOW_MS);
     }
 
+    /** Just says something (no Undo): "You're offline. It'll be sent when you're back." */
+    note(text: string) {
+        this.show(text, null);
+    }
+
     /** Takes back what the bar says (once). */
     undo() {
         const c = this.current;
-        if (!c) return;
+        if (!c?.run) return;
         this.dismiss();
         void c.run();
     }

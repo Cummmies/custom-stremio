@@ -5,7 +5,7 @@
     import { undo } from '$lib/undo.svelte';
 
     function onkeydown(e: KeyboardEvent) {
-        if (!undo.current || e.key.toLowerCase() !== 'z' || !(e.ctrlKey || e.metaKey) || e.shiftKey) return;
+        if (!undo.current?.run || e.key.toLowerCase() !== 'z' || !(e.ctrlKey || e.metaKey) || e.shiftKey) return;
         const t = e.target as HTMLElement | null;
         if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) return;
         e.preventDefault();
@@ -19,7 +19,7 @@
     {#key undo.current.id}
         <div class="undo" role="status">
             <span>{undo.current.text}</span>
-            <button onclick={() => undo.undo()}>Undo</button>
+            {#if undo.current.run}<button onclick={() => undo.undo()}>Undo</button>{/if}
         </div>
     {/key}
 {/if}
@@ -34,6 +34,7 @@
         align-items: center;
         gap: 16px;
         max-width: calc(100vw - 32px);
+        min-height: 48px;
         padding: 8px 8px 8px 18px;
         border: 1px solid var(--glass-border);
         border-radius: 999px;

@@ -499,7 +499,7 @@
         // Your history follows: watched is logged, unwatched leaves it.
         const logged = episodeLogs[v.id];
         if (watched && !logged) {
-            lb.logEpisode(meta.id, v.id, meta.name).then((res) => res && keepEpisodeLog(res.episode));
+            lb.logEpisode(meta.id, v.id, meta.name).then((res) => res && res !== 'kept' && keepEpisodeLog(res.episode));
         } else if (!watched && logged) {
             lb.removeEpisode(logged.log_id).then((res) => res && forgetEpisodeLog(v.id));
         }
@@ -562,7 +562,8 @@
             episodeError = 'Couldn’t save. Try again in a moment.';
             return;
         }
-        keepEpisodeLog(res.episode);
+        if (res === 'kept') undo.note('You’re offline. It’ll be sent when you’re back.');
+        else keepEpisodeLog(res.episode);
         if (!v.watched) core.dispatch({ action: 'MetaDetails', args: { action: 'MarkVideoAsWatched', args: [{ id: v.id, released: v.released }, true] } });
         episodeRate = null;
     }

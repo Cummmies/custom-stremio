@@ -131,6 +131,9 @@ function moveFromBefore(uid: string) {
     }
 }
 const queueKey = (uid: string) => `tracker-queue:${uid}`;
+const outboxKey = (uid: string) => `tracker-outbox:${uid}`;
+/** A rating or review written while the tracker couldn't be reached, kept to send later. */
+export type KeptWrite = { path: string; method: string; body: unknown; at: string };
 const sharedKey = (uid: string) => `tracker-shared:${uid}`;
 
 /** An address another device could reach (not this machine's loopback). */
@@ -249,6 +252,8 @@ class Tracker {
     /** This profile's watch events not yet taken by the tracker, oldest first. */
     #queue: WatchEvent[] = [];
     #flushing = false;
+    /** Ratings and reviews written offline, oldest first (sent before anything new). */
+    #outbox: KeptWrite[] = [];
     /**
      * New episodes for anime you're watching, by your sub/dub preference:
      * {stremio id: N}, zeros included (the tracker has the say for those; the
@@ -296,6 +301,7 @@ class Tracker {
         this.error = null;
         this.saved = uid ? this.#load(uid) : null;
         this.#queue = uid ? this.#loadQueue(uid) : [];
+        this.#outbox = uid ? this.#loadOutbox(uid) : [];
         this.lastResult = null;
         this.newEpisodes = {};
         this.#rowsMoveTried = false;
@@ -390,6 +396,57 @@ class Tracker {
             if (this.#queue.length) localStorage.setItem(queueKey(uid), JSON.stringify(this.#queue));
             else localStorage.removeItem(queueKey(uid));
         } catch {}
+    }
+
+    #loadOutbox(uid: string): KeptWrite[] {
+        try {
+            const v = JSON.parse(localStorage.getItem(outboxKey(uid)) ?? '[]');
+            if (Array.isArray(v)) return v;
+        } catch {}
+        return [];
+    }
+
+    #saveOutbox() {
+        const uid = this.#uid;
+        if (!uid) return;
+        try {
+            if (this.#outbox.length) localStorage.setItem(outboxKey(uid), JSON.stringify(this.#outbox.slice(-QUEUE_MAX)));
+            else localStorage.removeItem(outboxKey(uid));
+        } catch {}
+    }
+
+    /**
+     * A rating or review: sent now, or kept on this device when the tracker
+     * can't be reached and sent once it can ('kept'). null: refused or failed
+     * for another reason (nothing kept).
+     */
+    async write<T>(path: string, opts: { method: string; body?: unknown; timeout?: number }): Promise<T | 'kept' | null> {
+        const res = await this.#send<T>(path, opts);
+        if (res?.ok) return res.data;
+        if (res && res.status === null) {
+            this.#outbox.push({ path, method: opts.method, body: opts.body, at: new Date().toISOString() });
+            this.#saveOutbox();
+            return 'kept';
+        }
+        return null;
+    }
+
+    /** How many ratings and reviews are waiting to be sent. */
+    get keptCount() {
+        return this.#outbox.length;
+    }
+
+    async #flushOutbox(uid: string | null) {
+        while (this.#outbox.length && uid === this.#uid && this.status === 'ok') {
+            const w = this.#outbox[0];
+            const res = await this.#send(w.path, { method: w.method, body: w.body });
+            if (uid !== this.#uid) return false;
+            // Unreachable or signed out: later. Refused (gone meanwhile, say): dropped.
+            if (!res || (!res.ok && (res.status === null || res.status === 401 || res.status >= 500))) return false;
+            this.#outbox.shift();
+            this.#saveOutbox();
+        }
+        return true;
     }
 
     #load(uid: string): Saved | null {
@@ -590,12 +647,14 @@ class Tracker {
      * (rated in the tracker, or removed, meanwhile); false when it couldn't reach it.
      */
     async answerRating(logId: number, answer: number | 'later' | 'skip', review = ''): Promise<'saved' | 'gone' | false> {
-        const res =
-            typeof answer === 'number'
-                ? await this.#send(`/ratings/${logId}`, { method: 'POST', body: { rating: answer, ...(review.trim() && { review: review.trim() }) } })
-                : await this.#send(`/ratings/${logId}/${answer}`, { method: 'POST' });
-        if (!res) return false;
-        return res.ok ? 'saved' : res.status === 404 ? 'gone' : false;
+        // Offline, the answer is kept and sent once the tracker is back: as good as saved.
+        const path = typeof answer === 'number' ? `/ratings/${logId}` : `/ratings/${logId}/${answer}`;
+        const body = typeof answer === 'number' ? { rating: answer, ...(review.trim() && { review: review.trim() }) } : undefined;
+        const res = await this.#send(path, { method: 'POST', body });
+        if (res?.ok) return 'saved';
+        if (res && res.status === 404) return 'gone';
+        if (res && res.status === null) return (await this.write(path, { method: 'POST', body })) === 'kept' ? 'saved' : false;
+        return false;
     }
 
     #installedRows(url: string): AddonDescriptor | null {
@@ -691,6 +750,7 @@ class Tracker {
         const uid = this.#uid;
         this.#flushing = true;
         try {
+            if (!(await this.#flushOutbox(uid))) return;
             while (this.#queue.length && uid === this.#uid && this.status === 'ok') {
                 const event = this.#queue[0];
                 const res = await this.#send<EventResult>('/events', { method: 'POST', body: event, timeout: EVENT_TIMEOUT_MS });

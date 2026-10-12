@@ -175,10 +175,9 @@ export const lb = {
     setStatus: (titleId: number, status: Status) =>
         tracker.request<{ title: Summary }>(`/titles/${titleId}/status`, { method: 'POST', body: { status } }),
     remove: (titleId: number) => tracker.request<{ status: string }>(`/titles/${titleId}`, { method: 'DELETE' }),
-    addWatch: (titleId: number, fields: WatchFields) =>
-        tracker.request<{ title: Summary }>(`/titles/${titleId}/watches`, { method: 'POST', body: fields }),
-    editWatch: (logId: number, fields: WatchFields) =>
-        tracker.request<{ title: Summary }>(`/watches/${logId}`, { method: 'PUT', body: fields }),
+    /** A watch, its score and review: 'kept' when offline (sent once the tracker is back). */
+    addWatch: (titleId: number, fields: WatchFields) => tracker.write<{ title: Summary }>(`/titles/${titleId}/watches`, { method: 'POST', body: fields }),
+    editWatch: (logId: number, fields: WatchFields) => tracker.write<{ title: Summary }>(`/watches/${logId}`, { method: 'PUT', body: fields }),
     deleteWatch: (logId: number) => tracker.request<{ title: Summary }>(`/watches/${logId}`, { method: 'DELETE' }),
     profile: () => tracker.request<Profile>('/profile'),
     /** The saved profile, or why not (409: the handle is taken; 400: not valid; null: no connection). */
@@ -201,7 +200,7 @@ export const lb = {
     episodes: (id: string) => tracker.request<{ episodes: EpisodeLog[] }>(`/episodes?id=${enc(id)}`),
     /** Marks an episode watched (counting it) and sets what's in `fields`. */
     logEpisode: (id: string, videoId: string, name: string, fields: WatchFields = {}) =>
-        tracker.request<{ episode: EpisodeLog }>('/episodes', { method: 'POST', body: { id, video_id: videoId, name, ...fields }, timeout: 30_000 }),
+        tracker.write<{ episode: EpisodeLog }>('/episodes', { method: 'POST', body: { id, video_id: videoId, name, ...fields }, timeout: 30_000 }),
     removeEpisode: (logId: number) => tracker.request<{ status: string }>(`/episodes/${logId}`, { method: 'DELETE' }),
     reviews: (titleId: number) => tracker.request<Reviews>(`/titles/${titleId}/reviews`, { timeout: 30_000 }),
     related: (titleId: number) => tracker.request<{ groups: RelatedGroup[] }>(`/titles/${titleId}/related`, { timeout: 30_000 }),
