@@ -48,7 +48,13 @@ export const slider: Action<HTMLElement, SliderParams> = (node, initial) => {
     if (getComputedStyle(node).position === 'static') node.style.position = 'relative';
 
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-    const items = () => [...node.querySelectorAll<HTMLElement>(`:scope > :is(${params.items ?? 'a, button'})`)];
+    // ":scope > a, :scope > button", not ":scope > :is(a, button)": older
+    // TVs' Chromium 69 has no :is(), and the bad selector stopped the app.
+    const childSelector = (params.items ?? 'a, button')
+        .split(',')
+        .map((s) => `:scope > ${s.trim()}`)
+        .join(', ');
+    const items = () => [...node.querySelectorAll<HTMLElement>(childSelector)];
     // Offsets, not screen positions: right in a container that scrolls sideways.
     const box = (el: HTMLElement) => ({ left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight });
 
