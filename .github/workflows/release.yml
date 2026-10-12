@@ -56,6 +56,29 @@ jobs:
       - uses: ./.github/actions/release
         if: startsWith(github.ref, 'refs/tags/')
 
+      # A desktop-only release (v1.2.3-desktop) is still the latest one, where
+      # TizenBrew Installer and new iPhone installs look for their files: they
+      # get the newest TV and iPhone builds from the last release that has them.
+      - name: Carry over the TV and iPhone files
+        if: startsWith(github.ref, 'refs/tags/') && endsWith(github.ref_name, '-desktop')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          for prev in $(gh release list --limit 30 --exclude-drafts --json tagName --jq '.[].tagName'); do
+            [ "$prev" = "$TAG" ] && continue
+            if gh release view "$prev" --json assets --jq '.assets[].name' | grep -qx 'Stremio.wgt'; then
+              mkdir -p carried
+              gh release download "$prev" --dir carried --pattern 'Stremio.wgt' --pattern '*.ipa'
+              gh release upload "$TAG" carried/* --clobber
+              echo "Carried over from $prev: $(ls carried | tr '\n' ' ')"
+              exit 0
+            fi
+          done
+          echo "No earlier release with a TV build: nothing to carry over."
+
       # Which web build is inside the app, so an older over-the-air bundle is
       # never used over it (src-tauri/src/web_update.rs).
       - name: Stamp the built-in web build

@@ -17,7 +17,8 @@ on:
   push:
     branches: [main]
     # Path filters don't apply to tags: every version tag builds it.
-    tags: ['v*']
+    # A desktop-only release (v1.2.3-desktop) doesn't build it either.
+    tags: ['v*', '!v*-desktop']
     paths:
       - 'src/**'
       - 'static/**'

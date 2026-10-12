@@ -9,7 +9,8 @@ name: iOS
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    # A desktop-only release (v1.2.3-desktop) doesn't build the iPhone app.
+    tags: ['v*', '!v*-desktop']
 
 permissions:
   contents: write
