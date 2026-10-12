@@ -22,6 +22,7 @@
     import { canPlay, isDesktop, isIOS, isTV } from '$lib/platform';
     import { phone, openHandoff, pollHandoff, closeHandoff } from '$lib/handoff.svelte';
     import QrDialog from '$lib/components/QrDialog.svelte';
+    import { leaveResumeNote, takeStartAt } from '$lib/resume.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -359,6 +360,9 @@
     // Pick up where you left off. The Player model carries the stored library
     // record (position in ms and which episode it belongs to).
     async function resumeFrom() {
+        // Carrying on from another device (its exact second), else Stremio's saved spot.
+        const handed = id ? takeStartAt(id, videoId ?? null) : null;
+        if (handed != null) return handed;
         const state = await core
             .getState<{ libraryItem: { state?: { timeOffset?: number; video_id?: string | null } } | null }>('player')
             .catch(() => null);
@@ -1577,6 +1581,10 @@
         showRemoteCode = false;
     }
     onDestroy(stopRemote);
+    // Leaving: your other devices can offer to carry on from here.
+    onDestroy(() => {
+        if (id && type) leaveResumeNote({ id, type, videoId: videoId ?? null, name: heading, time: player.time, duration: player.duration ?? 0 });
+    });
 
     /** Releasing the double-speed key: back to the speed before, or (a tap) play/pause. */
     function onkeyup(e: KeyboardEvent) {
