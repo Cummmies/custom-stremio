@@ -104,6 +104,17 @@ define(Promise, 'withResolvers', function () {
     return { promise, resolve, reject };
 });
 
+// Chromium 86: a node's children swapped for these (the top nav's sliding highlight).
+if (typeof Element !== 'undefined') {
+    const replaceChildren = function (this: ParentNode, ...nodes: (Node | string)[]) {
+        while (this.lastChild) this.removeChild(this.lastChild);
+        this.append(...nodes);
+    };
+    define(Element.prototype, 'replaceChildren', replaceChildren);
+    define(Document.prototype, 'replaceChildren', replaceChildren);
+    define(DocumentFragment.prototype, 'replaceChildren', replaceChildren);
+}
+
 // Chromium 103.
 define(AbortSignal, 'timeout', function (ms: number) {
     const c = new AbortController();
