@@ -20,6 +20,7 @@
     import { app } from '$lib/app.svelte';
     import { player, type Track } from '$lib/player/player';
     import { canPlay, isDesktop, isIOS, isTV } from '$lib/platform';
+    import { phone } from '$lib/handoff.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -913,6 +914,16 @@
         untrack(() => (ratePrompt = null));
     });
 
+    /** TV: score it on your phone (a QR code); the tracker saves it, and the card says so. */
+    async function rateOnPhone() {
+        const asked = ratePrompt;
+        if (!asked || asked.state !== 'ask') return;
+        const res = await phone.rateOnPhone(asked.name, asked.logId);
+        if (!res || ratePrompt?.logId !== asked.logId) return;
+        ratePrompt = { ...asked, state: 'done', score: res.rating };
+        setTimeout(() => ratePrompt?.logId === asked.logId && (ratePrompt = null), 3000);
+    }
+
     async function answerRate(answer: number | 'skip') {
         const asked = ratePrompt;
         if (!asked || asked.state !== 'ask') return;
@@ -1796,6 +1807,9 @@
                 </div>
                 <ReviewField bind:value={rateReview} disabled={ratePrompt.state === 'saving'} onsubmit={() => answerRate(rateScore)} />
                 <div class="rate-actions">
+                    {#if isTV && tracker.ready}
+                        <button class="rate-skip" disabled={ratePrompt.state === 'saving'} onclick={rateOnPhone}>Rate on Phone</button>
+                    {/if}
                     <button class="rate-skip" disabled={ratePrompt.state === 'saving'} onclick={() => answerRate('skip')}>Don’t Rate</button>
                     <button class="rate-save" disabled={ratePrompt.state === 'saving'} onclick={() => answerRate(rateScore)}>
                         {ratePrompt.state === 'saving' ? 'Saving…' : 'Rate'}
