@@ -10,7 +10,7 @@
     // everything you see here is the control layer on top of it.
     import ScoreSlider from '$lib/components/ScoreSlider.svelte';
     import ReviewField from '$lib/components/ReviewField.svelte';
-    import { onMount, untrack } from 'svelte';
+    import { onDestroy, onMount, untrack } from 'svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
     import { addPluginListener, invoke } from '@tauri-apps/api/core';
@@ -20,7 +20,8 @@
     import { app } from '$lib/app.svelte';
     import { player, type Track } from '$lib/player/player';
     import { canPlay, isDesktop, isIOS, isTV } from '$lib/platform';
-    import { phone } from '$lib/handoff.svelte';
+    import { phone, openHandoff, pollHandoff, closeHandoff } from '$lib/handoff.svelte';
+    import QrDialog from '$lib/components/QrDialog.svelte';
     import { playerPrefs, upscalerLabels, type Upscaler } from '$lib/player/prefs.svelte';
     import { cleanVideoId, parsePlayerDeepLink, playerHref, streamUrl } from '$lib/player/deeplink';
     import { easyQueue, type Like, type Pick } from '$lib/player/easy';
@@ -1520,6 +1521,63 @@
         }
     }
 
+    // --- TV: your phone as a remote (lib/handoff.svelte.ts) ---
+    // A QR code opens a remote on your phone; each press is a command the TV
+    // picks up (about twice a second) and runs as the matching shortcut.
+    let remote = $state<{ id: number; url: string } | null>(null);
+    let showRemoteCode = $state(false);
+    let remoteSeq = 0;
+    let remoteTimer: ReturnType<typeof setTimeout> | undefined;
+    async function startRemote() {
+        if (remote) return void (showRemoteCode = true);
+        const opened = await openHandoff('remote', { title: heading });
+        if (!opened) return note('Couldn’t start the phone remote.', 2000);
+        remote = { id: opened.id, url: opened.url };
+        remoteSeq = 0;
+        showRemoteCode = true;
+        void pollRemote();
+    }
+    async function pollRemote() {
+        const r = remote;
+        if (!r) return;
+        const p = await pollHandoff(r.id, remoteSeq);
+        if (remote?.id !== r.id) return;
+        if (p && (p.state === 'closed' || p.state === 'expired')) return void (remote = null);
+        for (const c of p?.commands ?? []) {
+            remoteSeq = Math.max(remoteSeq, c.seq);
+            // The phone is connected: the code can go.
+            showRemoteCode = false;
+            runRemote(c.cmd);
+        }
+        remoteTimer = setTimeout(pollRemote, 600);
+    }
+    function runRemote(cmd: string) {
+        markActive();
+        if (cmd === 'playpause') return runHotkey('toggle-pause');
+        if (cmd === 'back') return skipBy(-10);
+        if (cmd === 'forward') return skipBy(30);
+        if (cmd === 'skip') return runHotkey('skip-segment');
+        if (cmd === 'next') return runHotkey('next-episode');
+        if (cmd === 'subtitles') return runHotkey('toggle-subtitles');
+        if (cmd === 'volume_up') return runHotkey('volume-up');
+        if (cmd === 'volume_down') return runHotkey('volume-down');
+        if (cmd === 'audio') {
+            const tracks = player.audioTracks;
+            if (!tracks.length) return note('No other audio', 1200);
+            const at = tracks.findIndex((t) => String(t.id) === player.aid);
+            const next = tracks[(at + 1) % tracks.length];
+            pickAudio(next);
+            return note(`Audio: ${trackLabel(next)}`, 1400);
+        }
+    }
+    function stopRemote() {
+        clearTimeout(remoteTimer);
+        if (remote) void closeHandoff(remote.id);
+        remote = null;
+        showRemoteCode = false;
+    }
+    onDestroy(stopRemote);
+
     /** Releasing the double-speed key: back to the speed before, or (a tap) play/pause. */
     function onkeyup(e: KeyboardEvent) {
         if (isTV) {
@@ -1819,6 +1877,15 @@
         </aside>
     {/if}
 
+    {#if showRemoteCode && remote}
+        <QrDialog
+            title="Use Your Phone as a Remote"
+            caption="Scan with your phone’s camera. This goes away once your phone is connected."
+            url={remote.url}
+            onclose={() => (showRemoteCode = false)}
+        />
+    {/if}
+
     <!-- Touch: keep the controls up while dragging the seek bar. -->
     <footer class="bottom" onpointerdown={poke} onpointermove={poke}>
         <SeekBar time={shownTime} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
@@ -1877,6 +1944,11 @@
                     <button class="icon" aria-haspopup="menu" aria-expanded="false" aria-label="Playback settings" title="Settings" onclick={(e) => settingsMenu(e.currentTarget)}>
                         <Icon name="gear" size={20} />
                     </button>
+                    {#if isTV && tracker.ready}
+                        <button class="icon" class:on={!!remote} onclick={startRemote} aria-label={remote ? 'Phone remote connected' : 'Use your phone as a remote'} title="Phone Remote">
+                            <Icon name="phone" size={20} />
+                        </button>
+                    {/if}
                 {/if}
                 {#if isIOS && iosPip?.state !== 'unsupported'}
                     <button class="icon" onclick={toggleIosPip} aria-label={iosPip?.state === 'active' ? 'Exit picture in picture' : 'Picture in picture'}>
