@@ -104,6 +104,8 @@ export type BackupRestored = {
     friend_requests: number;
     not_found: number;
     blocked: number;
+    /** Over the hourly limit on friend requests: import the backup again later to ask them. */
+    friends_later?: number;
 };
 
 /** A title whose status or progress here differs from a backup's (from an import). */

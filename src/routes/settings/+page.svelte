@@ -233,6 +233,7 @@
             const people = (k: number) => `${k} ${k === 1 ? 'friend' : 'friends'}`;
             if (r.friends_back) said.push(`${people(r.friends_back)} ${r.friends_back === 1 ? 'is' : 'are'} back.`);
             if (r.friend_requests) said.push(`Asked ${people(r.friend_requests)} to be friends again.`);
+            if (r.friends_later) said.push(`Import it again in an hour to ask ${people(r.friends_later)} more.`);
             if (r.handle_taken) said.push(`Someone here already has @${r.handle_taken}, so your username wasn’t changed.`);
         }
         dataNote = said.filter(Boolean).join(' ') || 'Nothing to import.';
