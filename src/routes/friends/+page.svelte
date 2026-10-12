@@ -11,6 +11,7 @@
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import QrDialog from '$lib/components/QrDialog.svelte';
+    import PhoneTypeButton from '$lib/components/PhoneTypeButton.svelte';
 
     let data = $state<FriendsOverview | null>(null);
     /** Your username, for your code (someone scans it to add you). */
@@ -94,6 +95,7 @@
             </label>
             <button class="pill primary" type="submit" disabled={busy || !handle.trim()}><Icon name="plus" size={14} /> Add Friend</button>
         </form>
+        <div class="phone-row"><PhoneTypeButton label="Their username" value={handle} max={30} onresult={(text) => (handle = text.replace(/^@/, '').trim())} /></div>
         {#if myCodeUrl}
             <p class="code-line">Or have them scan your code with their phone. <button class="text" onclick={() => (showingCode = true)}>Show My Code</button></p>
         {/if}
@@ -347,6 +349,12 @@
     .empty,
     .loading {
         font-size: var(--text-callout);
+    }
+    .phone-row:empty {
+        display: none;
+    }
+    .phone-row {
+        margin-top: 10px;
     }
     .code-line {
         margin: 10px 4px 0;

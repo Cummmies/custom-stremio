@@ -1,4 +1,5 @@
 <script lang="ts">
+    import PhoneTypeButton from '$lib/components/PhoneTypeButton.svelte';
     import { page } from '$app/state';
     import { goto, appUrl } from '$lib/nav';
     import Icon from '$lib/components/Icon.svelte';
@@ -56,6 +57,7 @@
             spellcheck="false"
         />
     </form>
+    <div class="phone-row"><PhoneTypeButton label="Search" value={field} onresult={(text) => ((field = text), search(text))} /></div>
     {#if !query}
         <EmptyState icon="search" title="Find something to watch">
             <p>Search movies and series across all your addons.{#if !isIOS && !isTV}{' '}Press Ctrl K from anywhere to start typing.{/if}</p>
@@ -75,6 +77,12 @@
 </div>
 
 <style>
+    .phone-row:empty {
+        display: none;
+    }
+    .phone-row {
+        margin: 12px 0 0;
+    }
     .page {
         padding: calc(var(--nav-h) + 24px) 0 56px;
     }

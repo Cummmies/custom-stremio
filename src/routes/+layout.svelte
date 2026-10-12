@@ -12,6 +12,7 @@
     import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
     import UpdateToast from '$lib/components/UpdateToast.svelte';
     import UndoToast from '$lib/components/UndoToast.svelte';
+    import PhoneHandoff from '$lib/components/PhoneHandoff.svelte';
     import WhatsNew from '$lib/components/WhatsNew.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
     import TabBar from '$lib/components/TabBar.svelte';
@@ -119,6 +120,7 @@
     <TabBar />
     <UpdateToast />
     <UndoToast />
+    <PhoneHandoff />
     <!-- After choosing who's watching, not on top of it. -->
     {#if !profiles.pickerOpen && !app.loginOpen}<WhatsNew />{/if}
 {/if}
