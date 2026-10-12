@@ -6,6 +6,8 @@
     import RelatedTab from '$lib/components/detail/RelatedTab.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import { TrackerTitle } from '$lib/tracker/title.svelte';
+    import { tracker } from '$lib/tracker.svelte';
+    import { undo } from '$lib/undo.svelte';
     import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/tracker/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
@@ -484,18 +486,54 @@
     }
 
     function toggleEpisodeWatched(v: Video) {
+        setEpisodeWatched(v, !v.watched);
+        const label = v.season != null && v.episode != null ? `S${v.season} E${v.episode}` : 'the episode';
+        undo.show(v.watched ? `Marked ${label} unwatched` : `Marked ${label} watched`, () => setEpisodeWatched(v, !!v.watched));
+    }
+    function setEpisodeWatched(v: Video, watched: boolean) {
         core.dispatch({
             action: 'MetaDetails',
-            args: { action: 'MarkVideoAsWatched', args: [{ id: v.id, released: v.released }, !v.watched] },
+            args: { action: 'MarkVideoAsWatched', args: [{ id: v.id, released: v.released }, watched] },
         });
         if (!lbOn || !meta) return;
         // Your history follows: watched is logged, unwatched leaves it.
         const logged = episodeLogs[v.id];
-        if (!v.watched && !logged) {
+        if (watched && !logged) {
             lb.logEpisode(meta.id, v.id, meta.name).then((res) => res && keepEpisodeLog(res.episode));
-        } else if (v.watched && logged) {
+        } else if (!watched && logged) {
             lb.removeEpisode(logged.log_id).then((res) => res && forgetEpisodeLog(v.id));
         }
+    }
+
+    /** Mark Previous as Watched: every released episode before this one, in
+     *  Stremio, and the tracker's progress up to the last of them (one watch
+     *  event, as if it had just been finished; it only ever moves forward). */
+    function markPreviousWatched(v: Video) {
+        if (!meta) return;
+        const before = meta.videos
+            .filter((x) => (x.season ?? 0) > 0 && !x.upcoming)
+            .filter((x) => (x.season! < v.season! || (x.season === v.season && (x.episode ?? 0) < (v.episode ?? 0))))
+            .sort((a, b) => (a.season! - b.season!) || (a.episode ?? 0) - (b.episode ?? 0));
+        const marked = before.filter((x) => !x.watched);
+        const mark = (watched: boolean) => {
+            for (const x of marked) core.dispatch({ action: 'MetaDetails', args: { action: 'MarkVideoAsWatched', args: [{ id: x.id, released: x.released }, watched] } });
+        };
+        mark(true);
+        const last = before.at(-1);
+        if (!last) return;
+        const text = `Marked ${marked.length} ${marked.length === 1 ? 'episode' : 'episodes'} watched`;
+        if (!lbOn) return void undo.show(text, () => mark(false));
+        // The tracker's progress too: sent now for its Undo; queued if it can't be reached.
+        const event = { kind: 'finished', type: 'series', id: meta.id, video_id: last.id, name: meta.name, at: new Date().toISOString() } as const;
+        void lb.eventNow(event).then((res) => {
+            if (!res) tracker.track(event);
+            const back = res?.undo;
+            const titleId = res?.title_id;
+            undo.show(text, () => {
+                mark(false);
+                if (back && titleId) void lb.undoProgress(titleId, back);
+            });
+        });
     }
 
     // Rate Episode: the same dialog as a whole title's, for one episode.
@@ -720,6 +758,7 @@
                                 ontogglewatched={toggleEpisodeWatched}
                                 logs={episodeLogs}
                                 onrate={lbOn ? rateEpisode : undefined}
+                                onmarkbefore={markPreviousWatched}
                             />
                         {:else}
                             <ul class="extras">

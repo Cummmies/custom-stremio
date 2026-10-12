@@ -11,6 +11,7 @@
     import MenuHost from '$lib/components/menu/MenuHost.svelte';
     import InstallFromUrl from '$lib/components/addons/InstallFromUrl.svelte';
     import UpdateToast from '$lib/components/UpdateToast.svelte';
+    import UndoToast from '$lib/components/UndoToast.svelte';
     import WhatsNew from '$lib/components/WhatsNew.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
     import TabBar from '$lib/components/TabBar.svelte';
@@ -117,6 +118,7 @@
 {#if !inPlayer}
     <TabBar />
     <UpdateToast />
+    <UndoToast />
     <!-- After choosing who's watching, not on top of it. -->
     {#if !profiles.pickerOpen && !app.loginOpen}<WhatsNew />{/if}
 {/if}

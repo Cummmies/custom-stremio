@@ -106,7 +106,10 @@ export type EventResult = {
     note: string;
     log_id: number | null;
     needs_rating: boolean;
+    /** A show whose progress moved: what it was before, for Undo (lb.undoProgress). */
+    undo?: ProgressUndo | null;
 };
+export type ProgressUndo = { progress: number | null; last_progress_at: string | null };
 
 const storageKey = (uid: string) => `tracker:${uid}`;
 /**

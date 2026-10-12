@@ -2,7 +2,7 @@
 // (docs/tracker.md). Every call goes through tracker.request, so it's
 // null when the tracker isn't connected, can't be reached, or refused.
 
-import { tracker } from '$lib/tracker.svelte';
+import { tracker, type EventResult, type ProgressUndo, type WatchEvent } from '$lib/tracker.svelte';
 
 export type Status = 'plan_to_watch' | 'watching' | 'completed' | 'dropped';
 
@@ -168,6 +168,10 @@ export const lb = {
     /** Plan to Watch (importing it into the tracker if it isn't there yet). */
     addToWatchlist: (id: string, type: string, name: string) =>
         tracker.request<{ titles: Summary[] }>('/watchlist', { method: 'POST', body: { id, type, name }, timeout: 30_000 }),
+    /** Sends a watch event now (not queued), for its result: Mark Previous as Watched uses its `undo`. */
+    eventNow: (event: WatchEvent) => tracker.request<EventResult>('/events', { method: 'POST', body: event }),
+    undoProgress: (titleId: number, before: ProgressUndo) =>
+        tracker.request<{ title: Summary }>(`/titles/${titleId}/progress/undo`, { method: 'POST', body: before }),
     setStatus: (titleId: number, status: Status) =>
         tracker.request<{ title: Summary }>(`/titles/${titleId}/status`, { method: 'POST', body: { status } }),
     remove: (titleId: number) => tracker.request<{ status: string }>(`/titles/${titleId}`, { method: 'DELETE' }),

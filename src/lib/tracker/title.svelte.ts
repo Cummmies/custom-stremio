@@ -8,7 +8,8 @@
 // the first stands for the show, as the tracker's own Add to Watchlist does.
 
 import { tracker } from '$lib/tracker.svelte';
-import { lb, type ListInfo, type RelatedGroup, type Reviews, type Status, type Summary, type WatchFields } from './api';
+import { lb, STATUS_LABEL, type ListInfo, type RelatedGroup, type Reviews, type Status, type Summary, type WatchFields } from './api';
+import { undo } from '$lib/undo.svelte';
 
 /** Rated or logged elsewhere meanwhile (the website, another device): picked up this often. */
 const REFRESH_MS = 60_000;
@@ -120,29 +121,40 @@ export class TrackerTitle {
         }
     }
 
-    /** Plan to Watch, Watching, Completed or Dropped. */
-    setStatus(status: Status) {
+    /** Plan to Watch, Watching, Completed or Dropped (with Undo; `quiet`: none, for an undo itself). */
+    setStatus(status: Status, quiet = false) {
         return this.#do(async () => {
+            const before = this.main;
             const main = await this.#ensure();
             if (!main) return null;
             const res = await lb.setStatus(main.title_id, status);
             this.#put(res?.title);
+            if (res && !quiet) {
+                const was = before?.status;
+                // Back to the status before; one that wasn't in your library at all goes
+                // back out, as long as nothing else was added to it meanwhile.
+                if (was) undo.show(`Marked ${STATUS_LABEL[status]}`, () => this.setStatus(was, true));
+                else if (!before) undo.show(`Added as ${STATUS_LABEL[status]}`, () => !this.main?.watches && this.remove());
+            }
             return res;
         }, 'Couldn’t change the status.');
     }
 
-    /** On or off one of your lists. */
-    toggleList(listId: number) {
+    /** On or off one of your lists (with Undo; `quiet`: none, for an undo itself). */
+    toggleList(listId: number, quiet = false) {
         return this.#do(async () => {
             const t = this.#title;
             if (!t) return null;
             const main = this.main;
+            const was = !!main?.lists.includes(listId);
+            const listName = this.lists.find((l) => l.id === listId)?.name ?? 'the list';
             const res = main?.lists.includes(listId)
                 ? await lb.removeFromList(listId, main.title_id)
                 : await lb.addToList(listId, t.id, t.type, t.name);
             if (res && !this.titles?.length) this.titles = [res.title];
             else this.#put(res?.title);
             if (res) this.#bumpCount(listId, this.main?.lists.includes(listId) ? 1 : -1);
+            if (res && !quiet) undo.show(was ? `Removed from ${listName}` : `Added to ${listName}`, () => this.toggleList(listId, true));
             return res;
         }, 'Couldn’t change the list.');
     }
@@ -190,6 +202,8 @@ export class TrackerTitle {
             if (target == null) return null;
             const res = await lb.addWatch(target, fields);
             this.#put(res?.title);
+            const made = res?.title.log[0];
+            if (made) undo.show(made.rewatch ? 'Logged a rewatch' : 'Logged a watch', () => this.deleteWatch(made.id));
             return res;
         }, 'Couldn’t log the watch.');
     }

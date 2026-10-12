@@ -18,6 +18,7 @@
     import FavoritePicker from '$lib/components/profile/FavoritePicker.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
+    import { undo } from '$lib/undo.svelte';
     import { isIOS, isTV } from '$lib/platform';
 
     const openId = $derived(Number(appUrl(page.url).searchParams.get('id')) || null);
@@ -125,7 +126,13 @@
         if (!res) {
             note('Couldn’t remove it. Try again in a moment.');
             await reload();
-        } else lists = null;
+        } else {
+            lists = null;
+            undo.show(`Removed ${item.name}`, async () => {
+                await lb.addToList(list.id, item.id, item.type, item.name);
+                await reload();
+            });
+        }
     }
     function deleteMenu(e: MouseEvent) {
         const list = detail;

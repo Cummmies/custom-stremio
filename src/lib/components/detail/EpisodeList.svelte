@@ -18,6 +18,7 @@
         ontogglewatched,
         logs = {},
         onrate,
+        onmarkbefore,
     }: {
         videos: Video[];
         season: number;
@@ -30,13 +31,24 @@
         logs?: Record<string, EpisodeLog>;
         /** Score an episode (with the tracker connected). */
         onrate?: (video: Video) => void;
+        /** Mark every earlier episode watched (catching up on a show started elsewhere). */
+        onmarkbefore?: (video: Video) => void;
     } = $props();
+
+    /** Whether a regular episode before this one (any season) isn't watched yet. */
+    function hasUnwatchedBefore(ep: Video) {
+        if ((ep.season ?? 0) === 0) return false;
+        return videos.some((v) => (v.season ?? 0) > 0 && !v.upcoming && !v.watched && ((v.season ?? 0) < (ep.season ?? 0) || (v.season === ep.season && (v.episode ?? 0) < (ep.episode ?? 0))));
+    }
 
     /** An episode's menu (right-click, or press and hold): what its buttons do, and rating. */
     function episodeMenu(ep: Video): MenuEntry[] {
         const rated = logs[ep.id]?.rating != null;
         return [
             { label: ep.watched ? 'Mark as Unwatched' : 'Mark as Watched', icon: 'check', onselect: () => ontogglewatched(ep) },
+            ...(onmarkbefore && hasUnwatchedBefore(ep)
+                ? [{ label: 'Mark Previous as Watched', icon: 'check', onselect: () => onmarkbefore(ep) } as MenuEntry]
+                : []),
             ...(onrate && !ep.upcoming
                 ? [{ label: rated ? 'Edit Rating…' : 'Rate Episode…', icon: 'star', onselect: () => onrate(ep) } as MenuEntry]
                 : []),
