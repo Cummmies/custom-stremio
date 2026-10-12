@@ -93,6 +93,19 @@ export type RelatedItem = {
 };
 export type RelatedGroup = { title: string; items: RelatedItem[] };
 
+/** What a full backup brought back besides the titles (from an import). */
+export type BackupRestored = {
+    profile: boolean;
+    /** The username in the backup, when someone here already has it. */
+    handle_taken: string | null;
+    /** Friends again (they had asked you, or restored first). */
+    friends_back: number;
+    /** Asked again: they're friends once they accept. */
+    friend_requests: number;
+    not_found: number;
+    blocked: number;
+};
+
 /** A title whose status or progress here differs from a backup's (from an import). */
 export type BackupConflict = { title_id: number; title_name: string; imported: Record<string, unknown> };
 
@@ -229,11 +242,18 @@ export const lb = {
     removeFromList: (listId: number, titleId: number) =>
         tracker.request<{ title: Summary }>(`/lists/${listId}/titles/${titleId}`, { method: 'DELETE' }),
 
-    /** Your data as a backup file's contents. */
-    backup: () => tracker.request<Record<string, unknown>>('/backup', { timeout: 60_000 }),
+    /**
+     * Your data as a backup file's contents: your watchlist, watches, scores and
+     * lists; `full`, your profile, pictures, favorites, friends and settings too.
+     */
+    backup: (full = false) => tracker.request<Record<string, unknown>>(full ? '/backup?full=1' : '/backup', { timeout: 120_000 }),
     /** Adds what's in a backup; what clashes comes back, for resolveBackup. */
     importBackup: (contents: unknown) =>
-        tracker.request<{ applied_count: number; conflicts: BackupConflict[] }>('/backup/import', { method: 'POST', body: contents, timeout: 120_000 }),
+        tracker.request<{ applied_count: number; conflicts: BackupConflict[]; restored?: BackupRestored }>('/backup/import', {
+            method: 'POST',
+            body: contents,
+            timeout: 180_000,
+        }),
     /** One choice for every clash: keep what's here, or use the backup's. */
     resolveBackup: (decision: 'keep_local' | 'use_imported', conflicts: BackupConflict[]) =>
         tracker.request<{ resolved_count: number }>('/backup/resolve', { method: 'POST', body: { decision, conflicts }, timeout: 120_000 }),

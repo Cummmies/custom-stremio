@@ -162,24 +162,25 @@
 
     // Data: your watchlist, watches, scores and lists as a backup file, and
     // importing one (PC and iPhone; not the TV).
-    let dataBusy = $state<'download' | 'import' | 'resolve' | null>(null);
+    let dataBusy = $state<'download' | 'download-full' | 'import' | 'resolve' | null>(null);
     let dataNote = $state<string | null>(null);
     let dataError = $state(false);
     let pendingConflicts = $state<BackupConflict[] | null>(null);
     let importInput = $state<HTMLInputElement>();
 
-    async function downloadBackup() {
-        dataBusy = 'download';
+    /** Full: profile, pictures, favorites, friends and settings too. */
+    async function downloadBackup(full: boolean) {
+        dataBusy = full ? 'download-full' : 'download';
         dataNote = null;
         dataError = false;
-        const data = await lb.backup();
+        const data = await lb.backup(full);
         dataBusy = null;
         if (!data) {
             dataError = true;
             dataNote = 'Couldn’t connect. Try again in a moment.';
             return;
         }
-        const name = `custom-stremio-backup-${today()}.json`;
+        const name = `custom-stremio-${full ? 'full-backup' : 'watch-history'}-${today()}.json`;
         const file = new File([JSON.stringify(data, null, 2)], name, { type: 'application/json' });
         // iPhone: the share sheet, with Save to Files. PC: a download.
         if (isIOS && navigator.canShare?.({ files: [file] })) {
@@ -225,7 +226,16 @@
             return;
         }
         const n = res.applied_count;
-        dataNote = n ? `Imported ${n} ${n === 1 ? 'title' : 'titles'}.` : 'Nothing to import.';
+        const said = [n ? `Imported ${n} ${n === 1 ? 'title' : 'titles'}.` : ''];
+        const r = res.restored;
+        if (r) {
+            if (r.profile) said.push('Your profile, pictures and favorites are back.');
+            const people = (k: number) => `${k} ${k === 1 ? 'friend' : 'friends'}`;
+            if (r.friends_back) said.push(`${people(r.friends_back)} ${r.friends_back === 1 ? 'is' : 'are'} back.`);
+            if (r.friend_requests) said.push(`Asked ${people(r.friend_requests)} to be friends again.`);
+            if (r.handle_taken) said.push(`Someone here already has @${r.handle_taken}, so your username wasn’t changed.`);
+        }
+        dataNote = said.filter(Boolean).join(' ') || 'Nothing to import.';
         if (res.conflicts.length) pendingConflicts = res.conflicts;
     }
 
@@ -821,17 +831,26 @@
                 <div class="group">
                     <div class="row">
                         <div>
-                            <div class="title">Download a Backup</div>
-                            <div class="sub">Your watchlist, watches, scores and lists, as a file to keep.</div>
+                            <div class="title">Download a Full Backup</div>
+                            <div class="sub">Everything: your profile, picture, banner, favorites, friends and settings, with your watches, scores and lists.</div>
                         </div>
-                        <button class="btn" onclick={downloadBackup} disabled={!!dataBusy || !tracker.ready}>
+                        <button class="btn" onclick={() => downloadBackup(true)} disabled={!!dataBusy || !tracker.ready}>
+                            {dataBusy === 'download-full' ? 'Preparing…' : 'Download'}
+                        </button>
+                    </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Download Watch History</div>
+                            <div class="sub">Just your watchlist, watches, scores, reviews and lists.</div>
+                        </div>
+                        <button class="btn" onclick={() => downloadBackup(false)} disabled={!!dataBusy || !tracker.ready}>
                             {dataBusy === 'download' ? 'Preparing…' : 'Download'}
                         </button>
                     </div>
                     <div class="row">
                         <div>
                             <div class="title">Import a Backup</div>
-                            <div class="sub">Adds what’s in a backup file. Nothing here is removed.</div>
+                            <div class="sub">Adds what’s in a backup file; a full one brings back your profile and friends too. Nothing here is removed.</div>
                         </div>
                         <button class="btn" onclick={() => importInput?.click()} disabled={!!dataBusy || !tracker.ready}>
                             {dataBusy === 'import' ? 'Importing…' : 'Import…'}
