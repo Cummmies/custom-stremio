@@ -59,6 +59,12 @@ export const core = {
         return bridge.call(['decodeStream'], [encoded]);
     },
 
+    /** The core's requests for `from` go to `to` instead (null: as addressed). See core.worker.ts. */
+    async setTrackerHome(route: { from: string; to: string } | null): Promise<void> {
+        await ready;
+        return bridge.call(['setTrackerHome'], [route]);
+    },
+
     onEvent(listener: EventListener) {
         eventListeners.add(listener);
         return () => eventListeners.delete(listener);

@@ -15,4 +15,6 @@ interface ImportMetaEnv {
      * then the server on the home network, as before.
      */
     readonly VITE_TRACKER_SERVER?: string;
+    /** The same tracker by its home-network name, for when its public address doesn't answer at home (lib/tracker.svelte.ts). */
+    readonly VITE_TRACKER_HOME_SERVER?: string;
 }

@@ -65,6 +65,70 @@ export const hasBuiltInServer = !!BUILT_IN_SERVER;
  */
 const isOurServer = (server: string | null | undefined) => !BUILT_IN_SERVER || server === BUILT_IN_SERVER;
 const DEFAULT_SERVERS = BUILT_IN_SERVER ? [BUILT_IN_SERVER] : LOCAL_SERVERS;
+
+/**
+ * The same tracker by its home-network name. At home, a router without NAT
+ * loopback (Xfinity's, for one) can't reach its own public address from
+ * inside, so the built-in address doesn't answer there; this name points
+ * straight at the server on the home network (with its own certificate, so
+ * the token only ever goes to the real server). Whichever way answered last
+ * is tried first, remembered across launches; a request that can't get
+ * through has the app look the other way.
+ */
+const HOME_SERVER = BUILT_IN_SERVER ? (import.meta.env.VITE_TRACKER_HOME_SERVER || '').trim().replace(/\/+$/, '') || null : null;
+const VIA_HOME_KEY = 'tracker-via-home';
+
+function readViaHome(): boolean {
+    if (!HOME_SERVER) return false;
+    try {
+        return localStorage.getItem(VIA_HOME_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+/** Whether the tracker is reached by its home-network name right now. */
+export const trackerRoute = $state({ viaHome: readViaHome() });
+
+const homeRoute = () => (trackerRoute.viaHome && HOME_SERVER && BUILT_IN_SERVER ? { from: BUILT_IN_SERVER, to: HOME_SERVER } : null);
+// The core (Home rows) asks the tracker too, from its worker: it follows along.
+if (trackerRoute.viaHome) void core.setTrackerHome(homeRoute());
+
+function setViaHome(on: boolean) {
+    if (!HOME_SERVER || trackerRoute.viaHome === on) return;
+    trackerRoute.viaHome = on;
+    try {
+        if (on) localStorage.setItem(VIA_HOME_KEY, '1');
+        else localStorage.removeItem(VIA_HOME_KEY);
+    } catch {}
+    void core.setTrackerHome(homeRoute());
+}
+
+/** `server` as it's reached now: the built-in one by its home name when at home. */
+export function reachable(server: string): string {
+    return server === BUILT_IN_SERVER && trackerRoute.viaHome && HOME_SERVER ? HOME_SERVER : server;
+}
+
+/**
+ * At home, links in a response that this device opens itself go to the home
+ * name too: pictures (/m/) and the phone's handoff page (/h/, opened on the
+ * same Wi-Fi). Links for other people (a shared review, a friend code, the
+ * Home rows saved in the Stremio account) keep the public address.
+ */
+function homeLinks<T>(data: T): T {
+    if (!BUILT_IN_SERVER || !HOME_SERVER) return data;
+    const from = [`${BUILT_IN_SERVER}/m/`, `${BUILT_IN_SERVER}/h/`];
+    const walk = (v: unknown): unknown => {
+        if (typeof v === 'string') {
+            const hit = from.find((f) => v.startsWith(f));
+            return hit ? HOME_SERVER + v.slice(BUILT_IN_SERVER.length) : v;
+        }
+        if (Array.isArray(v)) return v.map(walk);
+        if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+        return v;
+    };
+    return walk(data) as T;
+}
 const TIMEOUT_MS = 4000;
 const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
@@ -195,7 +259,7 @@ async function fetchManifest(url: string): Promise<unknown> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     try {
-        const r = await fetch(url, { signal: ctrl.signal });
+        const r = await fetch(BUILT_IN_SERVER && url.startsWith(BUILT_IN_SERVER) ? reachable(BUILT_IN_SERVER) + url.slice(BUILT_IN_SERVER.length) : url, { signal: ctrl.signal });
         const m = r.ok ? await r.json() : null;
         return m && typeof m === 'object' && 'id' in m ? m : null;
     } catch {
@@ -206,11 +270,28 @@ async function fetchManifest(url: string): Promise<unknown> {
 }
 
 /** One request to the tracker. Never throws: `status` is null when it couldn't be reached. */
-async function call<T>(
-    server: string,
-    path: string,
-    opts: { method?: string; body?: unknown; token?: string; timeout?: number } = {}
-): Promise<Result<T>> {
+type CallOpts = { method?: string; body?: unknown; token?: string; timeout?: number };
+
+/** A tracker request, by whichever way reaches it (see HOME_SERVER). */
+async function call<T>(server: string, path: string, opts: CallOpts = {}): Promise<Result<T>> {
+    if (!HOME_SERVER || server !== BUILT_IN_SERVER) return send<T>(server, path, opts);
+    const first = reachable(server);
+    const res = await send<T>(first, path, opts);
+    if (res.ok || res.status !== null) return res.ok && first === HOME_SERVER ? { ok: true, data: homeLinks(res.data) } : res;
+    // Couldn't get through: does the other way answer? (Without a token: a
+    // 401 is an answer.)
+    const other = first === HOME_SERVER ? BUILT_IN_SERVER : HOME_SERVER;
+    const probe = await send<unknown>(other, '/me');
+    if (!probe.ok && probe.status === null) return res;
+    setViaHome(other === HOME_SERVER);
+    // A read is simply asked again. A write isn't: it may have arrived, and the
+    // outbox and event queue send it again when it didn't.
+    if ((opts.method ?? 'GET').toUpperCase() !== 'GET') return res;
+    const again = await send<T>(other, path, opts);
+    return again.ok && other === HOME_SERVER ? { ok: true, data: homeLinks(again.data) } : again;
+}
+
+async function send<T>(server: string, path: string, opts: CallOpts = {}): Promise<Result<T>> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), opts.timeout ?? TIMEOUT_MS);
     try {
@@ -569,7 +650,8 @@ class Tracker {
 
     /** Where the app's error reports go (lib/errorReports.ts): this device's server, else the built-in one. */
     get reportsServer(): string | null {
-        return this.saved?.server ?? BUILT_IN_SERVER;
+        const server = this.saved?.server ?? BUILT_IN_SERVER;
+        return server ? reachable(server) : null;
     }
 
     /** What Settings fills the address field with: this device's, else the profile's shared one. */
@@ -807,11 +889,17 @@ class Tracker {
         try {
             const candidates = (BUILT_IN_SERVER ? [BUILT_IN_SERVER] : [this.sharedServerFor(uid), ...LOCAL_SERVERS]).filter((s): s is string => !!s);
             for (const server of new Set(candidates)) {
-                const res = await call<{ token: string }>(server, '/pair/stremio', {
-                    method: 'POST',
-                    body: { auth_key: key, name: DEVICE_NAME, platform: PLATFORM },
-                    timeout: 8_000,
-                });
+                const pair = () =>
+                    call<{ token: string }>(server, '/pair/stremio', {
+                        method: 'POST',
+                        body: { auth_key: key, name: DEVICE_NAME, platform: PLATFORM },
+                        timeout: 8_000,
+                    });
+                const via = trackerRoute.viaHome;
+                let res = await pair();
+                // It found the other way in (at home, say): ask again that way. At
+                // worst the first got through too, and that sign-in goes unused.
+                if (!res.ok && res.status === null && trackerRoute.viaHome !== via) res = await pair();
                 if (uid !== this.#uid || this.saved?.token || this.pairing) return;
                 if (res.ok) {
                     this.#save({ server, token: res.data.token });

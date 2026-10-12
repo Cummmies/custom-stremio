@@ -1,7 +1,7 @@
 <script lang="ts">
     // A QR code to scan with a phone's camera (drawn by the tracker, /qr.svg):
     // adding a friend, or carrying something from the TV to a phone. A modal <dialog> (docs/design.md).
-    import { tracker } from '$lib/tracker.svelte';
+    import { reachable, tracker } from '$lib/tracker.svelte';
     import Icon from './Icon.svelte';
 
     let {
@@ -11,7 +11,8 @@
         onclose,
     }: { title: string; caption: string; url: string; onclose: () => void } = $props();
 
-    const src = $derived(`${(tracker.saved?.server ?? '').replace(/\/$/, '')}/qr.svg?text=${encodeURIComponent(url)}`);
+    // The picture comes from the tracker by whichever way reaches it (at home, its home name).
+    const src = $derived(`${reachable(tracker.saved?.server ?? '').replace(/\/$/, '')}/qr.svg?text=${encodeURIComponent(url)}`);
 
     let dialog = $state<HTMLDialogElement>();
     $effect(() => {

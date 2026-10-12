@@ -22,6 +22,28 @@ scope.local_storage_get_item = (key: string) => bridge.call(['localStorage', 'ge
 scope.local_storage_set_item = (key: string, value: string) => bridge.call(['localStorage', 'setItem'], [key, value]);
 scope.local_storage_remove_item = (key: string) => bridge.call(['localStorage', 'removeItem'], [key]);
 
+/**
+ * At home, the tracker's public address may not reach it (a router without
+ * NAT loopback): the app (lib/tracker.svelte.ts) then sends the core's
+ * requests for it, the Home rows, to its home-network name instead.
+ */
+let trackerHome: { from: string; to: string } | null = null;
+scope.setTrackerHome = (route: { from: string; to: string } | null) => {
+    trackerHome = route;
+};
+const nativeFetch: typeof fetch = self.fetch.bind(self);
+scope.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const route = trackerHome;
+    if (route) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.startsWith(route.from)) {
+            const moved = route.to + url.slice(route.from.length);
+            return nativeFetch(typeof input === 'string' || input instanceof URL ? moved : new Request(moved, input), init);
+        }
+    }
+    return nativeFetch(input, init);
+};
+
 scope.init = async ({ appVersion, shellVersion }: { appVersion: string; shellVersion: string | null }) => {
     scope.app_version = appVersion;
     scope.shell_version = shellVersion;
