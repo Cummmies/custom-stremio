@@ -378,13 +378,75 @@
     });
     /** The section showing: the one chosen, else the first there is. */
     const shownPane = $derived(paneList.some((p) => p.key === pane) ? pane : (paneList[0]?.key ?? ''));
+
+    // --- Search: the settings themselves, filtered as you type (the rows
+    // that match, from every section, each still the control it is). ---
+    let query = $state('');
+    let noMatches = $state(false);
+    const searching = $derived(query.trim().length > 0);
+    const HIDE = 'data-search-hide';
     $effect(() => {
         const el = panesEl;
         void paneList;
         if (!el) return;
-        for (const sec of el.querySelectorAll<HTMLElement>(':scope > section')) sec.hidden = twoPane && sec.dataset.pane !== shownPane;
+        const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        for (const n of el.querySelectorAll(`[${HIDE}], [data-first-shown]`)) {
+            n.removeAttribute(HIDE);
+            n.removeAttribute('data-first-shown');
+        }
+        const sections = [...el.querySelectorAll<HTMLElement>(':scope > section')];
+        if (!words.length) {
+            for (const sec of sections) sec.hidden = twoPane && sec.dataset.pane !== shownPane;
+            noMatches = false;
+            return;
+        }
+        const has = (text: string | null | undefined) => {
+            const t = (text ?? '').toLowerCase();
+            return words.every((w) => t.includes(w));
+        };
+        // Hides what's around the matching rows that holds none of them (a
+        // preview, a note), keeping the way down to each match.
+        const prune = (parent: Element, hits: Element[]) => {
+            for (const child of parent.children) {
+                if (child.tagName === 'H2' || hits.includes(child)) continue;
+                if (hits.some((h) => child.contains(h))) prune(child, hits);
+                else child.setAttribute(HIDE, '');
+            }
+        };
+        let any = false;
+        for (const sec of sections) {
+            sec.hidden = false;
+            // The section's own name: all of it.
+            if (has(sec.querySelector('h2')?.textContent)) {
+                any = true;
+                continue;
+            }
+            const hits = [...sec.querySelectorAll('.row')].filter((r) => has(r.textContent));
+            if (!hits.length) {
+                sec.hidden = true;
+                continue;
+            }
+            any = true;
+            prune(sec, hits);
+            // The first row left in a group has no line above it.
+            for (const group of sec.querySelectorAll('.group')) {
+                const first = [...group.children].find((c) => c.classList.contains('row') && !c.hasAttribute(HIDE));
+                first?.setAttribute('data-first-shown', '');
+            }
+        }
+        noMatches = !any;
+        // Results start at the top.
+        if (twoPane) el.scrollTop = 0;
     });
+    function searchKey(e: KeyboardEvent) {
+        if (e.key === 'Escape' && query) {
+            e.preventDefault();
+            e.stopPropagation();
+            query = '';
+        }
+    }
     function choose(key: string) {
+        query = '';
         pane = key;
         try {
             sessionStorage.setItem(PANE_KEY, key);
@@ -399,12 +461,20 @@
 <div class="page" class:two-pane={twoPane}>
     <h1>Settings</h1>
 
+    {#snippet searchField()}
+        <label class="search" role="search">
+            <Icon name="search" size={16} />
+            <input type="search" bind:value={query} onkeydown={searchKey} placeholder="Search" aria-label="Search Settings" autocomplete="off" spellcheck="false" />
+        </label>
+    {/snippet}
+
     {#if twoPane}
         <nav class="sidebar" aria-label="Settings sections">
+            {#if !isTV}{@render searchField()}{/if}
             {#each paneList as p (p.key)}
                 <button
                     class="side-item"
-                    class:on={p.key === shownPane}
+                    class:on={!searching && p.key === shownPane}
                     aria-current={p.key === shownPane ? 'page' : undefined}
                     onclick={() => choose(p.key)}
                     onfocus={() => isTV && choose(p.key)}
@@ -414,9 +484,12 @@
                 </button>
             {/each}
         </nav>
+    {:else if !isTV}
+        {@render searchField()}
     {/if}
 
-    <div class="panes" bind:this={panesEl}>
+    <div class="panes" class:searching bind:this={panesEl}>
+    {#if noMatches}<p class="no-results">No settings match “{query.trim()}”.</p>{/if}
 
     <section>
         <h2>Account</h2>
@@ -1060,9 +1133,8 @@
         </div>
     </section>
 
+    {#if !searching}<p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
     </div>
-
-    <p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>
 </div>
 
 <style>
@@ -1071,28 +1143,82 @@
         margin: 0 auto;
         padding: calc(var(--nav-h) + 28px) var(--gutter) 64px;
     }
-    /* PC and TV: the sidebar beside the section it shows. */
+    /* PC and TV: the sidebar beside the section it shows. The page stays put
+       (title and sidebar); only the section scrolls, in its own column. */
     .page.two-pane {
         display: grid;
         grid-template-columns: 240px minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
         column-gap: 48px;
         max-width: 1180px;
+        height: 100vh;
+        height: 100dvh;
+        padding-bottom: 0;
+        overflow: hidden;
     }
     .two-pane h1 {
         grid-column: 1 / -1;
     }
-    .two-pane .panes,
-    .two-pane .about {
+    .two-pane .panes {
         grid-column: 2;
         min-width: 0;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        /* Room under the last setting, and for focus rings at the edges. */
+        padding: 2px 4px 64px;
+        margin: -2px -4px 0;
     }
     .sidebar {
-        position: sticky;
-        top: calc(var(--nav-h) + 20px);
-        align-self: start;
         display: flex;
         flex-direction: column;
         gap: 2px;
+        min-height: 0;
+        overflow-y: auto;
+        padding-bottom: 32px;
+    }
+    /* Search: a field over the sections (phones: under the title). */
+    .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        margin-bottom: 12px;
+        padding: 0 12px;
+        border: 1px solid var(--separator);
+        border-radius: var(--radius);
+        background: var(--fill);
+        color: var(--label-2);
+        flex: none;
+    }
+    .search:focus-within {
+        border-color: var(--accent);
+    }
+    .search input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--label);
+        font: inherit;
+    }
+    .search input::placeholder {
+        color: var(--label-3);
+    }
+    .page:not(.two-pane) .search {
+        margin-bottom: 24px;
+    }
+    /* What a search leaves out. */
+    .panes :global([data-search-hide]) {
+        display: none !important;
+    }
+    .panes :global(.row[data-first-shown]) {
+        border-top: 0;
+    }
+    .no-results {
+        margin: 8px 2px;
+        color: var(--label-2);
     }
     .side-item {
         display: flex;
