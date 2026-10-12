@@ -93,6 +93,9 @@ class AppState {
             // A title's link (shared titles, reviews and lists open these): its page here.
             const detail = urls?.map((u) => /^stremio:\/\/\/?detail\/(movie|series)\/([^/?#]+)/i.exec(u)).find(Boolean);
             if (detail) void import('$lib/nav').then(({ goto }) => goto(`/title/${detail[1].toLowerCase()}/${detail[2]}`));
+            // Someone's profile (a friend's code opens these): there, with its Add Friend.
+            const user = urls?.map((u) => /^stremio:\/\/\/?user\/([a-z0-9_]{1,30})/i.exec(u)).find(Boolean);
+            if (user) void import('$lib/nav').then(({ goto }) => goto(`/u/${user[1].toLowerCase()}`));
         };
         handle(await getCurrent().catch(() => null));
         await onOpenUrl(handle);

@@ -10,8 +10,16 @@
     import Avatar from '$lib/components/Avatar.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import Icon from '$lib/components/Icon.svelte';
+    import QrDialog from '$lib/components/QrDialog.svelte';
 
     let data = $state<FriendsOverview | null>(null);
+    /** Your username, for your code (someone scans it to add you). */
+    let myHandle = $state<string | null>(null);
+    let showingCode = $state(false);
+    $effect(() => {
+        if (tracker.ready && !myHandle) lb.profile().then((p) => p && (myHandle = p.handle.replace(/^@/, '')));
+    });
+    const myCodeUrl = $derived(myHandle && tracker.saved?.server ? `${tracker.saved.server.replace(/\/$/, '')}/f/${myHandle}` : null);
     let failed = $state(false);
     function load() {
         lb.friends().then((res) => {
@@ -86,6 +94,9 @@
             </label>
             <button class="pill primary" type="submit" disabled={busy || !handle.trim()}><Icon name="plus" size={14} /> Add Friend</button>
         </form>
+        {#if myCodeUrl}
+            <p class="code-line">Or have them scan your code with their phone. <button class="text" onclick={() => (showingCode = true)}>Show My Code</button></p>
+        {/if}
 
         {#if data === null}
             <p class="loading" role="status">{failed ? 'Couldn’t load your friends. Try again in a moment.' : 'Loading…'}</p>
@@ -159,6 +170,9 @@
 </div>
 
 {#if note}<p class="toast" role="status">{note}</p>{/if}
+{#if showingCode && myCodeUrl}
+    <QrDialog title="Add Me as a Friend" caption="Scan with a phone’s camera to open your profile and add you." url={myCodeUrl} onclose={() => (showingCode = false)} />
+{/if}
 
 <style>
     .page {
@@ -333,6 +347,20 @@
     .empty,
     .loading {
         font-size: var(--text-callout);
+    }
+    .code-line {
+        margin: 10px 4px 0;
+        color: var(--label-2);
+        font-size: var(--text-callout);
+    }
+    .text {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--accent-text);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
     }
     .toast {
         position: fixed;
