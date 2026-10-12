@@ -178,6 +178,8 @@ export const lb = {
     /** A watch, its score and review: 'kept' when offline (sent once the tracker is back). */
     addWatch: (titleId: number, fields: WatchFields) => tracker.write<{ title: Summary }>(`/titles/${titleId}/watches`, { method: 'POST', body: fields }),
     editWatch: (logId: number, fields: WatchFields) => tracker.write<{ title: Summary }>(`/watches/${logId}`, { method: 'PUT', body: fields }),
+    /** A link anyone can open to one of your watches (its score and review). */
+    shareWatch: (logId: number) => tracker.request<{ share_url: string }>(`/watches/${logId}/share`, { method: 'POST' }),
     deleteWatch: (logId: number) => tracker.request<{ title: Summary }>(`/watches/${logId}`, { method: 'DELETE' }),
     profile: () => tracker.request<Profile>('/profile'),
     /** The saved profile, or why not (409: the handle is taken; 400: not valid; null: no connection). */

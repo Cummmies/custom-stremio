@@ -90,6 +90,9 @@ class AppState {
         const handle = (urls: string[] | null) => {
             const link = urls?.find((u) => /^stremio:\/\/.+manifest\.json/i.test(u));
             if (link) this.pendingAddonUrl = addonLinkUrl(link);
+            // A title's link (shared titles, reviews and lists open these): its page here.
+            const detail = urls?.map((u) => /^stremio:\/\/\/?detail\/(movie|series)\/([^/?#]+)/i.exec(u)).find(Boolean);
+            if (detail) void import('$lib/nav').then(({ goto }) => goto(`/title/${detail[1].toLowerCase()}/${detail[2]}`));
         };
         handle(await getCurrent().catch(() => null));
         await onOpenUrl(handle);

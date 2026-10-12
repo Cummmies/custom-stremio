@@ -8,6 +8,7 @@
     import { TrackerTitle } from '$lib/tracker/title.svelte';
     import { tracker } from '$lib/tracker.svelte';
     import { undo } from '$lib/undo.svelte';
+    import { shareLink, titleLink } from '$lib/share';
     import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/tracker/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
@@ -441,9 +442,23 @@
                           label: `${day(w.date) ?? 'Date unknown'}${w.rating != null ? ` · ${score(w.rating)}` : ''}`,
                           onselect: () => openEdit(w.id),
                       })),
+                      ...(reviewToShare ? [{ separator: true }, { label: 'Share My Review…', icon: 'share', onselect: shareReview }] : []),
                   ] as MenuEntry[])
                 : []),
         ]);
+    }
+
+    // Share: the title's link, or your latest scored or reviewed watch's.
+    const reviewToShare = $derived(watches.find((w) => w.rating != null || w.review) ?? null);
+    function shareTitle() {
+        if (meta) void shareLink(titleLink(meta.type, meta.id), meta.name);
+    }
+    async function shareReview() {
+        const w = reviewToShare;
+        if (!w || !meta) return;
+        const res = await lb.shareWatch(w.id);
+        if (res) await shareLink(res.share_url, `My review of ${meta.name}`);
+        else undo.note('Couldn’t make a link. Try again in a moment.');
     }
 
     // Details' Status and Lists rows.
@@ -672,6 +687,11 @@
                     {#if trailers.length}
                         <button class="round" onclick={() => (trailer = trailers[0].ytId!)} aria-label="Play Trailer" title="Play Trailer">
                             <Icon name="film" size={18} />
+                        </button>
+                    {/if}
+                    {#if !isTV}
+                        <button class="round" onclick={shareTitle} aria-label="Share" title="Share">
+                            <Icon name="share" size={18} />
                         </button>
                     {/if}
                     {#if !isSeries}
