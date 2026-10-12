@@ -9,6 +9,7 @@
 // Rows the layout doesn't know yet (a new addon) are added at the end, shown.
 import '$lib/polyfills';
 import { app } from '$lib/app.svelte';
+import { undo } from '$lib/undo.svelte';
 import type { Catalog } from '$lib/core/types';
 
 export type RowEntry = { key: string; hidden?: boolean; name?: string };
@@ -104,6 +105,7 @@ class HomeLayout {
         this.layout = next;
         this.undoLabel = label;
         this.#save();
+        undo.show(label, () => this.undo());
     }
 
     /** The current profile's layout, as it came from another device. */

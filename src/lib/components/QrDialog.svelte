@@ -1,7 +1,6 @@
 <script lang="ts">
     // A QR code to scan with a phone's camera (drawn by the tracker, /qr.svg):
-    // adding a friend, or carrying something from the TV to a phone. The link
-    // shows under it too, for typing in. A modal <dialog> (docs/design.md).
+    // adding a friend, or carrying something from the TV to a phone. A modal <dialog> (docs/design.md).
     import { tracker } from '$lib/tracker.svelte';
     import Icon from './Icon.svelte';
 
@@ -32,9 +31,8 @@
             <h2 id="qr-heading">{title}</h2>
             <button class="close" onclick={onclose} aria-label="Done"><Icon name="close" size={16} /></button>
         </header>
-        <div class="code"><img {src} alt={`QR code for ${url}`} /></div>
+        <div class="code"><img {src} alt="QR code" /></div>
         <p class="caption">{caption}</p>
-        <p class="link">{url}</p>
     </div>
 </dialog>
 
@@ -112,13 +110,6 @@
     .caption {
         margin: 0;
         color: var(--label-2);
-    }
-    .link {
-        margin: 0;
-        max-width: 100%;
-        overflow-wrap: anywhere;
-        color: var(--label-3);
-        font-size: var(--text-caption);
     }
     :global(html.tv) .code {
         width: 320px;

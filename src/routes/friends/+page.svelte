@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { undo } from '$lib/undo.svelte';
     // Friends: add someone by username, answer the requests you got (and
     // cancel the ones you sent), your friends (each opens their profile; its
     // ⋯ has Close Friend, Unfriend and Block), and who you've blocked. Grouped
@@ -32,15 +33,9 @@
         if (tracker.ready && !data) load();
     });
 
-    let note = $state<string | null>(null);
-    let noteTimer: ReturnType<typeof setTimeout> | undefined;
     const done: friendship.Done = (text) => {
         busy = false;
-        if (text) {
-            note = text;
-            clearTimeout(noteTimer);
-            noteTimer = setTimeout(() => (note = null), 3500);
-        }
+        if (text) undo.note(text);
         load();
     };
     let busy = $state(false);
@@ -97,7 +92,7 @@
         </form>
         <div class="phone-row"><PhoneTypeButton label="Their username" value={handle} max={30} onresult={(text) => (handle = text.replace(/^@/, '').trim())} /></div>
         {#if myCodeUrl}
-            <p class="code-line">Or have them scan your code with their phone. <button class="text" onclick={() => (showingCode = true)}>Show My Code</button></p>
+            <p class="code-line">Or have them scan your code with their phone. <button class="text-link" onclick={() => (showingCode = true)}>Show My Code</button></p>
         {/if}
 
         {#if data === null}
@@ -171,7 +166,6 @@
     {/if}
 </div>
 
-{#if note}<p class="toast" role="status">{note}</p>{/if}
 {#if showingCode && myCodeUrl}
     <QrDialog title="Add Me as a Friend" caption="Scan with a phone’s camera to open your profile and add you." url={myCodeUrl} onclose={() => (showingCode = false)} />
 {/if}
@@ -359,9 +353,9 @@
     .code-line {
         margin: 10px 4px 0;
         color: var(--label-2);
-        font-size: var(--text-callout);
+        font-size: var(--text-caption);
     }
-    .text {
+    .text-link {
         padding: 0;
         border: 0;
         background: none;
@@ -369,19 +363,6 @@
         font: inherit;
         font-weight: 600;
         cursor: pointer;
-    }
-    .toast {
-        position: fixed;
-        left: 50%;
-        bottom: calc(24px + var(--tabbar-h));
-        z-index: 20;
-        transform: translateX(-50%);
-        margin: 0;
-        padding: 10px 16px;
-        border: 1px solid var(--separator);
-        border-radius: var(--radius-l);
-        background: var(--elevated);
-        box-shadow: var(--shadow-m);
     }
     @media (pointer: coarse) {
         .pill,

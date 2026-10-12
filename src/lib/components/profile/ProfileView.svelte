@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { undo } from '$lib/undo.svelte';
     // A profile (docs/design.md): the banner as artwork in the website's shape
     // (a wide strip, 1120 by 220) with the picture across its edge and four
     // numbers in its bottom-right corner, as a title's scores; Edit Profile
@@ -239,17 +240,11 @@
 
     // ---- Friends: what you can do about someone else, and a row of friends ----
     const person = $derived({ user_id: profile.user_id, name: profile.name || profile.handle, handle: profile.handle });
-    let note = $state<string | null>(null);
-    let noteTimer: ReturnType<typeof setTimeout> | undefined;
     let acting = $state(false);
     /** After an action: say what happened (if anything to say) and show the new state. */
     const done: friendship.Done = (text) => {
         acting = false;
-        if (text) {
-            note = text;
-            clearTimeout(noteTimer);
-            noteTimer = setTimeout(() => (note = null), 3500);
-        }
+        if (text) undo.note(text);
         onchanged?.();
     };
     const act = (run: () => unknown) => {
@@ -271,7 +266,7 @@
 <svelte:window {onkeydown} />
 
 <div class="profile" class:editing>
-    <div class="cover" aria-hidden={!editing}>
+    <div class="cover" class:empty={!cover} aria-hidden={!editing}>
         {#if cover}<ProfileMedia src={cover} crop={shownBannerCrop} />{/if}
     </div>
 
@@ -390,7 +385,7 @@
                     {#if handle && !handleValid}
                         <p class="note bad">A username is 3 to 24 letters, numbers or underscores.</p>
                     {:else}
-                        <p class="note">Your name shows here and in the app. Only friends see your real name, and it’s the one shown when switching profiles (empty: your name). Your username is how friends find you, and your profile’s link.</p>
+                        <p class="note">Your name shows here and in the app. Only close friends see your real name, and it’s the one shown when switching profiles (empty: your name). Your username is how friends find you, and your profile’s link.</p>
                     {/if}
                 </div>
                 <div class="edit-col">
@@ -541,7 +536,6 @@
     </div>
 </div>
 
-{#if note}<p class="note-toast" role="status">{note}</p>{/if}
 {#if picking !== null}
     <FavoritePicker slot={picking} taken={slots.map((s) => s.id)} onpick={chose} onclose={() => (picking = null)} />
 {/if}
@@ -568,6 +562,10 @@
         /* The picture itself fades into whatever is behind it, ending at the edge. */
         -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 62%, rgb(0 0 0 / 0.4) 84%, transparent 100%);
         mask-image: linear-gradient(to bottom, #000 0, #000 62%, rgb(0 0 0 / 0.4) 84%, transparent 100%);
+    }
+    /* Nothing to show yet: the banner's shape in the raised surface, fading the same way. */
+    .cover.empty {
+        background: var(--elevated);
     }
     /* Light at the top, for the bar. */
     .cover::after {
@@ -1095,19 +1093,6 @@
     }
     .friend:hover .friend-name {
         text-decoration: underline;
-    }
-    .note-toast {
-        position: fixed;
-        left: 50%;
-        bottom: calc(24px + var(--tabbar-h));
-        z-index: 20;
-        transform: translateX(-50%);
-        margin: 0;
-        padding: 10px 16px;
-        border: 1px solid var(--separator);
-        border-radius: var(--radius-l);
-        background: var(--elevated);
-        box-shadow: var(--shadow-m);
     }
     /* One row, as many as fit (the count comes from the width). */
     .probe {

@@ -245,14 +245,6 @@
         return out;
     }
 
-    // --- Undo toast ------------------------------------------------------------------
-    let toastTimer: ReturnType<typeof setTimeout> | undefined;
-    $effect(() => {
-        if (!homeLayout.undoLabel) return;
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => homeLayout.dismissUndo(), 6000);
-        return () => clearTimeout(toastTimer);
-    });
     onMount(() => () => homeLayout.dismissUndo());
 </script>
 
@@ -396,12 +388,6 @@
     </dialog>
 {/if}
 
-{#if homeLayout.undoLabel}
-    <div class="toast" role="status">
-        <span>{homeLayout.undoLabel}</span>
-        <button onclick={() => homeLayout.undo()}>Undo</button>
-    </div>
-{/if}
 
 <style>
     .page {
@@ -841,32 +827,6 @@
         color: var(--label-2);
     }
 
-    .toast {
-        position: fixed;
-        left: 50%;
-        bottom: 24px;
-        translate: -50% 0;
-        z-index: 30;
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 8px 8px 8px 20px;
-        border-radius: 999px;
-        background: var(--label);
-        color: var(--bg);
-        box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
-        font-weight: 500;
-    }
-    .toast button {
-        height: 36px;
-        padding: 0 16px;
-        border: 0;
-        border-radius: 999px;
-        background: var(--bg);
-        color: var(--label);
-        font-weight: 700;
-        cursor: pointer;
-    }
     @media (max-width: 560px) {
         .art {
             display: none;
@@ -888,28 +848,6 @@
     @media (max-width: 700px) {
         .back {
             display: none;
-        }
-    }
-    /* Phones: the Undo notice spans the width above the tab bar. */
-    @media (max-width: 700px) {
-        .toast {
-            left: 12px;
-            right: 12px;
-            bottom: calc(var(--tabbar-h) + 12px);
-            translate: none;
-            gap: 12px;
-            padding: 8px 8px 8px 16px;
-            border-radius: 16px;
-        }
-        .toast span {
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .toast button {
-            flex: none;
         }
     }
 </style>

@@ -382,7 +382,8 @@
         font-size: 11px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-        box-shadow: 0 0 0 2px var(--bg);
+        /* Floats over artwork: a soft lift, not a cutout ring in the page color. */
+        box-shadow: var(--shadow-s);
     }
     .popover {
         position: absolute;
