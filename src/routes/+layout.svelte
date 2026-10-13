@@ -14,6 +14,7 @@
     import UndoToast from '$lib/components/UndoToast.svelte';
     import PhoneHandoff from '$lib/components/PhoneHandoff.svelte';
     import ResumeBanner from '$lib/components/ResumeBanner.svelte';
+    import NoticeBanner from '$lib/components/NoticeBanner.svelte';
     import HandlePrompt from '$lib/components/HandlePrompt.svelte';
     import WhatsNew from '$lib/components/WhatsNew.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
@@ -124,6 +125,7 @@
     <UndoToast />
     <PhoneHandoff />
     <ResumeBanner />
+    <NoticeBanner />
     <HandlePrompt />
     <!-- After choosing who's watching, not on top of it. -->
     {#if !profiles.pickerOpen && !app.loginOpen}<WhatsNew />{/if}

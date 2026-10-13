@@ -38,7 +38,8 @@
     <h2>Fair use</h2>
     <p>
         Don’t try to break, overload or get around the app or its server, read other people’s data, or collect data from it automatically.
-        Accounts that do may be suspended, and content that breaks these terms may be removed.
+        Accounts that do, or that keep breaking these terms, may be warned or suspended for a while or for good, and content that breaks
+        them may be removed. A suspension keeps your data; the app tells you until when, and why.
     </p>
 
     <h2>No guarantees</h2>

@@ -583,7 +583,7 @@
                     </div>
                     <Icon name="chevronRight" size={16} />
                 </a>
-                {#if tracker.saved?.user?.is_admin}
+                {#if tracker.saved?.user?.is_staff ?? tracker.saved?.user?.is_admin}
                     <a class="row link" href="/reports">
                         <div>
                             <div class="title">Reports</div>

@@ -130,11 +130,16 @@ function homeLinks<T>(data: T): T {
     return walk(data) as T;
 }
 const TIMEOUT_MS = 4000;
+/** While suspended, how often to look whether it ended. */
+const SUSPENDED_RETRY_MS = 10 * 60_000;
 const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
 const RETRY_MS = 60_000;
 
-export type TrackerUser = { name: string; handle: string | null; avatar_url: string | null; is_admin?: boolean };
+/** is_staff: a mod or an admin (the Reports page). */
+export type TrackerUser = { name: string; handle: string | null; avatar_url: string | null; is_admin?: boolean; is_staff?: boolean };
+/** The account is suspended: until when (null: permanently) and why. */
+export type Suspension = { until: string | null; permanent: boolean; reason: string };
 type Saved = {
     server: string;
     /** null once the tracker removed this device (the server is kept for reconnecting). */
@@ -149,7 +154,7 @@ type Saved = {
 export type Shared = { server: string | null; token: string | null; addonUrl: string | null };
 const NO_SHARED: Shared = { server: null, token: null, addonUrl: null };
 type AddonDescriptor = { transportUrl: string; manifest: unknown; flags: { official: boolean; protected: boolean } };
-export type Status = 'off' | 'checking' | 'ok' | 'unreachable' | 'removed';
+export type Status = 'off' | 'checking' | 'ok' | 'unreachable' | 'removed' | 'suspended';
 export type Pairing = {
     server: string;
     code: string;
@@ -240,8 +245,8 @@ export function normalizeServer(input: string): string | null {
     }
 }
 
-/** detail: the tracker's own words for a refusal, when it gave them. */
-type Result<T> = { ok: true; data: T } | { ok: false; status: number | null; detail?: string };
+/** detail: the tracker's own words for a refusal, when it gave them; suspended: the account is. */
+type Result<T> = { ok: true; data: T } | { ok: false; status: number | null; detail?: string; suspended?: Suspension };
 
 /** `url` with its scheme, host and port taken from `server` (the path kept). */
 function onServer(url: string, server: string): string | null {
@@ -307,11 +312,13 @@ async function send<T>(server: string, path: string, opts: CallOpts = {}): Promi
         });
         if (!res.ok) {
             let detail: string | undefined;
+            let suspended: Suspension | undefined;
             try {
                 const body = await res.json();
                 if (typeof body?.detail === 'string') detail = body.detail;
+                if (res.status === 403 && body?.suspended && typeof body.suspended === 'object') suspended = body.suspended;
             } catch {}
-            return { ok: false, status: res.status, detail };
+            return { ok: false, status: res.status, detail, suspended };
         }
         return { ok: true, data: (await res.json()) as T };
     } catch {
@@ -328,6 +335,8 @@ class Tracker {
     pairing = $state<Pairing | null>(null);
     /** Why the last Connect didn't get a code. */
     error = $state<string | null>(null);
+    /** While the account is suspended: until when and why (the app says so, and the tracker features hide). */
+    suspension = $state<Suspension | null>(null);
     connecting = $state(false);
     /** The tracker was reached but has no one with this Stremio account connected: it took a code instead. */
     stremioNotLinked = $state(false);
@@ -569,6 +578,9 @@ class Tracker {
         clearInterval(this.#retry);
         this.#retry = undefined;
         if (s === 'unreachable') this.#retry = setInterval(() => this.check(), RETRY_MS);
+        // A suspension can end (or be lifted): checked again now and then.
+        if (s === 'suspended') this.#retry = setInterval(() => this.check(), SUSPENDED_RETRY_MS);
+        else this.suspension = null;
         if (s === 'ok') this.#flush();
     }
 
@@ -591,8 +603,8 @@ class Tracker {
         const res = await call<{ user: TrackerUser }>(saved.server, '/me', { token: saved.token });
         if (uid !== this.#uid || saved !== this.saved) return; // switched meanwhile
         if (res.ok) {
-            const { name, handle, avatar_url, is_admin } = res.data.user;
-            this.#save({ ...saved, user: { name, handle, avatar_url, is_admin: !!is_admin } });
+            const { name, handle, avatar_url, is_admin, is_staff } = res.data.user;
+            this.#save({ ...saved, user: { name, handle, avatar_url, is_admin: !!is_admin, is_staff: !!(is_staff ?? is_admin) } });
             this.#setStatus('ok');
             // The account's connection, for its other devices. If the account has
             // another, this device moves to it; nothing more on this token meanwhile.
@@ -604,6 +616,8 @@ class Tracker {
             else if (uid) this.#moveRowsToShared(uid);
         } else if (res.status === 401) {
             this.#forgetToken();
+        } else if (res.suspended) {
+            this.#suspended(res.suspended);
         } else {
             this.#setStatus('unreachable');
         }
@@ -673,6 +687,12 @@ class Tracker {
         if (res && uid === this.#uid) this.newEpisodes = res.counts ?? {};
     }
 
+    /** The account is suspended: its sign-in is kept for when it ends. */
+    #suspended(info: Suspension) {
+        this.suspension = info;
+        if (this.status !== 'suspended') this.#setStatus('suspended');
+    }
+
     /** The tracker removed this connection: keep the address for reconnecting. */
     #forgetToken() {
         this.newEpisodes = {};
@@ -726,6 +746,7 @@ class Tracker {
         if (res.ok) {
             if (this.status !== 'ok') this.#setStatus('ok');
         } else if (res.status === 401) this.#forgetToken();
+        else if (res.suspended) this.#suspended(res.suspended);
         else if (res.status === null) this.#setStatus('unreachable');
         return res;
     }
@@ -912,6 +933,11 @@ class Tracker {
                 if (res.ok) {
                     this.#save({ server, token: res.data.token });
                     await this.check();
+                    return;
+                }
+                if (!res.ok && res.suspended) {
+                    this.suspension = res.suspended;
+                    this.status = 'suspended';
                     return;
                 }
                 if (res.status !== null) return; // it answered, and said no

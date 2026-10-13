@@ -11,7 +11,8 @@
     let reports = $state<Report[] | null>(null);
     let failed = $state(false);
     let busy = $state<number | null>(null);
-    const admin = $derived(!!tracker.saved?.user?.is_admin);
+    // Staff: mods and admins.
+    const admin = $derived(!!(tracker.saved?.user?.is_staff ?? tracker.saved?.user?.is_admin));
 
     $effect(() => {
         if (tracker.ready && admin && reports === null)

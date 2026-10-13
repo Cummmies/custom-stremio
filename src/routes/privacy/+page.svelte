@@ -54,8 +54,14 @@
             friend you recommend a title to sees the recommendation and its note.
         </li>
         <li>
-            <strong>Reports:</strong> if someone reports your review or profile, the app’s admins see what was reported and the reason.
-            They don’t tell you who reported it. An admin can hide a review’s text; you’re told when that happens.
+            <strong>Reports:</strong> if someone reports your review or profile, the app’s moderators see what was reported and the reason.
+            They don’t tell you who reported it. A moderator can hide a review’s text, or remove a bio, picture or name that breaks the
+            rules; you’re told when that happens.
+        </li>
+        <li>
+            <strong>Support and moderation:</strong> the app’s moderators and admins can look up an account to help with a problem or deal
+            with a report. Moderators see your profile and activity, never your email; admins also see your email and can download
+            your data for you if you ask. Everything they do is recorded.
         </li>
         <li>
             <strong>Stremio</strong> keeps your Stremio library and addons, as its own privacy policy says. The addons you install are run by
@@ -70,8 +76,9 @@
     <h2>How long, and removing it</h2>
     <p>
         What you add is kept while you use the app. You can download all of it (a full backup, with your profile and friends), or bring a
-        backup back, in Settings → Data. To protect against loss, the server keeps daily backup copies for a short while; a deletion
-        reaches those as they’re replaced. To have your data deleted, write to <strong>{CONTACT}</strong> from your Stremio account’s
+        backup back, in Settings → Data. A watch you delete is kept for 30 days, so it can be brought back if you ask, then it’s gone.
+        To protect against loss, the server keeps daily backup copies for a short while; a deletion reaches those as they’re replaced.
+        To have your data deleted, write to <strong>{CONTACT}</strong> from your Stremio account’s
         email address, and it will be removed from the server. Signing a device out (Settings → Devices) removes its sign-in.
     </p>
 
