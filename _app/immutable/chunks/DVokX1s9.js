@@ -1,0 +1,1 @@
+var e=e=>/^tt\d+$/.test(e);function t(t){return t.background?t.background:e(t.id)?`https://images.metahub.space/background/medium/${t.id}/img`:null}function n(t){return t.logo?t.logo:e(t.id)?`https://images.metahub.space/logo/medium/${t.id}/img`:null}export{n,t};
