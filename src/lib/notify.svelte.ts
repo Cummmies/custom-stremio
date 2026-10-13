@@ -31,7 +31,8 @@ import { cleanVideoId } from '$lib/player/deeplink';
 import { titleHref } from '$lib/links';
 import { inTauri, isIOS, isTV } from '$lib/platform';
 
-export type NotificationKind = 'episode' | 'movie' | 'season' | 'reply';
+/** friend: a request or an answer; report: one for admins to look at; moderation: your review was hidden. */
+export type NotificationKind = 'episode' | 'movie' | 'season' | 'reply' | 'friend' | 'report' | 'moderation';
 export type AppNotification = {
     id: number;
     kind: NotificationKind;
@@ -47,6 +48,8 @@ export type AppNotification = {
     season: number | null;
     episode: number | null;
     track: 'sub' | 'dub' | null;
+    /** The page one that isn't about a title opens (Friends, Reports). */
+    link?: string | null;
     /** Stremio's (the backup's): its key here, for read and removed. */
     key?: string;
     /** `date` is a calendar day (Stremio's), not a moment: "Today", not "3h". */
@@ -72,9 +75,11 @@ export type NotifyPrefs = {
     episodes: boolean;
     seasons: boolean;
     replies: boolean;
+    /** Friend requests, and answers to yours. */
+    friends: boolean;
 };
 const PREFS_KEY = 'notify-prefs';
-const DEFAULT_PREFS: NotifyPrefs = { system: true, episodes: true, seasons: true, replies: true };
+const DEFAULT_PREFS: NotifyPrefs = { system: true, episodes: true, seasons: true, replies: true, friends: true };
 
 /** How often it looks while the app is open. */
 const POLL_MS = 5 * 60_000;
@@ -363,7 +368,12 @@ class Notify {
     }
 
     #allowed(kind: NotificationKind) {
-        return kind === 'episode' || kind === 'movie' ? this.prefs.episodes : kind === 'season' ? this.prefs.seasons : this.prefs.replies;
+        if (kind === 'episode' || kind === 'movie') return this.prefs.episodes;
+        if (kind === 'season') return this.prefs.seasons;
+        if (kind === 'friend') return this.prefs.friends !== false;
+        // Reports (admins) and your own hidden review always come through.
+        if (kind === 'report' || kind === 'moderation') return true;
+        return this.prefs.replies;
     }
 
     /** New ones since the last look, as system notifications. */
@@ -518,7 +528,8 @@ class Notify {
     /** Opens what a notification is about (and marks it read). */
     open(n: AppNotification) {
         void this.markRead(n);
-        if (n.stremio_id) goto(titleHref(n.type, n.stremio_id));
+        if (n.link) goto(n.link);
+        else if (n.stremio_id) goto(titleHref(n.type, n.stremio_id));
     }
 
     stop() {

@@ -92,7 +92,10 @@ export type FriendReview = {
     edited?: boolean;
     date: string | null;
 };
-export type Reviews = { aggregate: AggregateReview[]; friends: FriendReview[] };
+/** community: everyone else's with a public profile (friends' are under friends). */
+export type Reviews = { aggregate: AggregateReview[]; friends: FriendReview[]; community?: FriendReview[] };
+/** A person found by search, with how you stand with them. */
+export type FoundPerson = FriendCard & { relationship: Relationship; friendship_id: number | null };
 
 export type RelatedItem = {
     id: string;
@@ -251,6 +254,8 @@ export const lb = {
     /** A review or profile, for an admin to look at. */
     report: (body: { kind: 'review' | 'profile'; log_id?: number; user_id?: number; reason?: string }) =>
         tracker.request<{ status: string }>('/reports', { method: 'POST', body }),
+    /** People by username or name (3+ characters). */
+    searchUsers: (q: string) => tracker.request<{ results: FoundPerson[] }>(`/users/search?q=${enc(q)}`),
     /** Whether a username is free, for the username prompt. */
     handleAvailable: (handle: string) => tracker.request<{ available: boolean; reason: string | null }>(`/handles/${enc(handle)}`),
     devices: () => tracker.request<{ devices: SignedInDevice[] }>('/devices'),

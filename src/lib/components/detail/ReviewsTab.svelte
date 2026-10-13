@@ -11,7 +11,7 @@
     import { playerPrefs } from '$lib/player/prefs.svelte';
     import { undo } from '$lib/undo.svelte';
     import * as friendship from '$lib/friendActions';
-    import { day, score, type Reviews, type Watch } from '$lib/tracker/api';
+    import { day, score, type FriendReview, type Reviews, type Watch } from '$lib/tracker/api';
 
     let {
         name,
@@ -56,8 +56,31 @@
         userId?: number;
     };
 
+    /** People muted from here: gone at once (the tracker leaves them out from now on). */
+    let mutedHere = $state<Set<number>>(new Set());
     const SOURCES: Record<string, string> = { tmdb: 'TMDb', trakt: 'Trakt', anilist: 'AniList' };
-    const aggregate = $derived<Card[]>(
+    /** A person's review (a friend's, or anyone's with a public profile). */
+    const personCard = (f: FriendReview, prefix: string): Card => ({
+        key: `${prefix}${f.handle}`,
+        author: f.name,
+        // A video avatar (the tracker allows them) shows as the initial.
+        avatar: f.avatar && !/\.(webm|mov|mp4)$/i.test(f.avatar) ? f.avatar : null,
+        date: day(f.date),
+        sort: f.date ?? '',
+        score: f.rating,
+        body: f.review,
+        profile: f.handle ? `/u/${f.handle.replace(/^@/, '')}` : undefined,
+        handle: f.handle ? `@${f.handle.replace(/^@/, '')}` : undefined,
+        spoiler: !!f.spoiler,
+        edited: !!f.edited,
+        logId: f.log_id,
+        userId: f.user_id,
+    });
+    /** People here (not friends) with a public profile: first among the aggregated. */
+    const community = $derived<Card[]>(
+        (reviews?.community ?? []).filter((f) => f.user_id == null || !mutedHere.has(f.user_id)).map((f) => personCard(f, 'c'))
+    );
+    const external = $derived<Card[]>(
         (reviews?.aggregate ?? []).map((r, i) => ({
             key: `a${i}`,
             author: r.author,
@@ -69,25 +92,9 @@
             source: SOURCES[r.source?.toLowerCase()] ?? r.source,
         }))
     );
-    /** People muted from here: gone at once (the tracker leaves them out from now on). */
-    let mutedHere = $state<Set<number>>(new Set());
+    const aggregate = $derived<Card[]>([...community, ...external]);
     const friendCards = $derived<Card[]>(
-        (reviews?.friends ?? []).filter((f) => f.user_id == null || !mutedHere.has(f.user_id)).map((f) => ({
-            key: `f${f.handle}`,
-            author: f.name,
-            // A video avatar (the tracker allows them) shows as the initial.
-            avatar: f.avatar && !/\.(webm|mov|mp4)$/i.test(f.avatar) ? f.avatar : null,
-            date: day(f.date),
-            sort: f.date ?? '',
-            score: f.rating,
-            body: f.review,
-            profile: f.handle ? `/u/${f.handle.replace(/^@/, '')}` : undefined,
-            handle: f.handle ? `@${f.handle.replace(/^@/, '')}` : undefined,
-            spoiler: !!f.spoiler,
-            edited: !!f.edited,
-            logId: f.log_id,
-            userId: f.user_id,
-        }))
+        (reviews?.friends ?? []).filter((f) => f.user_id == null || !mutedHere.has(f.user_id)).map((f) => personCard(f, 'f'))
     );
     /** Spoilers the reader chose to see. */
     let revealed = $state<Set<string>>(new Set());
@@ -115,11 +122,10 @@
     });
 
     let sort = $state<'newest' | 'highest'>('newest');
-    const sorted = $derived(
-        sort === 'newest'
-            ? [...aggregate].sort((a, b) => b.sort.localeCompare(a.sort))
-            : [...aggregate].sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-    );
+    // People here first (each group in the chosen order), then the outside sources.
+    const order = (cards: Card[]) =>
+        sort === 'newest' ? [...cards].sort((a, b) => b.sort.localeCompare(a.sort)) : [...cards].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+    const sorted = $derived([...order(community), ...order(external)]);
 
     let expanded = $state<Set<string>>(new Set());
     const toggle = (k: string) => {
@@ -207,7 +213,7 @@
             <div class="grid">
                 {#each sorted as r (r.key)}{@render card(r)}{/each}
             </div>
-            <p class="note">From aggregated sources.</p>
+            <p class="note">{community.length ? 'From people here, and from TMDb, Trakt and AniList.' : 'From TMDb, Trakt and AniList.'}</p>
         {/if}
     {:else if tab === 'Friends'}
         {#if !reviews}

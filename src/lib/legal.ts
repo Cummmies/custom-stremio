@@ -10,4 +10,4 @@ export const OPERATOR = 'Custom Stremio';
 /** Where people write for questions, their data, or to have it deleted. Placeholder. */
 export const CONTACT = 'support@customstremio.example';
 /** When this version of the policy and terms took effect. */
-export const EFFECTIVE = 'October 10, 2026';
+export const EFFECTIVE = 'October 12, 2026';

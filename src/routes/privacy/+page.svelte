@@ -22,7 +22,12 @@
     <h2>What’s kept</h2>
     <ul>
         <li><strong>Your activity:</strong> what you start and finish watching, the episode, and when.</li>
-        <li><strong>What you add:</strong> statuses (Watching, Plan to Watch and so on), watches, scores, reviews, lists and their names.</li>
+        <li><strong>What you add:</strong> statuses (Watching, Plan to Watch and so on), watches, scores, reviews (and whether you marked one as a spoiler), lists and their names.</li>
+        <li>
+            <strong>Your profile:</strong> your name, username, bio, picture, banner and favorites, and an optional real name. Your past
+            usernames are kept for 30 days, so links to them still reach you.
+        </li>
+        <li><strong>People:</strong> your friends and close friends, requests, who you’ve blocked or muted, and titles you recommend to friends.</li>
         <li><strong>Your devices:</strong> each signed-in device’s name and kind (for example, “iPhone”), so you can see and sign them out.</li>
         <li><strong>Preferences:</strong> such as subtitled or dubbed anime, kept with your account. Other settings stay on your device, or in your Stremio account.</li>
         <li>
@@ -39,8 +44,19 @@
 
     <h2>Who else sees it</h2>
     <ul>
-        <li><strong>Friends:</strong> your scores and reviews show to friends you’ve added, as your profile’s visibility allows.</li>
-        <li><strong>Shared lists:</strong> anyone with a list’s link can see its name and titles, until you stop sharing it. Never your scores or history.</li>
+        <li>
+            <strong>Your profile, scores and reviews</strong> show as you choose in Your Profile: to everyone using the app (Everyone),
+            to your friends (Friends), or to no one (Only Me); and whether scores, reviews and watch dates are included. With Everyone,
+            your reviews also show on title pages to people who aren’t your friends. Your real name shows only to close friends.
+        </li>
+        <li>
+            <strong>Links you share:</strong> anyone with a link to one of your lists or reviews can see it, until you stop sharing it. A
+            friend you recommend a title to sees the recommendation and its note.
+        </li>
+        <li>
+            <strong>Reports:</strong> if someone reports your review or profile, the app’s admins see what was reported and the reason.
+            They don’t tell you who reported it. An admin can hide a review’s text; you’re told when that happens.
+        </li>
         <li>
             <strong>Stremio</strong> keeps your Stremio library and addons, as its own privacy policy says. The addons you install are run by
             others: they see what you ask them for, such as a title’s streams.
@@ -53,8 +69,10 @@
 
     <h2>How long, and removing it</h2>
     <p>
-        What you add is kept while you use the app. You can download all of it, or add a backup, in Settings → Data. To have your data
-        deleted, write to <strong>{CONTACT}</strong> from your Stremio account’s email address, and it will be removed from the server.
+        What you add is kept while you use the app. You can download all of it (a full backup, with your profile and friends), or bring a
+        backup back, in Settings → Data. To protect against loss, the server keeps daily backup copies for a short while; a deletion
+        reaches those as they’re replaced. To have your data deleted, write to <strong>{CONTACT}</strong> from your Stremio account’s
+        email address, and it will be removed from the server. Signing a device out (Settings → Devices) removes its sign-in.
     </p>
 
     <h2>Children</h2>

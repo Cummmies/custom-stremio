@@ -70,7 +70,7 @@
 
     function open(n: AppNotification) {
         notify.open(n);
-        if (n.stremio_id) onnavigate?.();
+        if (n.stremio_id || n.link) onnavigate?.();
     }
     function more(e: MouseEvent) {
         menu.toggleFor(
@@ -118,7 +118,7 @@
                         <button class="row" onclick={() => open(n)}>
                             <span class="dot" aria-hidden="true"></span>
                             <span class="art">
-                                {#if n.poster}<img src={n.poster} alt="" loading="lazy" width="40" height="60" />{:else}<Icon name="film" size={18} />{/if}
+                                {#if n.poster}<img src={n.poster} alt="" loading="lazy" width="40" height="60" />{:else}<Icon name={n.kind === 'friend' ? 'users' : n.kind === 'report' ? 'info' : 'film'} size={18} />{/if}
                             </span>
                             <span class="body">
                                 <span class="top">

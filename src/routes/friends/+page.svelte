@@ -6,7 +6,7 @@
     // rows, as Settings. Actions are lib/friendActions.ts, as on profiles.
     import { tracker } from '$lib/tracker.svelte';
     import { app } from '$lib/app.svelte';
-    import { lb, type FriendCard, type FriendsOverview } from '$lib/tracker/api';
+    import { lb, type FoundPerson, type FriendCard, type FriendsOverview } from '$lib/tracker/api';
     import * as friendship from '$lib/friendActions';
     import Avatar from '$lib/components/Avatar.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -57,6 +57,30 @@
         );
     }
 
+    // Search as you type (3+ characters): people by username or name, each
+    // with what you can do (Add, Accept), as their profile has it.
+    let found = $state<FoundPerson[] | null>(null);
+    let searchTimer: ReturnType<typeof setTimeout> | undefined;
+    $effect(() => {
+        const q = handle.trim().replace(/^@/, '');
+        clearTimeout(searchTimer);
+        if (q.length < 3 || !tracker.ready) {
+            found = null;
+            return;
+        }
+        searchTimer = setTimeout(async () => {
+            const res = await lb.searchUsers(q);
+            if (handle.trim().replace(/^@/, '') === q) found = res?.results ?? [];
+        }, 300);
+        return () => clearTimeout(searchTimer);
+    });
+    /** After acting on a search result: the list and the search say what changed. */
+    const refresh: friendship.Done = (text) => {
+        done(text);
+        const q = handle.trim().replace(/^@/, '');
+        if (q.length >= 3) lb.searchUsers(q).then((res) => res && (found = res.results));
+    };
+
     const person = (f: FriendCard) => ({ user_id: f.user_id, name: f.name || f.handle, handle: f.handle });
     const href = (f: FriendCard) => `/u/${f.handle.replace(/^@/, '')}`;
     const anchor = (e: MouseEvent) => e.currentTarget as HTMLElement;
@@ -86,11 +110,38 @@
         <form class="add" onsubmit={add}>
             <label class="field">
                 <span aria-hidden="true">@</span>
-                <input bind:value={handle} placeholder="username" aria-label="Their username" autocomplete="off" spellcheck="false" />
+                <input bind:value={handle} placeholder="username or name" aria-label="Their username or name" autocomplete="off" spellcheck="false" />
             </label>
             <button class="pill primary" type="submit" disabled={busy || !handle.trim()}><Icon name="plus" size={14} /> Add Friend</button>
         </form>
         <div class="phone-row"><PhoneTypeButton label="Their username" value={handle} max={30} onresult={(text) => (handle = text.replace(/^@/, '').trim())} /></div>
+        {#if found}
+            <section class="results" aria-label="People found">
+                {#if found.length}
+                    <div class="group">
+                        {#each found as f (f.user_id)}
+                            <div class="row">
+                                {@render who(f)}
+                                <span class="buttons">
+                                    {#if f.relationship === 'friends'}
+                                        <span class="state">Friends</span>
+                                    {:else if f.relationship === 'outgoing'}
+                                        <span class="state">Requested</span>
+                                    {:else if f.relationship === 'incoming' && f.friendship_id}
+                                        {@const id = f.friendship_id}
+                                        <button class="pill primary" disabled={busy} onclick={() => act(() => friendship.accept(id, refresh))}>Accept</button>
+                                    {:else}
+                                        <button class="pill primary" disabled={busy} onclick={() => act(() => friendship.addFriend(f.handle, refresh))}><Icon name="plus" size={14} /> Add</button>
+                                    {/if}
+                                </span>
+                            </div>
+                        {/each}
+                    </div>
+                {:else}
+                    <p class="empty">No one by that name or username.</p>
+                {/if}
+            </section>
+        {/if}
         {#if myCodeUrl}
             <p class="code-line">Or have them scan your code with their phone. <button class="text-link" onclick={() => (showingCode = true)}>Show My Code</button></p>
         {/if}
@@ -349,6 +400,9 @@
     }
     .phone-row {
         margin-top: 10px;
+    }
+    .results {
+        margin-top: 12px;
     }
     .code-line {
         margin: 10px 4px 0;

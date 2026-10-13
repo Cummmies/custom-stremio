@@ -29,8 +29,10 @@
 
     <h2>What you add</h2>
     <p>
-        Your reviews, scores and lists stay yours. You let the app keep them and show them as you choose: to friends, or to anyone with a list’s
-        link. Don’t post anything unlawful, hateful or someone else’s private information.
+        Your reviews, scores, lists and profile stay yours. You let the app keep them and show them as you choose: to everyone, to friends, or
+        to anyone with a link you share. Don’t post anything unlawful, hateful or harassing, or someone else’s private information, and don’t
+        pretend to be someone else. Mark reviews that give a story away as spoilers. People can report what breaks these rules, and it may be
+        hidden.
     </p>
 
     <h2>Fair use</h2>

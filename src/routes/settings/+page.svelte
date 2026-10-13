@@ -977,6 +977,10 @@
                         <div class="title">Replies to Your Reviews</div>
                         <Toggle label="Replies to Your Reviews" checked={notify.prefs.replies} onchange={(v) => notify.setPrefs({ replies: v })} />
                     </div>
+                    <div class="row">
+                        <div class="title">Friend Requests</div>
+                        <Toggle label="Friend Requests" checked={notify.prefs.friends !== false} onchange={(v) => notify.setPrefs({ friends: v })} />
+                    </div>
                 </div>
             </section>
         {/if}

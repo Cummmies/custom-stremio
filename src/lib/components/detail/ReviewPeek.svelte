@@ -10,7 +10,7 @@
 
     const SOURCES: Record<string, string> = { tmdb: 'TMDb', trakt: 'Trakt', anilist: 'AniList' };
     const items = $derived([
-        ...reviews.friends
+        ...[...reviews.friends, ...(reviews.community ?? [])]
             .filter((f) => f.review)
             .map((f) => ({
                 key: `f${f.handle}`,
