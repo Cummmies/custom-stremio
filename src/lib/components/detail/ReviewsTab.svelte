@@ -257,8 +257,8 @@
                                 <li>
                                     <button class="watch" onclick={() => oneditwatch(w.id)} title="Edit Watch">
                                         <span>{day(w.date) ?? 'Date unknown'}</span>
-                                        <span class="kind">{w.rewatch ? 'Rewatch' : 'Watch'}</span>
-                                        <strong>{w.rating != null ? score(w.rating) : '—'}</strong>
+                                        <span class="kind">{w.rewatch ? 'Rewatched' : 'Watched'}</span>
+                                        {#if w.rating != null}<strong>{score(w.rating)}</strong>{:else}<span class="unrated">No score</span>{/if}
                                     </button>
                                 </li>
                             {/each}
@@ -285,7 +285,7 @@
                     <div class="actions"><button class="btn" onclick={() => onrate()}>Edit</button></div>
                 {:else}
                     <p class="name">You haven’t rated {name} yet.</p>
-                    <p class="body muted">Your friends see your score and review, as your sharing settings allow.</p>
+                    <p class="body muted">Who sees your score and review follows your profile’s privacy: everyone, friends, or only you.</p>
                     <div class="actions"><button class="btn primary" onclick={() => onrate()}>Rate</button></div>
                 {/if}
             </article>
@@ -298,8 +298,8 @@
                             <li>
                                 <button class="watch" onclick={() => oneditwatch(w.id)} title="Edit Watch">
                                     <span>{day(w.date) ?? 'Date unknown'}</span>
-                                    <span class="kind">{w.rewatch ? 'Rewatch' : 'Watch'}</span>
-                                    <strong>{w.rating != null ? score(w.rating) : '—'}</strong>
+                                    <span class="kind">{w.rewatch ? 'Rewatched' : 'Watched'}</span>
+                                    {#if w.rating != null}<strong>{score(w.rating)}</strong>{:else}<span class="unrated">No score</span>{/if}
                                 </button>
                             </li>
                         {/each}
@@ -311,6 +311,10 @@
 </div>
 
 <style>
+    .unrated {
+        color: var(--label-3);
+        font-size: var(--text-caption);
+    }
     /* Scrolls inside the column, like the episode list. */
     .reviews {
         flex: 1;
