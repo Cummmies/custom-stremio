@@ -2,6 +2,7 @@
     // Your tracker review, written with a score. Grows with what you write;
     // Ctrl+Enter saves. On a TV, Type on Phone writes it from your phone.
     import PhoneTypeButton from './PhoneTypeButton.svelte';
+    import CharCount from './CharCount.svelte';
     let {
         value = $bindable(''),
         disabled = false,
@@ -20,6 +21,7 @@
 </script>
 
 <textarea bind:value {disabled} {onkeydown} rows="2" maxlength={MAX} placeholder="Add a review" aria-label="Review"></textarea>
+<CharCount {value} max={MAX} />
 <div class="phone-row"><PhoneTypeButton label="Write a review" {value} multiline max={MAX} onresult={(text) => (value = text)} /></div>
 
 <style>

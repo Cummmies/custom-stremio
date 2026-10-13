@@ -8,6 +8,7 @@
     import { score } from '$lib/tracker/api';
     import type { EpisodeLog } from '$lib/tracker/api';
     import { isTV } from '$lib/platform';
+    import { playerPrefs } from '$lib/player/prefs.svelte';
 
     let {
         videos,
@@ -111,6 +112,7 @@
                         <img
                             src={ep.thumbnail}
                             alt=""
+                            class:blurred={playerPrefs.blurUnwatchedStills && !ep.watched}
                             loading="lazy"
                             decoding="async"
                             width="176"
@@ -273,6 +275,11 @@
         height: 100%;
         object-fit: cover;
         display: block;
+    }
+    /* Not watched yet: the picture can give things away (Settings > Spoilers). */
+    .thumb img.blurred {
+        filter: blur(10px);
+        transform: scale(1.12);
     }
     .play-hint {
         position: absolute;

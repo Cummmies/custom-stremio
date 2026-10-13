@@ -134,7 +134,7 @@ const POLL_MS = 2000;
 /** Checked again this often while unreachable, and on focus at most this often. */
 const RETRY_MS = 60_000;
 
-export type TrackerUser = { name: string; handle: string | null; avatar_url: string | null };
+export type TrackerUser = { name: string; handle: string | null; avatar_url: string | null; is_admin?: boolean };
 type Saved = {
     server: string;
     /** null once the tracker removed this device (the server is kept for reconnecting). */
@@ -240,7 +240,8 @@ export function normalizeServer(input: string): string | null {
     }
 }
 
-type Result<T> = { ok: true; data: T } | { ok: false; status: number | null };
+/** detail: the tracker's own words for a refusal, when it gave them. */
+type Result<T> = { ok: true; data: T } | { ok: false; status: number | null; detail?: string };
 
 /** `url` with its scheme, host and port taken from `server` (the path kept). */
 function onServer(url: string, server: string): string | null {
@@ -304,7 +305,14 @@ async function send<T>(server: string, path: string, opts: CallOpts = {}): Promi
             body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
             signal: ctrl.signal,
         });
-        if (!res.ok) return { ok: false, status: res.status };
+        if (!res.ok) {
+            let detail: string | undefined;
+            try {
+                const body = await res.json();
+                if (typeof body?.detail === 'string') detail = body.detail;
+            } catch {}
+            return { ok: false, status: res.status, detail };
+        }
         return { ok: true, data: (await res.json()) as T };
     } catch {
         return { ok: false, status: null };
@@ -583,8 +591,8 @@ class Tracker {
         const res = await call<{ user: TrackerUser }>(saved.server, '/me', { token: saved.token });
         if (uid !== this.#uid || saved !== this.saved) return; // switched meanwhile
         if (res.ok) {
-            const { name, handle, avatar_url } = res.data.user;
-            this.#save({ ...saved, user: { name, handle, avatar_url } });
+            const { name, handle, avatar_url, is_admin } = res.data.user;
+            this.#save({ ...saved, user: { name, handle, avatar_url, is_admin: !!is_admin } });
             this.#setStatus('ok');
             // The account's connection, for its other devices. If the account has
             // another, this device moves to it; nothing more on this token meanwhile.
@@ -703,10 +711,10 @@ class Tracker {
         return res?.ok ? res.data : null;
     }
 
-    /** Like request, saying why it failed: the HTTP status (409: taken, say), or null when it couldn't be reached. */
-    async requestOrStatus<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number } = {}): Promise<{ data: T } | { status: number | null }> {
+    /** Like request, saying why it failed: the HTTP status (409: taken, say) and the tracker's words, or null when it couldn't be reached. */
+    async requestOrStatus<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number } = {}): Promise<{ data: T } | { status: number | null; detail?: string }> {
         const res = await this.#send<T>(path, opts);
-        return res?.ok ? { data: res.data } : { status: res ? res.status : null };
+        return res?.ok ? { data: res.data } : { status: res ? res.status : null, detail: res && !res.ok ? res.detail : undefined };
     }
 
     /** Like request, with the failure's HTTP status; null when not connected or switched meanwhile. */

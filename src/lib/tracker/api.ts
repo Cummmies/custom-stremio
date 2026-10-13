@@ -6,7 +6,8 @@ import { tracker, type EventResult, type ProgressUndo, type WatchEvent } from '$
 
 export type Status = 'plan_to_watch' | 'watching' | 'completed' | 'dropped';
 
-export type Watch = { id: number; date: string | null; rating: number | null; review: string | null; rewatch: boolean };
+/** spoiler: you marked the review as giving things away; edited: changed after it was written. */
+export type Watch = { id: number; date: string | null; rating: number | null; review: string | null; rewatch: boolean; spoiler?: boolean; edited?: boolean };
 
 export type FriendScore = {
     friend_name: string;
@@ -78,7 +79,19 @@ export type ListDetail = {
 };
 
 export type AggregateReview = { author: string; source: string; body: string; rating: number | null; date: string | null; url: string | null };
-export type FriendReview = { name: string; handle: string; avatar: string | null; rating: number | null; review: string | null; date: string | null };
+/** log_id/user_id: to report the review or mute them. */
+export type FriendReview = {
+    log_id?: number;
+    user_id?: number;
+    name: string;
+    handle: string;
+    avatar: string | null;
+    rating: number | null;
+    review: string | null;
+    spoiler?: boolean;
+    edited?: boolean;
+    date: string | null;
+};
 export type Reviews = { aggregate: AggregateReview[]; friends: FriendReview[] };
 
 export type RelatedItem = {
@@ -141,6 +154,10 @@ export type Profile = {
     friendship_id?: number | null;
     is_close?: boolean;
     blocked?: boolean;
+    /** Someone else's: you muted their reviews. */
+    muted?: boolean;
+    /** Yours: still the user_a1b2c3 a Stremio sign-in was given (the app asks for one). */
+    handle_needed?: boolean;
     friends?: FriendCard[];
     friend_count?: number;
     /** Yours: friend requests waiting for an answer. */
@@ -174,7 +191,21 @@ export type ProfileFields = Partial<{
 }>;
 
 /** A watch to log or change: only what's set is sent on an edit. */
-export type WatchFields = { rating?: number | null; review?: string; watch_date?: string | null };
+export type WatchFields = { rating?: number | null; review?: string; watch_date?: string | null; spoiler?: boolean };
+
+/** A signed-in device (Settings > Account); `this`: the one you're using. */
+export type SignedInDevice = { id: number; name: string; platform: string; last_used: string | null; this: boolean };
+
+/** An open report, for an admin (the Reports page). */
+export type Report = {
+    id: number;
+    kind: 'review' | 'profile';
+    reason: string;
+    created_at: string;
+    reporter: string | null;
+    user: { id: number | null; handle: string | null; name: string; bio: string };
+    review: { log_id: number; title: string | null; text: string; rating: number | null; hidden: boolean } | null;
+};
 
 const enc = encodeURIComponent;
 
@@ -214,6 +245,19 @@ export const lb = {
     setCloseFriend: (userId: number, close: boolean) => tracker.request<{ close: boolean }>(`/friends/${userId}/close`, { method: 'PUT', body: { close } }),
     block: (userId: number) => tracker.request<{ status: string }>(`/blocks/${userId}`, { method: 'POST' }),
     unblock: (userId: number) => tracker.request<{ status: string }>(`/blocks/${userId}`, { method: 'DELETE' }),
+    /** Their reviews hidden from you (they aren't told; nothing else changes). */
+    mute: (userId: number) => tracker.request<{ status: string }>(`/mutes/${userId}`, { method: 'PUT' }),
+    unmute: (userId: number) => tracker.request<{ status: string }>(`/mutes/${userId}`, { method: 'DELETE' }),
+    /** A review or profile, for an admin to look at. */
+    report: (body: { kind: 'review' | 'profile'; log_id?: number; user_id?: number; reason?: string }) =>
+        tracker.request<{ status: string }>('/reports', { method: 'POST', body }),
+    /** Whether a username is free, for the username prompt. */
+    handleAvailable: (handle: string) => tracker.request<{ available: boolean; reason: string | null }>(`/handles/${enc(handle)}`),
+    devices: () => tracker.request<{ devices: SignedInDevice[] }>('/devices'),
+    signOutDevice: (id: number) => tracker.request<{ status: string }>(`/devices/${id}`, { method: 'DELETE' }),
+    adminReports: () => tracker.request<{ reports: Report[] }>('/admin/reports'),
+    resolveReport: (id: number, action: 'dismiss' | 'hide_review') =>
+        tracker.request<{ reports: Report[] }>(`/admin/reports/${id}`, { method: 'POST', body: { action } }),
     /** What you're watching and what's next, and what you've finished (for Continue Watching). */
     continueWatching: () => tracker.request<import('$lib/continueWatching').TrackerContinue>('/continue'),
     /** A show's episodes you've marked watched or scored. */

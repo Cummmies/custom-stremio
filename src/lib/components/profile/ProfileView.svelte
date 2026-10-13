@@ -22,6 +22,7 @@
     import Icon from '$lib/components/Icon.svelte';
     import Segmented from '$lib/components/Segmented.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
+    import CharCount from '$lib/components/CharCount.svelte';
     import ProfileMedia from './ProfileMedia.svelte';
     import ListCard from '$lib/components/ListCard.svelte';
     import FavoritePicker from './FavoritePicker.svelte';
@@ -48,7 +49,10 @@
 
     const SLOTS = 5;
     const NAME_MAX = 40;
-    const BIO_MAX = 300;
+    const BIO_MAX = 250;
+    /** A bio's line breaks, at most (no walls of empty lines). */
+    const BIO_LINE_BREAKS = 4;
+    const REAL_NAME_MAX = 80;
     const canEdit = $derived(profile.is_owner && !isTV && !!onsave);
 
     /** No banner: the first favorite's (or recent watch's) backdrop, so the top is never a blank band. */
@@ -111,7 +115,8 @@
     const initial = $derived((shownName || profile.handle.replace(/^@/, '') || '?').charAt(0).toUpperCase());
 
     const handleValid = $derived(/^[a-z0-9_]{3,24}$/.test(handle));
-    const valid = $derived(name.trim().length > 0 && name.trim().length <= NAME_MAX && handleValid && bio.length <= BIO_MAX);
+    const bioBreaks = $derived((bio.trim().match(/\n/g) ?? []).length);
+    const valid = $derived(name.trim().length > 0 && name.trim().length <= NAME_MAX && handleValid && bio.length <= BIO_MAX && bioBreaks <= BIO_LINE_BREAKS);
 
     async function save() {
         if (!valid || busy || !onsave) return;
@@ -314,7 +319,7 @@
                     {#if profile.blocked}
                         <button class="glass-pill" disabled={acting} onclick={() => act(() => friendship.unblock(person, done))}>Unblock</button>
                     {:else if profile.relationship === 'friends'}
-                        <button class="glass-pill" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.friendMenu(anchor(e), { ...person, close: profile.is_close }, done)}>
+                        <button class="glass-pill" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.friendMenu(anchor(e), { ...person, close: profile.is_close, muted: profile.muted }, done)}>
                             <Icon name={profile.is_close ? 'star' : 'check'} size={14} /> {profile.is_close ? 'Close Friend' : 'Friends'} <Icon name="chevronDown" size={14} />
                         </button>
                     {:else if profile.relationship === 'incoming' && profile.friendship_id}
@@ -332,7 +337,7 @@
                         </button>
                     {/if}
                     {#if !profile.blocked && profile.relationship !== 'friends'}
-                        <button class="glass-pill icon-only" aria-label="More" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.strangerMenu(anchor(e), person, done)}>
+                        <button class="glass-pill icon-only" aria-label="More" aria-haspopup="menu" aria-expanded="false" onclick={(e) => friendship.strangerMenu(anchor(e), { ...person, muted: profile.muted }, done)}>
                             <Icon name="more" size={16} />
                         </button>
                     {/if}
@@ -357,11 +362,17 @@
                     <div class="group">
                         <label class="row">
                             <span class="label">Name</span>
-                            <input bind:value={name} maxlength={NAME_MAX} placeholder="Your name" autocomplete="nickname" />
+                            <span class="field">
+                                <input bind:value={name} maxlength={NAME_MAX} placeholder="Your name" autocomplete="nickname" />
+                                <CharCount value={name} max={NAME_MAX} />
+                            </span>
                         </label>
                         <label class="row">
                             <span class="label">Real Name</span>
-                            <input bind:value={realName} maxlength="80" placeholder="Optional" autocomplete="name" />
+                            <span class="field">
+                                <input bind:value={realName} maxlength={REAL_NAME_MAX} placeholder="Optional" autocomplete="name" />
+                                <CharCount value={realName} max={REAL_NAME_MAX} />
+                            </span>
                         </label>
                         <label class="row">
                             <span class="label">Username</span>
@@ -379,7 +390,10 @@
                         </label>
                         <label class="row bio-row">
                             <span class="label">Bio</span>
-                            <textarea bind:value={bio} maxlength={BIO_MAX} rows="3" placeholder="A line about you"></textarea>
+                            <span class="field">
+                                <textarea bind:value={bio} maxlength={BIO_MAX} rows="3" placeholder="A line about you"></textarea>
+                                <CharCount value={bio} max={BIO_MAX} lines={bioBreaks} maxLines={BIO_LINE_BREAKS} />
+                            </span>
                         </label>
                     </div>
                     {#if handle && !handleValid}
@@ -522,6 +536,7 @@
                                     <a class="friend" href={`/u/${f.handle.replace(/^@/, '')}`}>
                                         <Avatar profile={{ name: f.name, color: '#6d4af0', avatar: f.avatar ?? undefined }} fallbackName={f.name} size={FRIEND_W - 8} />
                                         <span class="friend-name">{f.name}</span>
+                                        <span class="friend-handle">@{f.handle.replace(/^@/, '')}</span>
                                     </a>
                                 {/each}
                             </div>
@@ -1090,6 +1105,23 @@
         font-weight: 600;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    /* Names can be the same; the username tells people apart. */
+    .friend-handle {
+        max-width: 100%;
+        margin-top: -6px;
+        overflow: hidden;
+        color: var(--label-2);
+        font-size: var(--text-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* An edit field with its counter under it. */
+    .field {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
     }
     .friend:hover .friend-name {
         text-decoration: underline;

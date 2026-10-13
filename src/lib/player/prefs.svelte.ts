@@ -32,6 +32,10 @@ export type Prefs = {
     hideHdrOnSdr: boolean;
     /** How subtitles look (subtitleStyle.ts). */
     subStyle: SubStyle;
+    /** Reviews their writers marked as spoilers stay blurred until tapped. */
+    blurSpoilers: boolean;
+    /** Episodes you haven't watched show their picture blurred (it can give things away). */
+    blurUnwatchedStills: boolean;
 };
 
 const KEY = 'playerPrefs';
@@ -51,6 +55,8 @@ const defaults: Prefs = {
     discordPresence: false,
     hideHdrOnSdr: true,
     subStyle: DEFAULT_SUB_STYLE,
+    blurSpoilers: true,
+    blurUnwatchedStills: true,
 };
 
 function read(key: string): Partial<Prefs> | null {
@@ -180,6 +186,18 @@ class PlayerPrefs {
     set subStyle(v: SubStyle) {
         this.#save({ subStyle: normalizeSubStyle(v) });
     }
+    get blurSpoilers() {
+        return this.#p.blurSpoilers;
+    }
+    set blurSpoilers(v: boolean) {
+        this.#save({ blurSpoilers: v });
+    }
+    get blurUnwatchedStills() {
+        return this.#p.blurUnwatchedStills;
+    }
+    set blurUnwatchedStills(v: boolean) {
+        this.#save({ blurUnwatchedStills: v });
+    }
     get discordPresence() {
         return this.#p.discordPresence;
     }
@@ -229,7 +247,7 @@ export const playerPrefs = new PlayerPrefs();
  * iPhone…) and only reach devices of that kind, since they're about its
  * screen, speakers and window.
  */
-export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence', 'subStyle'] as const;
+export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence', 'subStyle', 'blurSpoilers', 'blurUnwatchedStills'] as const;
 export type SyncedPrefs = Pick<Prefs, (typeof SYNCED_PREFS)[number]>;
 export const DEVICE_PREFS = ['upscaler', 'hdrPassthrough', 'audioPassthrough', 'volume', 'pauseOnMinimize', 'pauseOnLostFocus', 'hideHdrOnSdr'] as const;
 export type DevicePrefs = Pick<Prefs, (typeof DEVICE_PREFS)[number]>;

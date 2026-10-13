@@ -3,6 +3,7 @@
     // reviews, then the ones the tracker gathers, filling the column's remaining
     // height: as many as fit, fading out at the bottom. See All opens the
     // Reviews tab. Not shown until there's at least one.
+    import { playerPrefs } from '$lib/player/prefs.svelte';
     import { day, score, type Reviews } from '$lib/tracker/api';
 
     let { reviews, onseeall }: { reviews: Reviews; onseeall: () => void } = $props();
@@ -11,13 +12,22 @@
     const items = $derived([
         ...reviews.friends
             .filter((f) => f.review)
-            .map((f) => ({ key: `f${f.handle}`, name: f.name, score: f.rating, date: day(f.date), body: f.review! })),
+            .map((f) => ({
+                key: `f${f.handle}`,
+                name: f.name,
+                score: f.rating,
+                date: [f.handle ? `@${f.handle.replace(/^@/, '')}` : null, day(f.date)].filter(Boolean).join(' · '),
+                body: f.review!,
+                // Read in the Reviews tab, where it can be shown.
+                spoiler: !!f.spoiler && playerPrefs.blurSpoilers,
+            })),
         ...reviews.aggregate.slice(0, 8).map((r, i) => ({
             key: `a${i}`,
             name: r.author,
             score: r.rating,
             date: [SOURCES[r.source?.toLowerCase()] ?? r.source, day(r.date)].filter(Boolean).join(' · '),
             body: r.body,
+            spoiler: false,
         })),
     ]);
 </script>
@@ -37,7 +47,7 @@
                         {#if f.score != null}<span class="score">{score(f.score)}</span>{/if}
                         {#if f.date}<span class="date">{f.date}</span>{/if}
                     </p>
-                    <p class="body">{f.body}</p>
+                    {#if f.spoiler}<p class="body spoiler">Contains spoilers.</p>{:else}<p class="body">{f.body}</p>{/if}
                 </li>
             {/each}
         </ul>
@@ -45,6 +55,10 @@
 {/if}
 
 <style>
+    .body.spoiler {
+        color: var(--label-2);
+        font-style: italic;
+    }
     .card {
         flex: 1 0 200px;
         display: flex;

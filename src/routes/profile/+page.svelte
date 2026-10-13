@@ -46,11 +46,13 @@
         const res = await lb.updateProfile(fields);
         busy = false;
         if (!('data' in res)) {
+            // The tracker says what's wrong ("That username is taken.", "A bio can
+            // have up to 4 line breaks.", once a week...); a picture too big says 413.
             error =
-                res.status === 409
-                    ? 'That handle is taken.'
-                    : res.status === 400 || res.status === 413
-                      ? 'That didn’t work: check the picture and fields.'
+                res.status === 413
+                    ? 'That picture is too big (up to 10 MB).'
+                    : res.status !== null && res.status < 500 && res.detail
+                      ? res.detail
                       : 'Couldn’t save. Try again in a moment.';
             return false;
         }

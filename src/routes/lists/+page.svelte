@@ -13,6 +13,7 @@
     import { lb, STATUS_SHORT, score, type LibraryItem, type ListDetail, type ListInfo } from '$lib/tracker/api';
     import PosterCard from '$lib/components/PosterCard.svelte';
     import ListCard from '$lib/components/ListCard.svelte';
+    import CharCount from '$lib/components/CharCount.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import NewListDialog from '$lib/components/NewListDialog.svelte';
     import FavoritePicker from '$lib/components/profile/FavoritePicker.svelte';
@@ -240,7 +241,9 @@
             {#if editing}
                 <div class="fields">
                     <input class="name-field" bind:value={name} maxlength="100" placeholder="List name" aria-label="List name" />
+                    <CharCount value={name} max={100} />
                     <input class="note-field" bind:value={description} maxlength="300" placeholder="A note about this list (optional)" aria-label="Note" />
+                    <CharCount value={description} max={300} />
                 </div>
                 <div class="actions">
                     <button class="pill" onclick={() => (editing = false)}>Cancel</button>

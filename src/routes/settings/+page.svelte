@@ -37,7 +37,8 @@
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
     import { tracker } from '$lib/tracker.svelte';
-    import { lb, today, type BackupConflict } from '$lib/tracker/api';
+    import { day, lb, today, type BackupConflict, type SignedInDevice } from '$lib/tracker/api';
+    import { menu } from '$lib/menu.svelte';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
     import type { IconName } from '$lib/components/Icon.svelte';
@@ -316,6 +317,33 @@
         hotkeyError = problem ? { action: action ?? null, text: problem } : null;
     }
 
+    // --- Devices: where you're signed in; sign out one you've lost. ---
+    const PLATFORM_NAMES: Record<string, string> = { desktop: 'PC', windows: 'PC', ios: 'iPhone', tv: 'TV', web: 'Web' };
+    let devicesList = $state<SignedInDevice[] | null>(null);
+    async function loadDevices() {
+        devicesList = (await lb.devices())?.devices ?? [];
+    }
+    $effect(() => {
+        if (app.user && tracker.ready && devicesList === null) void loadDevices();
+    });
+    function signOutDevice(e: MouseEvent, d: SignedInDevice) {
+        const name = d.name || PLATFORM_NAMES[d.platform] || 'this device';
+        menu.toggleFor(
+            e.currentTarget as HTMLElement,
+            [
+                { header: `Sign out ${name}?`, detail: 'It stops showing your history, ratings and friends until it signs in again.' },
+                {
+                    label: 'Sign Out',
+                    destructive: true,
+                    onselect: async () => {
+                        if (await lb.signOutDevice(d.id)) devicesList = (devicesList ?? []).filter((x) => x.id !== d.id);
+                    },
+                },
+            ],
+            'end'
+        );
+    }
+
     // --- PC and TV: a sidebar of sections, one shown at a time (as macOS's
     // System Settings and tvOS's Settings). The sidebar is read from the
     // sections showing on this device, so each keeps its own rules. On a TV,
@@ -327,6 +355,8 @@
         'Subtitle Style': 'captions',
         Video: 'film',
         'Easy Mode': 'star',
+        Spoilers: 'eye',
+        Devices: 'phone',
         Integrations: 'puzzle',
         Anime: 'tv',
         Notifications: 'bell',
@@ -553,6 +583,15 @@
                     </div>
                     <Icon name="chevronRight" size={16} />
                 </a>
+                {#if tracker.saved?.user?.is_admin}
+                    <a class="row link" href="/reports">
+                        <div>
+                            <div class="title">Reports</div>
+                            <div class="sub">Reviews and profiles people reported.</div>
+                        </div>
+                        <Icon name="chevronRight" size={16} />
+                    </a>
+                {/if}
             {/if}
             {#if app.user}
                 <div class="row">
@@ -573,6 +612,29 @@
             {/if}
         </div>
     </section>
+
+    {#if app.user && tracker.ready}
+        <section>
+            <h2>Devices</h2>
+            <div class="group">
+                {#if devicesList === null}
+                    <div class="row"><div class="sub">Loading…</div></div>
+                {:else}
+                    {#each devicesList as d (d.id)}
+                        <div class="row">
+                            <div>
+                                <div class="title">{d.name || PLATFORM_NAMES[d.platform] || 'A device'}</div>
+                                <div class="sub">{d.this ? 'This device' : `${PLATFORM_NAMES[d.platform] ?? 'Device'}${d.last_used ? ` · last used ${day(d.last_used)}` : ''}`}</div>
+                            </div>
+                            {#if !d.this}
+                                <button class="btn" onclick={(e) => signOutDevice(e, d)}>Sign Out…</button>
+                            {/if}
+                        </div>
+                    {/each}
+                {/if}
+            </div>
+        </section>
+    {/if}
 
     {#if settings}
         <section>
@@ -837,6 +899,26 @@
                 </div>
             </section>
         {/if}
+
+        <section>
+            <h2>Spoilers</h2>
+            <div class="group">
+                <div class="row">
+                    <div>
+                        <div class="title">Blur Spoilers in Reviews</div>
+                        <div class="sub">Reviews their writers marked as spoilers stay blurred until you tap them.</div>
+                    </div>
+                    <Toggle label="Blur Spoilers in Reviews" checked={playerPrefs.blurSpoilers} onchange={(v) => (playerPrefs.blurSpoilers = v)} />
+                </div>
+                <div class="row">
+                    <div>
+                        <div class="title">Blur Episodes You Haven’t Watched</div>
+                        <div class="sub">An episode’s picture can give things away.</div>
+                    </div>
+                    <Toggle label="Blur Episodes You Haven’t Watched" checked={playerPrefs.blurUnwatchedStills} onchange={(v) => (playerPrefs.blurUnwatchedStills = v)} />
+                </div>
+            </div>
+        </section>
 
         {#if app.user && tracker.ready && animeTrack}
             <section>

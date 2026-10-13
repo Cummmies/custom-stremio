@@ -6,7 +6,11 @@
     // here on narrow ones.
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import Segmented from '$lib/components/Segmented.svelte';
+    import Icon from '$lib/components/Icon.svelte';
     import { isTV } from '$lib/platform';
+    import { playerPrefs } from '$lib/player/prefs.svelte';
+    import { undo } from '$lib/undo.svelte';
+    import * as friendship from '$lib/friendActions';
     import { day, score, type Reviews, type Watch } from '$lib/tracker/api';
 
     let {
@@ -34,8 +38,23 @@
         oneditwatch: (id: number) => void;
     } = $props();
 
-    /** `profile`: a friend's, opened from their name. */
-    type Card = { key: string; author: string; avatar: string | null; date: string | null; sort: string; score: number | null; body: string | null; source?: string; profile?: string };
+    /** `profile`: a friend's, opened from their name; handle, logId, userId: theirs, for Report and Mute. */
+    type Card = {
+        key: string;
+        author: string;
+        avatar: string | null;
+        date: string | null;
+        sort: string;
+        score: number | null;
+        body: string | null;
+        source?: string;
+        profile?: string;
+        handle?: string;
+        spoiler?: boolean;
+        edited?: boolean;
+        logId?: number;
+        userId?: number;
+    };
 
     const SOURCES: Record<string, string> = { tmdb: 'TMDb', trakt: 'Trakt', anilist: 'AniList' };
     const aggregate = $derived<Card[]>(
@@ -50,8 +69,10 @@
             source: SOURCES[r.source?.toLowerCase()] ?? r.source,
         }))
     );
+    /** People muted from here: gone at once (the tracker leaves them out from now on). */
+    let mutedHere = $state<Set<number>>(new Set());
     const friendCards = $derived<Card[]>(
-        (reviews?.friends ?? []).map((f) => ({
+        (reviews?.friends ?? []).filter((f) => f.user_id == null || !mutedHere.has(f.user_id)).map((f) => ({
             key: `f${f.handle}`,
             author: f.name,
             // A video avatar (the tracker allows them) shows as the initial.
@@ -61,8 +82,27 @@
             score: f.rating,
             body: f.review,
             profile: f.handle ? `/u/${f.handle.replace(/^@/, '')}` : undefined,
+            handle: f.handle ? `@${f.handle.replace(/^@/, '')}` : undefined,
+            spoiler: !!f.spoiler,
+            edited: !!f.edited,
+            logId: f.log_id,
+            userId: f.user_id,
         }))
     );
+    /** Spoilers the reader chose to see. */
+    let revealed = $state<Set<string>>(new Set());
+    const hidesSpoiler = (r: Card) => !!r.spoiler && playerPrefs.blurSpoilers && !revealed.has(r.key);
+    function reviewMenu(e: MouseEvent, r: Card) {
+        if (r.logId == null || r.userId == null) return;
+        const anchor = e.currentTarget as HTMLElement;
+        friendship.reviewMenu(
+            anchor,
+            { user_id: r.userId, name: r.author, handle: r.handle ?? '' },
+            r.logId,
+            (note) => note && undo.note(note),
+            () => (mutedHere = new Set([...mutedHere, r.userId!]))
+        );
+    }
     const written = $derived(friendCards.filter((f) => f.body));
     const ratedOnly = $derived(friendCards.filter((f) => !f.body && f.score != null));
 
@@ -104,13 +144,27 @@
             {@render avatar(r)}
             <div class="who">
                 {#if r.profile}<a class="name" href={r.profile}>{r.author}</a>{:else}<p class="name">{r.author}</p>{/if}
-                {#if r.date}<p class="meta">{r.date}</p>{/if}
+                {#if r.handle || r.date || r.edited}
+                    <p class="meta">{[r.handle, r.date, r.edited ? 'Edited' : null].filter(Boolean).join(' · ')}</p>
+                {/if}
             </div>
             {#if r.score != null}<p class="score">{score(r.score)}<span>/10</span></p>{/if}
+            {#if r.logId != null && !isTV}
+                <button class="card-menu" aria-label={`More for ${r.author}'s review`} aria-haspopup="menu" aria-expanded="false" onclick={(e) => reviewMenu(e, r)}>
+                    <Icon name="more" size={18} />
+                </button>
+            {/if}
         </header>
-        <p class="body" class:open={expanded.has(r.key)}>{r.body}</p>
-        {#if (r.body?.length ?? 0) > 180}
-            <button class="more" onclick={() => toggle(r.key)}>{expanded.has(r.key) ? 'Less' : 'More'}</button>
+        {#if hidesSpoiler(r)}
+            <button class="spoiler" onclick={() => (revealed = new Set([...revealed, r.key]))}>
+                <span class="spoiler-text" aria-hidden="true">{r.body}</span>
+                <span class="spoiler-label"><Icon name="eyeOff" size={14} /> Spoiler · Show</span>
+            </button>
+        {:else}
+            <p class="body" class:open={expanded.has(r.key)}>{r.body}</p>
+            {#if (r.body?.length ?? 0) > 180}
+                <button class="more" onclick={() => toggle(r.key)}>{expanded.has(r.key) ? 'Less' : 'More'}</button>
+            {/if}
         {/if}
         {#if r.source}<footer>{r.source}</footer>{/if}
     </article>
@@ -408,6 +462,62 @@
         color: var(--label);
         font-weight: 600;
         cursor: pointer;
+    }
+    /* A friend's review: Report, Mute. */
+    .card-menu {
+        flex: none;
+        align-self: flex-start;
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        margin: -6px -8px 0 -4px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: none;
+        color: var(--label-2);
+        cursor: pointer;
+    }
+    .card-menu:hover {
+        background: var(--fill);
+        color: var(--label);
+    }
+    /* A spoiler: the text blurred, until tapped. */
+    .spoiler {
+        position: relative;
+        display: block;
+        width: 100%;
+        min-height: 48px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .spoiler-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-size: var(--text-callout);
+        line-height: 1.5;
+        filter: blur(7px);
+        user-select: none;
+    }
+    .spoiler-label {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        color: var(--label);
+        font-size: var(--text-caption);
+        font-weight: 600;
     }
     .review footer {
         margin-top: auto;

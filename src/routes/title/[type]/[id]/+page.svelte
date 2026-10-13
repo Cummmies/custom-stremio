@@ -393,7 +393,7 @@
                 mode: 'edit',
                 id: w.id,
                 rewatch: w.rewatch,
-                initial: { score: w.rating, date: w.date, review: w.review ?? '' },
+                initial: { score: w.rating, date: w.date, review: w.review ?? '', spoiler: !!w.spoiler },
                 titleId: seasons.length ? (owner?.title_id ?? null) : null,
                 name: seasons.length && owner ? owner.name : null,
                 earliest: owner?.earliest_watch_date ?? null,
@@ -401,7 +401,7 @@
     }
     async function saveLog(d: LogDraft) {
         if (!log) return;
-        const fields = { rating: d.score, review: d.review, watch_date: d.date };
+        const fields = { rating: d.score, review: d.review, watch_date: d.date, spoiler: !!d.spoiler };
         const ok = log.id != null ? await lbt.editWatch(log.id, fields) : await lbt.addWatch(fields, log.titleId ?? undefined);
         if (!ok) return;
         if (log.id == null) {
@@ -872,6 +872,7 @@
     <LogDialog
         mode={episodeRate.entry ? 'edit' : 'rate'}
         title={episodeRate.entry ? 'Edit Episode Rating' : 'Rate Episode'}
+        spoilers={false}
         name={`S${v.season} · E${v.episode}${v.title ? ` · ${v.title}` : ''}`}
         year={null}
         poster={meta.poster ?? null}

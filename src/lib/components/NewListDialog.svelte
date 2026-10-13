@@ -1,5 +1,6 @@
 <script lang="ts">
     import PhoneTypeButton from './PhoneTypeButton.svelte';
+    import CharCount from './CharCount.svelte';
     // Name a new the tracker list. A modal <dialog>: focus stays inside, Escape
     // (the TV remote's Back) closes it; on iPhone a sheet with Cancel and
     // Create in its top bar, as the rating sheet.
@@ -48,6 +49,7 @@
         <h2 id="new-list-heading">New List</h2>
         <label class="label" for="new-list-name">Name</label>
         <input id="new-list-name" bind:this={field} bind:value={name} maxlength={MAX} placeholder="Comfort Rewatches" autocomplete="off" />
+        <CharCount value={name} max={MAX} />
         <PhoneTypeButton label="Name your list" value={name} max={MAX} onresult={(text) => (name = text)} />
         {#if error}<p class="error" role="alert">{error}</p>{/if}
         <footer>

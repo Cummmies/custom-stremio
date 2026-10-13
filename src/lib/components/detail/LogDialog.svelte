@@ -1,6 +1,7 @@
 <script lang="ts" module>
     export type LogMode = 'rate' | 'watch' | 'edit';
-    export type LogDraft = { score: number | null; date: string | null; review: string };
+    /** spoiler: the review gives things away (blurred for others until tapped). */
+    export type LogDraft = { score: number | null; date: string | null; review: string; spoiler?: boolean };
 </script>
 
 <script lang="ts">
@@ -19,6 +20,7 @@
     import ScoreSlider from '$lib/components/ScoreSlider.svelte';
     import ReviewField from '$lib/components/ReviewField.svelte';
     import Icon from '$lib/components/Icon.svelte';
+    import Toggle from '$lib/components/Toggle.svelte';
     import { isTV } from '$lib/platform';
     import { untrack } from 'svelte';
 
@@ -36,6 +38,7 @@
         ondelete,
         onclose,
         title,
+        spoilers = true,
     }: {
         mode: LogMode;
         /** It is (or would be) a rewatch. */
@@ -53,6 +56,8 @@
         onclose: () => void;
         /** The heading, when it's not a whole title's (an episode's: "Rate Episode"). */
         title?: string;
+        /** Offer "Contains Spoilers" for the review (not for an episode's). */
+        spoilers?: boolean;
     } = $props();
 
     const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -63,6 +68,7 @@
     let score = $state(start.score ?? 5);
     let date = $state(start.date ?? '');
     let review = $state(start.review);
+    let spoiler = $state(!!start.spoiler);
     /** Delete asks once more before it goes. */
     let confirmDelete = $state(false);
 
@@ -113,7 +119,7 @@
     function save() {
         if (busy) return;
         settleDate();
-        onsave({ score: hasScore ? score : null, date: date || null, review: review.trim() });
+        onsave({ score: hasScore ? score : null, date: date || null, review: review.trim(), spoiler: spoilers && !!review.trim() && spoiler });
     }
     function onkeydown(e: KeyboardEvent) {
         if (e.key === 'Escape') {
@@ -185,6 +191,12 @@
         <section class="field">
             <span class="label">Review</span>
             <ReviewField bind:value={review} onsubmit={save} />
+            {#if spoilers && review.trim()}
+                <div class="spoiler-row">
+                    <span>Contains Spoilers</span>
+                    <Toggle label="Contains Spoilers" checked={spoiler} onchange={(v) => (spoiler = v)} />
+                </div>
+            {/if}
         </section>
 
         {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -202,6 +214,16 @@
 </dialog>
 
 <style>
+    /* Under the review: the writer says it gives things away. */
+    .spoiler-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 10px;
+        color: var(--label-2);
+        font-size: var(--text-callout);
+    }
     dialog {
         width: min(480px, calc(100vw - 32px));
         max-width: none;
