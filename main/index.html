@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stremio Preview</title>
+<link rel="icon" href="app/favicon.png">
+<style>
+:root {
+    color-scheme: dark;
+    --bg: #0d0d12;
+    --panel: #17171f;
+    --raised: #20202b;
+    --line: #2c2c39;
+    --text: #ececf1;
+    --dim: #9a9aab;
+    --accent: #8b6cf6;
+    --bad: #f43f5e;
+    --warn: #f59e0b;
+    --good: #34d399;
+    --radius: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+.app { display: flex; flex-direction: column; height: 100%; }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+header .build { color: var(--dim); font-size: 13px; }
+nav.tabs { display: flex; gap: 4px; margin-left: auto; background: var(--panel); padding: 4px; border-radius: 999px; }
+nav.tabs button { border: 0; background: none; padding: 6px 14px; white-space: nowrap; border-radius: 999px; cursor: pointer; color: var(--dim); }
+nav.tabs button[aria-selected="true"] { background: var(--raised); color: var(--text); }
+nav.tabs .count { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 12px; text-align: center; }
+nav.tabs .count.ok { background: var(--good); color: #000; }
+main { flex: 1; min-height: 0; display: flex; }
+.view { flex: 1; min-width: 0; display: none; }
+.view.on { display: flex; }
+
+/* try it */
+.controls { width: 260px; flex: none; padding: 16px; border-right: 1px solid var(--line); overflow: auto; display: flex; flex-direction: column; gap: 18px; }
+.controls h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--panel); padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--text); color: #000; border-color: var(--text); }
+.list { display: flex; flex-direction: column; gap: 2px; }
+.list button { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.list button:hover { background: var(--panel); }
+.list button[aria-pressed="true"] { background: var(--raised); font-weight: 600; }
+label.toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.hint { color: var(--dim); font-size: 13px; }
+kbd { background: var(--raised); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; font: 12px ui-monospace, monospace; }
+.stage { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 16px; gap: 10px; }
+.stage .bar { display: flex; gap: 12px; align-items: center; color: var(--dim); font-size: 13px; flex-wrap: wrap; }
+.stage .bar a { margin-left: auto; }
+.frame { flex: 1; min-height: 0; position: relative; display: flex; align-items: flex-start; justify-content: center; }
+.device { position: relative; background: #000; border-radius: 14px; box-shadow: 0 0 0 1px var(--line), 0 20px 50px rgb(0 0 0 / 0.5); overflow: hidden; flex: none; }
+.device.mobile { border-radius: 28px; box-shadow: 0 0 0 8px #1c1c22, 0 0 0 9px var(--line), 0 20px 50px rgb(0 0 0 / 0.5); }
+.device iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #000; }
+
+/* screenshots */
+.scroll { flex: 1; overflow: auto; padding: 20px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.filters .spacer { flex: 1; }
+.screen-group { margin-bottom: 32px; }
+.screen-group h3 { margin: 0 0 10px; font-size: 16px; }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+figure { margin: 0; background: var(--panel); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+figure.changed { border-color: var(--warn); }
+figure .imgs { display: flex; background: #000; }
+figure .imgs > div { flex: 1; min-width: 0; position: relative; }
+figure .imgs > div + div { border-left: 2px solid var(--warn); }
+figure img { display: block; width: 100%; height: auto; cursor: zoom-in; }
+figure .tag { position: absolute; top: 6px; left: 6px; background: rgb(0 0 0 / 0.7); padding: 1px 7px; border-radius: 6px; font-size: 12px; }
+figcaption { padding: 8px 12px; font-size: 13px; color: var(--dim); display: flex; gap: 8px; align-items: center; }
+figcaption .badge { margin-left: auto; color: var(--warn); font-weight: 600; }
+.phone-grid .shots { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+/* navigation */
+.nav-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 24px; }
+.nav-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; text-align: left; }
+.nav-card strong { display: block; }
+.nav-card .meta { color: var(--dim); font-size: 13px; }
+.nav-card.bad { border-color: var(--bad); }
+.nav-card.warn { border-color: var(--warn); }
+.issue { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
+.issue.error { border-left-color: var(--bad); }
+.issue .kind { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
+.issue img { max-width: 520px; width: 100%; display: block; margin-top: 8px; border-radius: 8px; cursor: zoom-in; }
+.empty { color: var(--dim); padding: 40px; text-align: center; }
+.legend { color: var(--dim); font-size: 13px; margin: 0 0 18px; max-width: 760px; }
+
+dialog.zoom { padding: 0; border: 0; background: none; max-width: 96vw; max-height: 96vh; }
+dialog.zoom::backdrop { background: rgb(0 0 0 / 0.85); }
+dialog.zoom img { display: block; max-width: 96vw; max-height: 96vh; }
+
+@media (max-width: 760px) {
+    header { padding: 10px 16px; }
+    nav.tabs { margin-left: 0; width: 100%; justify-content: space-between; }
+    nav.tabs button { padding: 6px 10px; }
+    main { flex-direction: column; }
+    .view.on { flex-direction: column; }
+    .controls { width: auto; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: column; gap: 12px; max-height: none; overflow: visible; }
+    .list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+    .list button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 11px; }
+    .stage { padding: 12px 16px; min-height: 70vh; }
+    .scroll { padding: 16px; }
+    .shots { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <h1>Stremio Preview</h1>
+        <span class="build" id="build"></span>
+        <nav class="tabs" role="tablist">
+            <button role="tab" data-tab="try" aria-selected="true">Try it</button>
+            <button role="tab" data-tab="shots">Screenshots<span class="count ok" id="shot-count" hidden></span></button>
+            <button role="tab" data-tab="nav">Navigation<span class="count" id="nav-count" hidden></span></button>
+        </nav>
+    </header>
+    <main>
+        <section class="view on" id="try">
+            <div class="controls">
+                <div>
+                    <h2>Device</h2>
+                    <div class="chips" id="devices"></div>
+                </div>
+                <div>
+                    <h2>Screen</h2>
+                    <div class="list" id="screens"></div>
+                </div>
+                <div>
+                    <h2>Options</h2>
+                    <label class="toggle"><input type="checkbox" id="slow"> Slow network</label>
+                </div>
+                <p class="hint" id="keys"></p>
+            </div>
+            <div class="stage">
+                <div class="bar"><span id="dims"></span><button class="chip" id="reload">Restart</button><a id="open" target="_blank" rel="noopener">Open full size ↗</a></div>
+                <div class="frame" id="frame">
+                    <div class="device" id="device"><iframe id="iframe" title="App preview"></iframe></div>
+                </div>
+            </div>
+        </section>
+        <section class="view" id="shots">
+            <div class="scroll">
+                <div class="filters" id="shot-filters"></div>
+                <p class="legend" id="shot-legend"></p>
+                <div id="shot-list"></div>
+            </div>
+        </section>
+        <section class="view" id="nav">
+            <div class="scroll">
+                <p class="legend">The TV remote, checked automatically: on every screen, each arrow is pressed on every item it reaches. <b>Skip</b>: a press jumped over something in between. <b>Jump</b>: a press went more than a screen away. <b>Lost</b>: focus disappeared. Warnings: items the arrows can't reach, or that end up off the screen or covered. Pictures show where focus was (blue) and where it went (red).</p>
+                <div id="nav-list"></div>
+            </div>
+        </section>
+    </main>
+</div>
+<dialog class="zoom" id="zoom"><img alt=""></dialog>
+<script>
+(function () {
+    'use strict';
+    var $ = function (s) { return document.querySelector(s); };
+    var config, results = null, baseline = null, deploy = {};
+    var state = { device: 'tv', screen: 'home', slow: false };
+    try { Object.assign(state, JSON.parse(localStorage.getItem('preview.state') || '{}')); } catch (e) {}
+    var hashState = new URLSearchParams(location.hash.slice(1));
+    ['device', 'screen'].forEach(function (k) { if (hashState.get(k)) state[k] = hashState.get(k); });
+
+    function el(tag, attrs, children) {
+        var e = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (k) {
+            if (k === 'text') e.textContent = attrs[k];
+            else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), attrs[k]);
+            else if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+        });
+        (children || []).forEach(function (c) { if (c) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+        return e;
+    }
+    function save() {
+        try { localStorage.setItem('preview.state', JSON.stringify(state)); } catch (e) {}
+        history.replaceState(null, '', '#device=' + state.device + '&screen=' + state.screen);
+    }
+
+    // --- tabs ---------------------------------------------------------------
+    document.querySelectorAll('[data-tab]').forEach(function (b) {
+        b.addEventListener('click', function () { tab(b.dataset.tab); });
+    });
+    function tab(name) {
+        document.querySelectorAll('[data-tab]').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === name)); });
+        document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('on', v.id === name); });
+        if (name === 'try') fit();
+    }
+
+    // --- try it -------------------------------------------------------------
+    function device() { return config.devices.find(function (d) { return d.id === state.device; }) || config.devices[0]; }
+    function screen() { return config.screens.find(function (s) { return s.id === state.screen; }) || config.screens[0]; }
+    function screensFor(d) { return config.screens.filter(function (s) { return !s.tvOnly || d.id.indexOf('tv') === 0; }); }
+
+    function drawControls() {
+        var d = device();
+        $('#devices').replaceChildren.apply($('#devices'), config.devices.map(function (x) {
+            return el('button', { class: 'chip', 'aria-pressed': String(x.id === d.id), text: x.label, onclick: function () { state.device = x.id; go(); } });
+        }));
+        if (!screensFor(d).some(function (s) { return s.id === state.screen; })) state.screen = 'home';
+        $('#screens').replaceChildren.apply($('#screens'), screensFor(d).map(function (s) {
+            return el('button', { 'aria-pressed': String(s.id === state.screen), text: s.label, onclick: function () { state.screen = s.id; go(); } });
+        }));
+        $('#slow').checked = state.slow;
+        $('#keys').innerHTML = d.id.indexOf('tv') === 0
+            ? 'Click the screen, then use the keyboard as the remote: <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> move, <kbd>Enter</kbd> is OK, <kbd>Esc</kbd> is Back.'
+            : 'Click and scroll as on the device. Only layout: the iPhone and PC apps’ own features (video player, downloads) aren’t in the browser.';
+    }
+    function url() {
+        var d = device(), s = screen();
+        var q = d.query + (s.query ? '&' + s.query : '');
+        if (state.slow && !/delay=/.test(q)) q += '&delay=2500';
+        return 'app/index.html?' + q + '&t=' + Date.now() + s.hash;
+    }
+    function go() {
+        save();
+        drawControls();
+        var d = device();
+        var u = url();
+        $('#iframe').src = u;
+        $('#open').href = u;
+        $('#device').classList.toggle('mobile', !!d.mobile);
+        fit();
+    }
+    function fit() {
+        var d = device();
+        var box = $('#frame').getBoundingClientRect();
+        if (!box.width) return;
+        var avail = Math.max(240, window.innerWidth <= 760 ? window.innerHeight * 0.72 : box.height);
+        var scale = Math.min(box.width / d.width, avail / d.height, 1);
+        var f = $('#iframe');
+        f.style.width = d.width + 'px';
+        f.style.height = d.height + 'px';
+        f.style.transform = 'scale(' + scale + ')';
+        $('#device').style.width = Math.round(d.width * scale) + 'px';
+        $('#device').style.height = Math.round(d.height * scale) + 'px';
+        $('#dims').textContent = d.label + ' · ' + d.width + '×' + d.height + ' · shown at ' + Math.round(scale * 100) + '%';
+    }
+    window.addEventListener('resize', fit);
+    $('#slow').addEventListener('change', function (e) { state.slow = e.target.checked; go(); });
+    $('#reload').addEventListener('click', go);
+    $('#iframe').addEventListener('load', function () {
+        var w = $('#iframe').contentWindow;
+        try { w.focus(); } catch (e) {}
+        // What the screen needs pressed once it's up (OK on a source, to start the player).
+        var steps = (screen().steps || []).slice();
+        var src = $('#iframe').src;
+        var codes = { Enter: 13, ArrowDown: 40, ArrowUp: 38, ArrowLeft: 37, ArrowRight: 39 };
+        function next() {
+            if (!steps.length || $('#iframe').src !== src) return;
+            var s = steps.shift();
+            if (s.indexOf('wait:') === 0) return setTimeout(next, Number(s.slice(5)));
+            var e = new w.KeyboardEvent('keydown', { key: s, bubbles: true, cancelable: true });
+            Object.defineProperty(e, 'keyCode', { get: function () { return codes[s] || 0; } });
+            (w.document.activeElement || w.document.body).dispatchEvent(e);
+            setTimeout(next, 150);
+        }
+        (function started(n) {
+            if (w.document.documentElement.getAttribute('data-started')) setTimeout(next, 1500);
+            else if (n < 60) setTimeout(function () { started(n + 1); }, 250);
+        })(0);
+    });
+
+    // --- screenshots --------------------------------------------------------
+    var shotFilter = 'all', compare = true;
+    function engineLabel(id) {
+        var e = (results.engines || []).find(function (x) { return x.id === id; });
+        return e ? e.label : id;
+    }
+    function drawShots() {
+        var list = $('#shot-list');
+        if (!results) { list.replaceChildren(el('p', { class: 'empty', text: 'No screenshots yet: they appear after the checks run on GitHub.' })); return; }
+        var groups = [['all', 'All'], ['tv', 'TV'], ['tv69', 'TV · old engine'], ['phone', 'iPhone'], ['tablet', 'iPad'], ['desktop', 'PC']];
+        $('#shot-filters').replaceChildren.apply($('#shot-filters'), groups.map(function (g) {
+            return el('button', { class: 'chip', 'aria-pressed': String(shotFilter === g[0]), text: g[1], onclick: function () { shotFilter = g[0]; drawShots(); } });
+        }).concat([el('span', { class: 'spacer' }), baseline ? el('label', { class: 'toggle' }, [el('input', { type: 'checkbox', checked: compare ? '' : null, onchange: function (e) { compare = e.target.checked; drawShots(); } }), ' Compare with ' + (deploy.baselineLabel || 'before')]) : null]));
+        $('#shot-legend').textContent = baseline ? 'Pictures that look different from ' + (deploy.baselineLabel || 'the last version') + ' are outlined in orange, with the old one on the right.' : '';
+        var shots = results.shots.filter(function (s) {
+            if (shotFilter === 'all') return true;
+            if (shotFilter === 'tv') return s.device.indexOf('tv') === 0 && s.engine !== 'tv69';
+            if (shotFilter === 'tv69') return s.engine === 'tv69';
+            return s.device === shotFilter;
+        });
+        var out = [];
+        config.screens.forEach(function (sc) {
+            var mine = shots.filter(function (s) { return s.screen === sc.id; });
+            if (!mine.length) return;
+            var grid = el('div', { class: 'shots' }, mine.map(figureFor));
+            out.push(el('div', { class: 'screen-group' + (mine.every(function (s) { return s.device === 'phone'; }) ? ' phone-grid' : '') }, [el('h3', { text: sc.label }), grid]));
+        });
+        list.replaceChildren.apply(list, out.length ? out : [el('p', { class: 'empty', text: 'Nothing here.' })]);
+    }
+    function figureFor(s) {
+        var d = config.devices.find(function (x) { return x.id === s.device; }) || { label: s.device };
+        var old = baseline && compare && baseline.shots.find(function (b) { return b.engine === s.engine && b.device === s.device && b.screen === s.screen; });
+        var newImg = el('img', { src: 'report/' + s.file, alt: d.label + ' ' + s.screen, loading: 'lazy' });
+        var imgs = [el('div', {}, [newImg, old ? el('span', { class: 'tag', text: 'now' }) : null])];
+        var badge = el('span', { class: 'badge' });
+        var fig = el('figure', {}, [el('div', { class: 'imgs' }, imgs), el('figcaption', {}, [d.label + (s.engine === 'tv69' ? ' · old engine' : ''), badge])]);
+        if (old) {
+            var oldSrc = deploy.baseline + 'report/' + old.file;
+            differs('report/' + s.file, oldSrc).then(function (pct) {
+                if (pct < 0.3) return;
+                fig.classList.add('changed');
+                badge.textContent = 'changed';
+                fig.querySelector('.imgs').appendChild(el('div', {}, [el('img', { src: oldSrc, alt: 'before', loading: 'lazy' }), el('span', { class: 'tag', text: 'before' })]));
+            });
+        }
+        return fig;
+    }
+    /** How much of two pictures differs, in % of pixels (compared small). */
+    function differs(a, b) {
+        function load(src) {
+            return new Promise(function (ok, fail) { var i = new Image(); i.onload = function () { ok(i); }; i.onerror = fail; i.src = src; });
+        }
+        return Promise.all([load(a), load(b)]).then(function (imgs) {
+            var w = 240, h = Math.round(240 * imgs[0].naturalHeight / imgs[0].naturalWidth);
+            var data = imgs.map(function (img) {
+                var c = document.createElement('canvas'); c.width = w; c.height = h;
+                var x = c.getContext('2d'); x.drawImage(img, 0, 0, w, h);
+                return x.getImageData(0, 0, w, h).data;
+            });
+            var diff = 0;
+            for (var i = 0; i < data[0].length; i += 4) {
+                if (Math.abs(data[0][i] - data[1][i]) + Math.abs(data[0][i + 1] - data[1][i + 1]) + Math.abs(data[0][i + 2] - data[1][i + 2]) > 60) diff++;
+            }
+            return (diff / (w * h)) * 100;
+        }).catch(function () { return 100; });
+    }
+
+    // --- navigation ---------------------------------------------------------
+    function drawNav() {
+        var list = $('#nav-list');
+        if (!results) { list.replaceChildren(el('p', { class: 'empty', text: 'No navigation checks yet: they appear after the checks run on GitHub.' })); return; }
+        var cards = results.nav.map(function (n) {
+            var errors = n.issues.filter(function (i) { return i.level === 'error'; }).length;
+            var warns = n.issues.length - errors;
+            var sc = config.screens.find(function (s) { return s.id === n.screen; }) || { label: n.screen };
+            return el('button', { class: 'nav-card' + (errors ? ' bad' : warns ? ' warn' : ''), onclick: function () { var t = document.getElementById('nav-' + n.engine + '-' + n.screen); if (t) t.scrollIntoView({ behavior: 'smooth' }); } }, [
+                el('strong', { text: sc.label }),
+                el('span', { class: 'meta', text: engineLabel(n.engine).replace('TV · ', '') }),
+                el('div', { class: 'meta', text: (errors ? errors + ' problem' + (errors > 1 ? 's' : '') : 'No problems') + (warns ? ' · ' + warns + ' warning' + (warns > 1 ? 's' : '') : '') + ' · ' + n.moves + ' presses' }),
+            ]);
+        });
+        var errs = (results.errors || []).map(function (e) {
+            return el('div', { class: 'issue error' }, [el('div', { class: 'kind', text: 'app error · ' + e.engine + ' · ' + e.device + ' · ' + e.screen }), el('div', { text: e.message })]);
+        });
+        var details = results.nav.filter(function (n) { return n.issues.length; }).map(function (n) {
+            var sc = config.screens.find(function (s) { return s.id === n.screen; }) || { label: n.screen };
+            return el('div', { class: 'screen-group', id: 'nav-' + n.engine + '-' + n.screen }, [
+                el('h3', { text: sc.label + ' · ' + engineLabel(n.engine) }),
+                el('p', { class: 'hint', text: 'Focus starts on “' + (n.start || 'nothing') + '”. ' + n.visited + ' items reached' + (n.complete ? '.' : ' (stopped there; the rest of the page wasn’t walked).') }),
+            ].concat(n.issues.map(function (i) {
+                return el('div', { class: 'issue ' + i.level }, [
+                    el('div', { class: 'kind', text: i.kind + (i.level === 'error' ? ' · problem' : ' · warning') }),
+                    el('div', { text: i.text }),
+                    i.shot ? el('img', { src: 'report/' + i.shot, alt: i.text, loading: 'lazy' }) : null,
+                ]);
+            })));
+        });
+        list.replaceChildren.apply(list, [el('div', { class: 'nav-summary' }, cards)].concat(errs, details));
+        var total = results.nav.reduce(function (n, x) { return n + x.issues.filter(function (i) { return i.level === 'error'; }).length; }, 0) + (results.errors || []).length;
+        var c = $('#nav-count');
+        c.hidden = false;
+        c.textContent = total ? String(total) : '✓';
+        c.classList.toggle('ok', !total);
+    }
+
+    document.addEventListener('click', function (e) {
+        if (e.target.tagName === 'IMG' && e.target.closest('figure, .issue')) {
+            $('#zoom img').src = e.target.src;
+            $('#zoom').showModal();
+        } else if (e.target.closest('#zoom')) {
+            $('#zoom').close();
+        }
+    });
+
+    // --- start --------------------------------------------------------------
+    function getJson(u) { return fetch(u, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+    Promise.all([getJson('screens.json'), getJson('report/results.json'), getJson('deploy.json')]).then(function (r) {
+        config = r[0];
+        results = r[1];
+        deploy = r[2] || {};
+        var info = [];
+        if (deploy.branch) info.push(deploy.branch);
+        if (deploy.commit) info.push(deploy.commit.slice(0, 7));
+        if (results && results.date) info.push(new Date(results.date).toLocaleString());
+        $('#build').textContent = info.join(' · ');
+        if (results) {
+            var c = $('#shot-count'); c.hidden = false; c.textContent = String(results.shots.length);
+        }
+        go();
+        drawNav();
+        var after = deploy.baseline ? getJson(deploy.baseline + 'report/results.json') : Promise.resolve(null);
+        after.then(function (b) { baseline = b; drawShots(); });
+        drawShots();
+    });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,470 @@
+{
+ "version": 1791859668,
+ "native": 3,
+ "start": "_app/immutable/entry/start.CIGbJnOl.js",
+ "app": "_app/immutable/entry/app.DoO40XjA.js",
+ "css": [
+  "_app/immutable/assets/errorReports.CSmsnYLN.css",
+  "_app/immutable/assets/Avatar.CgEC-OSK.css",
+  "_app/immutable/assets/NotificationList.BofZxBc1.css",
+  "_app/immutable/assets/InstallFromUrl.CKZFqRrA.css",
+  "_app/immutable/assets/QrDialog.C8LCOSAz.css",
+  "_app/immutable/assets/Toggle.BKO0RJ_E.css",
+  "_app/immutable/assets/0.DxJygc5C.css"
+ ],
+ "script": "_app/immutable/tv/app.b07535ba09.js",
+ "files": [
+  {
+   "path": "_app/immutable/assets/0.DxJygc5C.css",
+   "size": 37397
+  },
+  {
+   "path": "_app/immutable/assets/10.DIszfGma.css",
+   "size": 117
+  },
+  {
+   "path": "_app/immutable/assets/11.BKmxAL63.css",
+   "size": 16913
+  },
+  {
+   "path": "_app/immutable/assets/13.CsWNSfGo.css",
+   "size": 118
+  },
+  {
+   "path": "_app/immutable/assets/14.DGKQaNxD.css",
+   "size": 1679
+  },
+  {
+   "path": "_app/immutable/assets/15.DZKW5JHI.css",
+   "size": 889
+  },
+  {
+   "path": "_app/immutable/assets/17.CB4UYwzs.css",
+   "size": 8811
+  },
+  {
+   "path": "_app/immutable/assets/19.CArdL78G.css",
+   "size": 44951
+  },
+  {
+   "path": "_app/immutable/assets/20.CuQvSq6S.css",
+   "size": 118
+  },
+  {
+   "path": "_app/immutable/assets/3.Canfp4lA.css",
+   "size": 4676
+  },
+  {
+   "path": "_app/immutable/assets/4.BglON6FU.css",
+   "size": 6974
+  },
+  {
+   "path": "_app/immutable/assets/5.Cp_u_Kcy.css",
+   "size": 8198
+  },
+  {
+   "path": "_app/immutable/assets/6.v63W8M4T.css",
+   "size": 3820
+  },
+  {
+   "path": "_app/immutable/assets/7.DOaI6kqn.css",
+   "size": 4469
+  },
+  {
+   "path": "_app/immutable/assets/8.ReqOKgT8.css",
+   "size": 3935
+  },
+  {
+   "path": "_app/immutable/assets/Avatar.CgEC-OSK.css",
+   "size": 843
+  },
+  {
+   "path": "_app/immutable/assets/CatalogList.Brucskpl.css",
+   "size": 2671
+  },
+  {
+   "path": "_app/immutable/assets/CharCount.DJzjOE0k.css",
+   "size": 189
+  },
+  {
+   "path": "_app/immutable/assets/EmptyState.DUniP_09.css",
+   "size": 688
+  },
+  {
+   "path": "_app/immutable/assets/FavoritePicker.BZ7fgjok.css",
+   "size": 5337
+  },
+  {
+   "path": "_app/immutable/assets/HomeView.Br4cnlaO.css",
+   "size": 10878
+  },
+  {
+   "path": "_app/immutable/assets/ImageCropper.DaIQVddu.css",
+   "size": 3525
+  },
+  {
+   "path": "_app/immutable/assets/InstallFromUrl.CKZFqRrA.css",
+   "size": 2328
+  },
+  {
+   "path": "_app/immutable/assets/LegalPage.h-fbupI2.css",
+   "size": 1039
+  },
+  {
+   "path": "_app/immutable/assets/NewListDialog.BYpzNkvn.css",
+   "size": 2461
+  },
+  {
+   "path": "_app/immutable/assets/NotificationList.BofZxBc1.css",
+   "size": 4031
+  },
+  {
+   "path": "_app/immutable/assets/PhoneTypeButton.vgMveZ1y.css",
+   "size": 400
+  },
+  {
+   "path": "_app/immutable/assets/PopupButton.XebbF1Q8.css",
+   "size": 524
+  },
+  {
+   "path": "_app/immutable/assets/PosterCard.DUvOCSiQ.css",
+   "size": 2431
+  },
+  {
+   "path": "_app/immutable/assets/ProfileView.CSMh5JUo.css",
+   "size": 12587
+  },
+  {
+   "path": "_app/immutable/assets/QrDialog.C8LCOSAz.css",
+   "size": 1437
+  },
+  {
+   "path": "_app/immutable/assets/Segmented.DjfkXtjf.css",
+   "size": 1511
+  },
+  {
+   "path": "_app/immutable/assets/Toggle.BKO0RJ_E.css",
+   "size": 516
+  },
+  {
+   "path": "_app/immutable/assets/easy.qVge0BVC.css",
+   "size": 2319
+  },
+  {
+   "path": "_app/immutable/assets/errorReports.CSmsnYLN.css",
+   "size": 888
+  },
+  {
+   "path": "_app/immutable/chunks/A0qaXuxD.js",
+   "size": 5287
+  },
+  {
+   "path": "_app/immutable/chunks/ACzchiIc.js",
+   "size": 6181
+  },
+  {
+   "path": "_app/immutable/chunks/BFzClX8E.js",
+   "size": 5264
+  },
+  {
+   "path": "_app/immutable/chunks/BKcZh1ux.js",
+   "size": 10168
+  },
+  {
+   "path": "_app/immutable/chunks/BPmphsgV.js",
+   "size": 5324
+  },
+  {
+   "path": "_app/immutable/chunks/BZwkct_Q.js",
+   "size": 508
+  },
+  {
+   "path": "_app/immutable/chunks/B_8pEq7J.js",
+   "size": 1348
+  },
+  {
+   "path": "_app/immutable/chunks/BebZwNLA.js",
+   "size": 66052
+  },
+  {
+   "path": "_app/immutable/chunks/Bgyd50GL.js",
+   "size": 1057
+  },
+  {
+   "path": "_app/immutable/chunks/Bjy-W4x2.js",
+   "size": 1365
+  },
+  {
+   "path": "_app/immutable/chunks/BkL9T1Jn.js",
+   "size": 109
+  },
+  {
+   "path": "_app/immutable/chunks/Br_Dt0-b.js",
+   "size": 15334
+  },
+  {
+   "path": "_app/immutable/chunks/BsyKRPXs.js",
+   "size": 10987
+  },
+  {
+   "path": "_app/immutable/chunks/Bz5zQxTL.js",
+   "size": 39
+  },
+  {
+   "path": "_app/immutable/chunks/C3BqyKBX.js",
+   "size": 3975
+  },
+  {
+   "path": "_app/immutable/chunks/C4EKybVQ.js",
+   "size": 454
+  },
+  {
+   "path": "_app/immutable/chunks/C4FfFJeC.js",
+   "size": 1848
+  },
+  {
+   "path": "_app/immutable/chunks/C4jN_pZv.js",
+   "size": 4727
+  },
+  {
+   "path": "_app/immutable/chunks/CAbTYFTV.js",
+   "size": 4343
+  },
+  {
+   "path": "_app/immutable/chunks/CB4QoNni.js",
+   "size": 9874
+  },
+  {
+   "path": "_app/immutable/chunks/CB70UXML.js",
+   "size": 1694
+  },
+  {
+   "path": "_app/immutable/chunks/CCcOl0Zo.js",
+   "size": 4318
+  },
+  {
+   "path": "_app/immutable/chunks/CHC6ubPw.js",
+   "size": 983
+  },
+  {
+   "path": "_app/immutable/chunks/CNh5qHxg.js",
+   "size": 22453
+  },
+  {
+   "path": "_app/immutable/chunks/CSLrakkc.js",
+   "size": 3627
+  },
+  {
+   "path": "_app/immutable/chunks/CT3w_5Fa.js",
+   "size": 587
+  },
+  {
+   "path": "_app/immutable/chunks/CT8bJBGy.js",
+   "size": 2332
+  },
+  {
+   "path": "_app/immutable/chunks/CUN3Y6y0.js",
+   "size": 845
+  },
+  {
+   "path": "_app/immutable/chunks/CXnWGUKM.js",
+   "size": 121
+  },
+  {
+   "path": "_app/immutable/chunks/Ca01icAv.js",
+   "size": 2304
+  },
+  {
+   "path": "_app/immutable/chunks/Cc2GQp_8.js",
+   "size": 1140
+  },
+  {
+   "path": "_app/immutable/chunks/CdsP3pRK.js",
+   "size": 314
+  },
+  {
+   "path": "_app/immutable/chunks/Cer1FlKV.js",
+   "size": 2414
+  },
+  {
+   "path": "_app/immutable/chunks/CewvBVXd.js",
+   "size": 346
+  },
+  {
+   "path": "_app/immutable/chunks/CpuAFd2R.js",
+   "size": 771
+  },
+  {
+   "path": "_app/immutable/chunks/CwyPTFof.js",
+   "size": 2581
+  },
+  {
+   "path": "_app/immutable/chunks/DUZ2170H.js",
+   "size": 3424
+  },
+  {
+   "path": "_app/immutable/chunks/DVokX1s9.js",
+   "size": 263
+  },
+  {
+   "path": "_app/immutable/chunks/DaGv67eh.js",
+   "size": 1188
+  },
+  {
+   "path": "_app/immutable/chunks/DevI778z.js",
+   "size": 1790
+  },
+  {
+   "path": "_app/immutable/chunks/Dm4h2uaq.js",
+   "size": 824
+  },
+  {
+   "path": "_app/immutable/chunks/Dpp-5h4c.js",
+   "size": 294
+  },
+  {
+   "path": "_app/immutable/chunks/DxV_aPtv.js",
+   "size": 1257
+  },
+  {
+   "path": "_app/immutable/chunks/DynN_hO2.js",
+   "size": 28833
+  },
+  {
+   "path": "_app/immutable/chunks/N2qsLpLt.js",
+   "size": 700
+  },
+  {
+   "path": "_app/immutable/chunks/XI63EEYM.js",
+   "size": 13962
+  },
+  {
+   "path": "_app/immutable/chunks/ZtMZ2sUT.js",
+   "size": 5760
+  },
+  {
+   "path": "_app/immutable/chunks/aiEv--od.js",
+   "size": 1222
+  },
+  {
+   "path": "_app/immutable/chunks/eRJMLgUY.js",
+   "size": 8843
+  },
+  {
+   "path": "_app/immutable/chunks/hAYeY731.js",
+   "size": 64259
+  },
+  {
+   "path": "_app/immutable/chunks/oFo-0-V6.js",
+   "size": 4176
+  },
+  {
+   "path": "_app/immutable/entry/app.DoO40XjA.js",
+   "size": 8693
+  },
+  {
+   "path": "_app/immutable/entry/start.CIGbJnOl.js",
+   "size": 82
+  },
+  {
+   "path": "_app/immutable/nodes/0.CH3-hZI4.js",
+   "size": 52068
+  },
+  {
+   "path": "_app/immutable/nodes/1.Bp3XfGxN.js",
+   "size": 381
+  },
+  {
+   "path": "_app/immutable/nodes/10.CJWrc8vh.js",
+   "size": 382
+  },
+  {
+   "path": "_app/immutable/nodes/11._B5Xn0h4.js",
+   "size": 71365
+  },
+  {
+   "path": "_app/immutable/nodes/12.Dzb9Em3F.js",
+   "size": 5334
+  },
+  {
+   "path": "_app/immutable/nodes/13.NeM6ltvC.js",
+   "size": 2707
+  },
+  {
+   "path": "_app/immutable/nodes/14.BSjkE0iz.js",
+   "size": 3914
+  },
+  {
+   "path": "_app/immutable/nodes/15.D9Lbotr6.js",
+   "size": 3057
+  },
+  {
+   "path": "_app/immutable/nodes/16.BIzIP_id.js",
+   "size": 190
+  },
+  {
+   "path": "_app/immutable/nodes/17.Bqu7mdda.js",
+   "size": 47505
+  },
+  {
+   "path": "_app/immutable/nodes/18.B6XYEcHv.js",
+   "size": 2708
+  },
+  {
+   "path": "_app/immutable/nodes/19.BybIP-kJ.js",
+   "size": 78067
+  },
+  {
+   "path": "_app/immutable/nodes/2.C1kIF7EY.js",
+   "size": 177
+  },
+  {
+   "path": "_app/immutable/nodes/20.D-jP_0UB.js",
+   "size": 1423
+  },
+  {
+   "path": "_app/immutable/nodes/3.C5b2CP6g.js",
+   "size": 7722
+  },
+  {
+   "path": "_app/immutable/nodes/4.C1zl4BTr.js",
+   "size": 11303
+  },
+  {
+   "path": "_app/immutable/nodes/5.DU502pq5.js",
+   "size": 12144
+  },
+  {
+   "path": "_app/immutable/nodes/6.DzTmhNfa.js",
+   "size": 8772
+  },
+  {
+   "path": "_app/immutable/nodes/7.DhfF8GRT.js",
+   "size": 17731
+  },
+  {
+   "path": "_app/immutable/nodes/8.C5hlc3qV.js",
+   "size": 10630
+  },
+  {
+   "path": "_app/immutable/nodes/9.CDLAwOhp.js",
+   "size": 189
+  },
+  {
+   "path": "_app/immutable/tv/app.b07535ba09.js",
+   "size": 676824
+  },
+  {
+   "path": "_app/immutable/workers/assets/stremio_core_web_bg-5erYqss4.wasm",
+   "size": 4600456
+  },
+  {
+   "path": "_app/immutable/workers/core.worker-C_hOPNxj.js",
+   "size": 24514
+  },
+  {
+   "path": "_app/version.json",
+   "size": 27
+  }
+ ]
+}

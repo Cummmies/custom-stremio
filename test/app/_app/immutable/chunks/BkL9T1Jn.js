@@ -1,0 +1,1 @@
+import{H as e}from"./hAYeY731.js";async function t(){await e(`plugin:process|restart`)}export{t as relaunch};
