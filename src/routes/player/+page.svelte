@@ -89,6 +89,30 @@
     let showNext = $state(false);
     let nextDismissed = $state(false);
     let startError = $state<string | null>(null);
+    /**
+     * A torrent on the PC with Stremio's streaming server not running here
+     * (none set up yet, or it failed): the player says so and offers Set Up,
+     * then plays once it's ready (src-tauri/src/server.rs). Not for a
+     * streaming server elsewhere (a custom address in Settings).
+     */
+    let waitingForServer = $state(false);
+    let serverSetupError = $state<string | null>(null);
+    const usesLocalServer = $derived(/^https?:\/\/(127\.0\.0\.1|localhost):11470\/?$/i.test(app.ctx?.profile.settings?.streamingServerUrl ?? 'http://127.0.0.1:11470/'));
+    async function setUpServer() {
+        serverSetupError = null;
+        try {
+            await invoke('server_install');
+        } catch {
+            serverSetupError = 'This version of the app can’t set it up. Install the latest version, or Stremio Service.';
+        }
+    }
+    // Up: play what was waiting for it.
+    $effect(() => {
+        if (waitingForServer && app.server.state === 'ready') {
+            waitingForServer = false;
+            void begin();
+        }
+    });
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let lastReported = 0;
     let subtitlesAdded = false;
@@ -242,6 +266,17 @@
         const url = params.get('url') ?? streamUrl(stream, settings?.streamingServerUrl ?? 'http://127.0.0.1:11470/');
         if (!url) return (startError = 'This stream has no playable address.');
         if (!canPlay) return (startError = 'Playback runs in the desktop app.');
+        const torrent = !!stream.infoHash && !stream.url && !params.get('url');
+        if (torrent && isDesktop && usesLocalServer && app.server.state !== 'ready') {
+            // Picked for you (Easy Mode) and no server coming: the next best source.
+            if (easyQueue.activeFor(videoId) && (app.server.state === 'missing' || app.server.state === 'failed')) {
+                void tryNextSource();
+                return;
+            }
+            waitingForServer = true;
+            return;
+        }
+        waitingForServer = false;
 
         thumbs?.close();
         // Frames are fetched only for where you hover the seek bar (thumbnails.ts).
@@ -1769,7 +1804,30 @@
         <div class="switching" role="status">Finding the best source for {findingNext}…</div>
     {/if}
 
-    {#if (startError || player.error) && !easyQueue.activeFor(videoId) && !adopting}
+    {#if waitingForServer}
+        <div class="center-card" role="alert">
+            {#if app.server.state === 'installing'}
+                <p class="err-title">Setting up the streaming server…</p>
+                <p class="err-body">{app.server.percent != null ? `Downloading · ${app.server.percent}%` : 'Getting it from Stremio'}. It plays as soon as it’s ready.</p>
+            {:else if app.server.state === 'starting'}
+                <p class="err-title">Starting the streaming server…</p>
+                <p class="err-body">It plays as soon as it’s ready.</p>
+            {:else}
+                <p class="err-title">Torrents need Stremio’s streaming server</p>
+                <p class="err-body">
+                    {app.server.state === 'failed' ? `${app.server.message} ` : ''}Set Up downloads it from Stremio (about 30 MB) and starts it with the app from now on. Or choose a source that
+                    isn’t a torrent.
+                </p>
+                {#if serverSetupError}<p class="err-body">{serverSetupError}</p>{/if}
+            {/if}
+            <div class="err-actions">
+                {#if app.server.state === 'missing' || app.server.state === 'failed'}
+                    <button onclick={setUpServer}>Set Up</button>
+                {/if}
+                <button class="quiet" onclick={() => (type && id ? changeSource() : exit())}>Choose Another Source</button>
+            </div>
+        </div>
+    {:else if (startError || player.error) && !easyQueue.activeFor(videoId) && !adopting}
         <div class="center-card" role="alert">
             <p class="err-title">Can’t play this stream</p>
             <p class="err-body">{startError ?? player.error}</p>
@@ -2284,6 +2342,16 @@
     .err-actions button {
         background: white;
         color: black;
+    }
+    .err-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+    .err-actions button.quiet {
+        background: rgb(255 255 255 / 0.14);
+        color: white;
     }
 
     .next {

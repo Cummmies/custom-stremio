@@ -17,6 +17,7 @@
     import NoticeBanner from '$lib/components/NoticeBanner.svelte';
     import { tracker } from '$lib/tracker.svelte';
     import { pushWatchedToStremio } from '$lib/stremioPush';
+    import { startServerUpdates } from '$lib/serverUpdate';
     import HandlePrompt from '$lib/components/HandlePrompt.svelte';
     import WhatsNew from '$lib/components/WhatsNew.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
@@ -67,6 +68,8 @@
         setTimeout(confirmWebBundle, 3000);
         // Release builds look for updates shortly after launch.
         if (import.meta.env.PROD) setTimeout(() => updates.check({ quiet: true }), 8000);
+        // The streaming server Set Up put here, kept current (weekly, never mid-movie).
+        if (import.meta.env.PROD) startServerUpdates();
         // Apps stay open for days: look again when it comes back to the front
         // (at most every half hour), and every few hours while it's open.
         let lastCheck = Date.now();

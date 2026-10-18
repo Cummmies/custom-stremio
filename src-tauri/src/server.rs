@@ -6,6 +6,11 @@
 //! downloads Stremio Service's Windows build from Stremio's own GitHub releases
 //! and unpacks it into this app's data folder, where it's found from then on.
 //! Nothing is installed system-wide; the tray app in the download isn't run.
+//!
+//! That copy is kept current (`server_update_download`, then
+//! `server_update_apply`): the app asks now and then; a newer Stremio Service
+//! release is downloaded next to it, and swapped in when nothing's playing (the
+//! app says when), or at the next launch, before the server starts.
 
 use serde::Serialize;
 use std::{
@@ -156,6 +161,12 @@ fn attach_job(child: &Child) -> Option<win32job::Job> {
 
 pub fn start(app: AppHandle) {
     thread::spawn(move || {
+        // A newer copy downloaded last time, not swapped in yet: now, before it runs.
+        if !port_open() {
+            if let Some(dir) = installed_dir(&app) {
+                swap_in_staged(&dir).ok();
+            }
+        }
         if port_open() {
             set_status(&app, ServerStatus::Ready { url: DEFAULT_URL.into(), source: ServerSource::External });
             return;
@@ -248,19 +259,53 @@ fn http_get(url: &str) -> Result<ureq::Response, String> {
         .map_err(|e| e.to_string())
 }
 
-/// The latest Stremio Service Windows download, from Stremio's GitHub releases.
-fn asset_url() -> Result<String, String> {
+/// The latest Stremio Service release: (its version, the Windows download).
+fn latest_release() -> Result<(String, String), String> {
     let release: serde_json::Value = http_get(RELEASES_URL)?.into_json().map_err(|e| e.to_string())?;
-    release["assets"]
+    let version = release["tag_name"].as_str().unwrap_or("").to_owned();
+    let url = release["assets"]
         .as_array()
         .and_then(|assets| assets.iter().find(|a| a["name"] == ASSET_NAME))
         .and_then(|a| a["browser_download_url"].as_str())
         .filter(|u| u.starts_with("https://github.com/Stremio/stremio-service/releases/download/"))
         .map(str::to_owned)
-        .ok_or_else(|| "Stremio Service's download wasn't found.".to_string())
+        .ok_or_else(|| "Stremio Service's download wasn't found.".to_string())?;
+    Ok((version, url))
 }
 
-fn download(app: &AppHandle, url: &str) -> Result<Vec<u8>, String> {
+/// Which release a folder holds (written when it was set up), if known.
+const VERSION_FILE: &str = "stremio-service-version.txt";
+
+fn version_of(dir: &Path) -> Option<String> {
+    std::fs::read_to_string(dir.join(VERSION_FILE)).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+}
+
+/// Where a newer copy waits to be swapped in.
+fn staged_dir(dir: &Path) -> PathBuf {
+    dir.with_extension("next")
+}
+
+/// The staged copy in place of `dir` (the server mustn't be running from it).
+fn swap_in_staged(dir: &Path) -> Result<bool, String> {
+    let next = staged_dir(dir);
+    if !has_server(&next) {
+        return Ok(false);
+    }
+    let old = dir.with_extension("old");
+    std::fs::remove_dir_all(&old).ok();
+    if dir.exists() {
+        std::fs::rename(dir, &old).map_err(|e| e.to_string())?;
+    }
+    if let Err(e) = std::fs::rename(&next, dir) {
+        // Put the old one back rather than leave none.
+        std::fs::rename(&old, dir).ok();
+        return Err(e.to_string());
+    }
+    std::fs::remove_dir_all(&old).ok();
+    Ok(true)
+}
+
+fn download(app: &AppHandle, url: &str, report: bool) -> Result<Vec<u8>, String> {
     use std::io::Read;
     let res = http_get(url)?;
     let total: Option<u64> = res.header("Content-Length").and_then(|v| v.parse().ok());
@@ -275,7 +320,7 @@ fn download(app: &AppHandle, url: &str) -> Result<Vec<u8>, String> {
         }
         data.extend_from_slice(&buf[..n]);
         let percent = total.map(|t| ((data.len() as u64 * 100) / t.max(1)).min(100) as u8);
-        if percent != last {
+        if report && percent != last {
             last = percent;
             set_status(app, ServerStatus::Installing { percent });
         }
@@ -284,8 +329,8 @@ fn download(app: &AppHandle, url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// Unpacks the wanted files (by name, wherever they are in the zip) into a
-/// fresh folder, then swaps it in for `dir`.
-fn unpack(data: &[u8], dir: &Path) -> Result<(), String> {
+/// fresh folder, notes which release it is, then swaps it in for `dir`.
+fn unpack(data: &[u8], dir: &Path, version: &str) -> Result<(), String> {
     let partial = dir.with_extension("partial");
     std::fs::remove_dir_all(&partial).ok();
     std::fs::create_dir_all(&partial).map_err(|e| e.to_string())?;
@@ -305,6 +350,9 @@ fn unpack(data: &[u8], dir: &Path) -> Result<(), String> {
         std::fs::remove_dir_all(&partial).ok();
         return Err("The download didn't have the streaming server in it.".into());
     }
+    if !version.is_empty() {
+        std::fs::write(partial.join(VERSION_FILE), version).map_err(|e| e.to_string())?;
+    }
     std::fs::remove_dir_all(dir).ok();
     std::fs::rename(&partial, dir).map_err(|e| e.to_string())
 }
@@ -320,9 +368,10 @@ pub fn server_install(app: AppHandle) -> Result<(), String> {
     let dir = installed_dir(&app).ok_or("No folder to put it in.")?;
     set_status(&app, ServerStatus::Installing { percent: None });
     thread::spawn(move || {
-        let result = asset_url().and_then(|url| download(&app, &url)).and_then(|data| {
+        let result = latest_release().and_then(|(version, url)| {
+            let data = download(&app, &url, true)?;
             set_status(&app, ServerStatus::Installing { percent: Some(100) });
-            unpack(&data, &dir)
+            unpack(&data, &dir, &version)
         });
         match result {
             Ok(()) => {
@@ -333,6 +382,53 @@ pub fn server_install(app: AppHandle) -> Result<(), String> {
         }
     });
     Ok(())
+}
+
+/// The copy Set Up made, if that's the one in use (not Stremio Service's own
+/// install or tray app, which keep themselves up to date).
+fn managed_copy(app: &AppHandle) -> Option<PathBuf> {
+    let dir = installed_dir(app)?;
+    let in_use = find_server_dir(app).is_some_and(|d| d == dir);
+    let ours = matches!(app.state::<Arc<StreamingServer>>().status(), ServerStatus::Ready { source: ServerSource::Managed, .. });
+    (in_use && ours).then_some(dir)
+}
+
+/// Downloads a newer Stremio Service next to the copy in use, quietly: true
+/// when one is waiting for `server_update_apply`.
+#[tauri::command]
+pub async fn server_update_download(app: AppHandle) -> Result<bool, String> {
+    let Some(dir) = managed_copy(&app) else { return Ok(false) };
+    tauri::async_runtime::spawn_blocking(move || {
+        let (version, url) = latest_release()?;
+        if has_server(&staged_dir(&dir)) && version_of(&staged_dir(&dir)).as_deref() == Some(version.as_str()) {
+            return Ok(true);
+        }
+        if version.is_empty() || version_of(&dir).as_deref() == Some(version.as_str()) {
+            return Ok(false);
+        }
+        let data = download(&app, &url, false)?;
+        unpack(&data, &staged_dir(&dir), &version)?;
+        Ok(true)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The downloaded copy swapped in: the server stops, and starts again from it
+/// (a few seconds). Only when nothing's playing; the app makes sure.
+#[tauri::command]
+pub fn server_update_apply(app: AppHandle) -> Result<bool, String> {
+    let Some(dir) = managed_copy(&app) else { return Ok(false) };
+    if !has_server(&staged_dir(&dir)) {
+        return Ok(false);
+    }
+    app.state::<Arc<StreamingServer>>().stop();
+    set_status(&app, ServerStatus::Starting);
+    // A moment for Windows to let go of the running files.
+    thread::sleep(Duration::from_millis(800));
+    let swapped = swap_in_staged(&dir);
+    start(app);
+    swapped
 }
 
 #[cfg(test)]
@@ -360,13 +456,14 @@ mod tests {
             ("target/release/stremio-service.exe", "tray"),
             ("../escape.js", "nope"),
         ]);
-        unpack(&data, &dir).unwrap();
+        unpack(&data, &dir, "v0.1.14").unwrap();
         assert!(has_server(&dir));
+        assert_eq!(version_of(&dir).as_deref(), Some("v0.1.14"));
         assert!(dir.join("ffmpeg.exe").is_file());
         assert!(!dir.join("stremio-service.exe").exists());
         assert!(!dir.parent().unwrap().join("escape.js").exists());
         // Again: replaces what's there.
-        unpack(&data, &dir).unwrap();
+        unpack(&data, &dir, "v0.1.15").unwrap();
         assert!(has_server(&dir));
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -375,7 +472,23 @@ mod tests {
     fn a_zip_without_the_server_is_refused() {
         let dir = env::temp_dir().join(format!("cs-server-test-empty-{}", std::process::id()));
         let data = zip_of(&[("readme.txt", "hi")]);
-        assert!(unpack(&data, &dir).is_err());
+        assert!(unpack(&data, &dir, "v1").is_err());
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn a_staged_copy_is_swapped_in_and_the_old_one_goes() {
+        let dir = env::temp_dir().join(format!("cs-server-test-swap-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_dir_all(staged_dir(&dir)).ok();
+        let data = zip_of(&[("stremio-runtime.exe", "runtime"), ("server.js", "server")]);
+        unpack(&data, &dir, "v1").unwrap();
+        // Nothing staged: nothing happens.
+        assert!(!swap_in_staged(&dir).unwrap());
+        unpack(&data, &staged_dir(&dir), "v2").unwrap();
+        assert!(swap_in_staged(&dir).unwrap());
+        assert_eq!(version_of(&dir).as_deref(), Some("v2"));
+        assert!(!staged_dir(&dir).exists() && !dir.with_extension("old").exists());
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -116,6 +116,8 @@ fn run_desktop() {
         .invoke_handler(tauri::generate_handler![
             server_status,
             server::server_install,
+            server::server_update_download,
+            server::server_update_apply,
             player::mpv_start,
             player::mpv_command,
             player::mpv_set,
