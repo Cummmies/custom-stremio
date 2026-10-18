@@ -63,6 +63,8 @@ export type LibraryItem = {
     watches?: number;
     /** Titles: when it went on your watchlist (or was first logged). */
     added?: string | null;
+    /** Titles: when you last watched it or any episode, or moved its progress (else when it was added). */
+    recent?: string | null;
     /** Titles: every season's episodes, when known. */
     episodes?: number | null;
     anime?: boolean;

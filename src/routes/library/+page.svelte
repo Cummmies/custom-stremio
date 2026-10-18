@@ -128,7 +128,8 @@
     function sortValue(i: LibraryItem): string | number | null {
         switch (sort) {
             case 'recent':
-                return i.date ?? null;
+                // Every title has one (an older server only sent the last whole watch).
+                return i.recent ?? i.date ?? null;
             case 'added':
                 return i.added ?? null;
             case 'rating':
