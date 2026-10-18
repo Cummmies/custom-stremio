@@ -943,9 +943,10 @@
     }
 
     // With "Play next episode automatically" on, the card counts down and starts the
-    // next episode when it runs out: `AUTOPLAY_COUNTDOWN` seconds into the credits,
-    // or the episode's last seconds when where the credits are isn't known (never
-    // cutting off the end of the story). Counted in video time, so pausing pauses it.
+    // next episode when it runs out. It starts in the credits, or in the episode's
+    // last seconds when where the credits are isn't known (never cutting off the
+    // end of the story), then counts `AUTOPLAY_COUNTDOWN` real seconds: its own
+    // clock, so skipping ahead doesn't jump it to the end; pausing pauses it.
     const AUTOPLAY_COUNTDOWN = 10;
     let nextCardAt = $state<number | null>(null);
     let nextCardInCredits = false;
@@ -965,10 +966,26 @@
         const from = nextCardInCredits ? nextCardAt : Math.max(nextCardAt, d - AUTOPLAY_COUNTDOWN);
         return { from, to: Math.min(d, from + AUTOPLAY_COUNTDOWN) };
     });
-    const autoplayIn = $derived.by(() => {
-        if (!settings?.bingeWatching || !showNext || !countdown || player.time < countdown.from) return null;
-        return Math.max(0, countdown.to - player.time);
+    /** Whether the countdown's time has come (the video got to where it starts). */
+    const countdownDue = $derived(!!settings?.bingeWatching && showNext && !!countdown && player.time >= countdown.from);
+    /** Seconds left on the countdown's own clock, once it's started. */
+    let countdownLeft = $state<number | null>(null);
+    $effect(() => {
+        if (!countdownDue) {
+            countdownLeft = null;
+            return;
+        }
+        // Started once: its own ticking doesn't start it over.
+        if (untrack(() => countdownLeft) == null) countdownLeft = untrack(() => (countdown ? countdown.to - countdown.from : AUTOPLAY_COUNTDOWN));
+        let last = performance.now();
+        const tick = setInterval(() => {
+            const now = performance.now();
+            if (!player.paused && !player.buffering && countdownLeft != null) countdownLeft = Math.max(0, countdownLeft - (now - last) / 1000);
+            last = now;
+        }, 100);
+        return () => clearInterval(tick);
     });
+    const autoplayIn = $derived(countdownDue ? countdownLeft : null);
     const autoplayTotal = $derived(countdown ? countdown.to - countdown.from : 0);
     $effect(() => {
         if (autoplayIn == null || autoplayIn > 0.25 || autoplayFired) return;
