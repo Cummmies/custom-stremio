@@ -247,11 +247,14 @@
     async function markInStremio() {
         const before = dataNote;
         const res: PushResult | null = await pushWatchedToStremio(true);
-        if (!res || (!res.movies && !res.shows)) return;
+        if (!res || (!res.movies && !res.shows && !res.added)) return;
         const parts = [res.movies ? `${res.movies} ${res.movies === 1 ? 'movie' : 'movies'}` : '', res.shows ? `${res.episodes} ${res.episodes === 1 ? 'episode' : 'episodes'}` : '']
             .filter(Boolean)
             .join(' and ');
-        if (dataNote === before) dataNote = `${before ?? ''} Marked ${parts} as watched in Stremio.`.trim();
+        const told = [res.added ? `Added ${res.added} ${res.added === 1 ? 'title' : 'titles'} to your Stremio library.` : '', parts ? `Marked ${parts} as watched in Stremio.` : '']
+            .filter(Boolean)
+            .join(' ');
+        if (dataNote === before) dataNote = `${before ?? ''} ${told}`.trim();
     }
 
     async function resolveConflicts(decision: 'keep_local' | 'use_imported') {

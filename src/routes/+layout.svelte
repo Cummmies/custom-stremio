@@ -31,9 +31,13 @@
     import { startErrorReports } from '$lib/errorReports';
     import '$lib/styles/tv.css';
 
-    // What the tracker knows you've watched, marked in Stremio too (now and then).
+    // Your Stremio library kept up with the tracker (lib/stremioPush.ts): on
+    // connecting, and every hour while the app's open (it skips if it ran lately).
     $effect(() => {
-        if (tracker.ready) void pushWatchedToStremio();
+        if (!tracker.ready) return;
+        void pushWatchedToStremio();
+        const every = setInterval(() => void pushWatchedToStremio(), 15 * 60_000);
+        return () => clearInterval(every);
     });
 
     let { children } = $props();
