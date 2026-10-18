@@ -103,33 +103,36 @@
         [meta?.releaseInfo, meta?.runtime, listSaysAnime ? 'Anime' : null, ...genres.slice(0, 3)].filter(Boolean)
     );
 
-    // Where "Play" goes: the episode you were on, else the first released episode.
+    // Where "Play" goes: the episode you're partway through, else the first one
+    // you haven't watched (by Stremio or the tracker), else the first released one.
     const resumeVideo = $derived.by((): Video | null => {
         if (!meta || !isSeries) return null;
         const lastId = cleanVideoId(details?.libraryItem?.state.video_id);
-        const last = lastId ? meta.videos.find((v) => v.id === lastId) : null;
-        if (last) return last;
-        const regular = meta.videos
-            .filter((v) => (v.season ?? 0) > 0 && !v.upcoming)
-            .sort((a, b) => (a.season! - b.season!) || (a.episode ?? 0) - (b.episode ?? 0));
-        return regular[0] ?? meta.videos[0] ?? null;
+        const last = lastId ? shownVideos.find((v) => v.id === lastId) : null;
+        if (last && (details?.libraryItem?.state.timeOffset || !last.watched)) return last;
+        const seen = new Set(shownVideos.filter((v) => v.watched).map((v) => v.id));
+        const next = regularVideos.find((v) => !seen.has(v.id));
+        return next ?? last ?? regularVideos[0] ?? meta.videos[0] ?? null;
     });
     const resuming = $derived(!!details?.libraryItem?.state.timeOffset);
-    const playLabel = $derived(
-        resumeVideo
-            ? `${resuming ? 'Resume' : 'Play'} S${resumeVideo.season} · E${resumeVideo.episode}`
-            : resuming
-              ? 'Resume'
-              : 'Play'
-    );
+    const playVerb = $derived(resuming ? 'Resume' : 'Play');
+    /** The episode Play starts, if it's a show's ("S2 · E5"). */
+    const playEpisode = $derived(resumeVideo ? `S${resumeVideo.season} · E${resumeVideo.episode}` : null);
 
-    // Pick the season to show once per title.
+    // Pick the season to show once per title, and once more when the tracker's
+    // progress arrives (it can move Play on) unless you've picked one meanwhile.
+    let autoSeason: number | null = null;
     $effect(() => {
-        if (!meta || seasonFor === meta.id) return;
-        seasonFor = meta.id;
+        if (!meta) return;
+        const key = `${meta.id}${main ? ':tracker' : ''}`;
+        if (seasonFor === key) return;
+        const first = seasonFor !== meta.id && seasonFor !== `${meta.id}:tracker`;
+        seasonFor = key;
+        if (!first && season !== autoSeason) return;
         const fromUrl = videoId ? meta.videos.find((v) => v.id === videoId)?.season : undefined;
         season = fromUrl ?? resumeVideo?.season ?? meta.videos[0]?.season ?? 1;
-        tab = firstTab();
+        autoSeason = season;
+        if (first) tab = firstTab();
     });
 
     // The Details tab only exists on narrow windows; widening goes back to the main section.
@@ -496,6 +499,31 @@
     // Episodes on their own (with the tracker): marked watched and scored,
     // by Stremio's episode IDs.
     let episodeLogs = $state<Record<string, EpisodeLog>>({});
+    /** Episodes you unmarked here: the tracker's progress doesn't tick them again. */
+    let unmarked = $state(new Set<string>());
+    /** In release order: what progress counts. */
+    const regularVideos = $derived(
+        (meta?.videos ?? [])
+            .filter((v) => (v.season ?? 0) > 0 && !v.upcoming)
+            .sort((a, b) => a.season! - b.season! || (a.episode ?? 0) - (b.episode ?? 0))
+    );
+    /**
+     * What the tracker knows you've watched of this show, by Stremio's IDs:
+     * the episodes its progress covers and any you logged. Stremio may not
+     * know (watched elsewhere, a backup brought back), and its ticks, Play
+     * and the spoiler blur shouldn't say otherwise. Not for an anime whose
+     * seasons are separate tracker titles (they can't be lined up).
+     */
+    const trackerSeen = $derived.by((): Set<string> => {
+        const out = new Set(Object.keys(episodeLogs));
+        if (main && isSeries && (lbt.titles?.length ?? 0) <= 1) {
+            const n = main.status === 'completed' ? regularVideos.length : (main.progress ?? 0);
+            for (const v of regularVideos.slice(0, n)) out.add(v.id);
+        }
+        for (const id of unmarked) out.delete(id);
+        return out;
+    });
+    const shownVideos = $derived((meta?.videos ?? []).map((v) => (!v.watched && trackerSeen.has(v.id) ? { ...v, watched: true } : v)));
     /** Only which show (not every update of its details) brings them again. */
     const episodeShowId = $derived(isSeries && lbOn ? (meta?.id ?? null) : null);
     $effect(() => {
@@ -515,11 +543,17 @@
     }
 
     function toggleEpisodeWatched(v: Video) {
+        // As shown (Stremio's tick or the tracker's).
+        v = shownVideos.find((x) => x.id === v.id) ?? v;
         setEpisodeWatched(v, !v.watched);
         const label = v.season != null && v.episode != null ? `S${v.season} E${v.episode}` : 'the episode';
         undo.show(v.watched ? `Marked ${label} unwatched` : `Marked ${label} watched`, () => setEpisodeWatched(v, !!v.watched));
     }
     function setEpisodeWatched(v: Video, watched: boolean) {
+        const next = new Set(unmarked);
+        if (watched) next.delete(v.id);
+        else next.add(v.id);
+        unmarked = next;
         core.dispatch({
             action: 'MetaDetails',
             args: { action: 'MarkVideoAsWatched', args: [{ id: v.id, released: v.released }, watched] },
@@ -670,7 +704,8 @@
                 <div class="actions">
                     <button class="play" data-tv-focus onclick={() => play()}>
                         <Icon name="play" size={16} filled />
-                        {playLabel}
+                        <!-- A phone keeps it on one line: the episode, with the icon for "Play". -->
+                        <span class:verb={!!playEpisode}>{playVerb}</span>{#if playEpisode}<span>{playEpisode}</span>{/if}
                     </button>
                     {#if lbOn}
                         <button class="round" class:on={saved} onclick={toggleLibrary} aria-haspopup="menu" aria-label="Status and Lists" title={saved ? 'Saved' : 'Save'}>
@@ -785,7 +820,7 @@
                             <div class="details-tab"><DetailsPanel {meta} status={statusLine} lists={listNames} /></div>
                         {:else if isSeries && tab === 'episodes'}
                             <EpisodeList
-                                videos={meta.videos}
+                                videos={shownVideos}
                                 bind:season
                                 selectedId={videoId}
                                 currentId={resuming ? (resumeVideo?.id ?? null) : null}
@@ -1459,6 +1494,12 @@
             flex: 1;
             justify-content: center;
             height: 48px;
+            min-width: 0;
+            padding: 0 16px;
+            white-space: nowrap;
+        }
+        .play .verb {
+            display: none;
         }
         .round {
             width: 48px;
