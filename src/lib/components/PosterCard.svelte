@@ -11,6 +11,7 @@
 </script>
 
 <script lang="ts">
+    import { sized } from '$lib/imageSize';
     import { arrowNav } from '$lib/keyboard';
     import { titleHref } from '$lib/links';
     import { titleContext } from '$lib/contextmenu';
@@ -71,7 +72,7 @@
     <div class="poster" class:loaded class:wide>
         {#if item.poster && !failed}
             <img
-                src={item.poster}
+                src={sized(item.poster, 'poster')}
                 alt=""
                 loading="lazy"
                 decoding="async"

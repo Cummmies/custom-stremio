@@ -1,11 +1,13 @@
 // Artwork helpers. Catalog previews often omit backgrounds and logos; for IMDb
 // ids, Stremio's own image service (metahub) has them.
 import type { MetaItemPreview } from './types';
+import { sized } from '$lib/imageSize';
 
 const isImdb = (id: string) => /^tt\d+$/.test(id);
 
 export function backgroundOf(item: MetaItemPreview): string | null {
-    if (item.background) return item.background;
+    // On the TV, at the screen's size (lib/imageSize.ts).
+    if (item.background) return sized(item.background, 'backdrop');
     return isImdb(item.id) ? `https://images.metahub.space/background/medium/${item.id}/img` : null;
 }
 

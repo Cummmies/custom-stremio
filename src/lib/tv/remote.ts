@@ -237,7 +237,14 @@ function loadingBetween(from: DOMRect, to: DOMRect | null, dir: 'up' | 'down'): 
     return best;
 }
 
+/** Set by a move until the next frame is drawn (held arrows: one move a frame). */
+let movedThisFrame = false;
+
 function move(dir: Dir): boolean {
+    if (!movedThisFrame) {
+        movedThisFrame = true;
+        requestAnimationFrame(() => (movedThisFrame = false));
+    }
     const list = candidates();
     const active = document.activeElement as HTMLElement | null;
     const inList = active && active !== document.body && list.some(({ el }) => el === active);
@@ -507,6 +514,12 @@ export function startRemote(opts: { atHome: () => boolean; back: () => void }) {
             const dir = ARROWS[e.key];
             if (dir) {
                 if (playerOnVideo) return;
+                // A held arrow repeats faster than the TV draws: one move a
+                // frame, the rest dropped, so focus never runs ahead of the screen.
+                if (e.repeat && movedThisFrame) {
+                    e.preventDefault();
+                    return;
+                }
                 const el = document.activeElement;
                 // A field being typed in keeps left/right for the cursor.
                 if ((dir === 'left' || dir === 'right') && isTextField(el) && el.dataset.tvLocked === undefined && !el.readOnly) return;
