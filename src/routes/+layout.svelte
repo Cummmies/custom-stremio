@@ -15,6 +15,8 @@
     import PhoneHandoff from '$lib/components/PhoneHandoff.svelte';
     import ResumeBanner from '$lib/components/ResumeBanner.svelte';
     import NoticeBanner from '$lib/components/NoticeBanner.svelte';
+    import { tracker } from '$lib/tracker.svelte';
+    import { pushWatchedToStremio } from '$lib/stremioPush';
     import HandlePrompt from '$lib/components/HandlePrompt.svelte';
     import WhatsNew from '$lib/components/WhatsNew.svelte';
     import { whatsNew } from '$lib/whatsNew.svelte';
@@ -28,6 +30,11 @@
     import { notify } from '$lib/notify.svelte';
     import { startErrorReports } from '$lib/errorReports';
     import '$lib/styles/tv.css';
+
+    // What the tracker knows you've watched, marked in Stremio too (now and then).
+    $effect(() => {
+        if (tracker.ready) void pushWatchedToStremio();
+    });
 
     let { children } = $props();
 

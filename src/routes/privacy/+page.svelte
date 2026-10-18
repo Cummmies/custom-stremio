@@ -64,7 +64,9 @@
             your data for you if you ask. Everything they do is recorded.
         </li>
         <li>
-            <strong>Stremio</strong> keeps your Stremio library and addons, as its own privacy policy says. The addons you install are run by
+            <strong>Stremio</strong> keeps your Stremio library and addons, as its own privacy policy says. To mark watched in your Stremio
+            library what you’ve watched here (from a backup, say), the app hands the server its Stremio sign-in for that moment; it isn’t
+            kept. The addons you install are run by
             others: they see what you ask them for, such as a title’s streams.
         </li>
         <li>

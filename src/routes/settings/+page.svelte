@@ -38,6 +38,7 @@
     import { setLinkHandlingWanted } from '$lib/addonLinks';
     import { tracker } from '$lib/tracker.svelte';
     import { day, lb, today, type BackupConflict, type SignedInDevice } from '$lib/tracker/api';
+    import { pushWatchedToStremio, type PushResult } from '$lib/stremioPush';
     import { menu } from '$lib/menu.svelte';
     import { openExternal } from '$lib/links';
     import { ACTIONS, chordOf, formatChord, hotkeys, labelOf, type HotkeyAction } from '$lib/hotkeys.svelte';
@@ -239,12 +240,25 @@
         }
         dataNote = said.filter(Boolean).join(' ') || 'Nothing to import.';
         if (res.conflicts.length) pendingConflicts = res.conflicts;
+        else void markInStremio();
+    }
+
+    /** What the backup brought back, ticked in Stremio too. */
+    async function markInStremio() {
+        const before = dataNote;
+        const res: PushResult | null = await pushWatchedToStremio(true);
+        if (!res || (!res.movies && !res.shows)) return;
+        const parts = [res.movies ? `${res.movies} ${res.movies === 1 ? 'movie' : 'movies'}` : '', res.shows ? `${res.episodes} ${res.episodes === 1 ? 'episode' : 'episodes'}` : '']
+            .filter(Boolean)
+            .join(' and ');
+        if (dataNote === before) dataNote = `${before ?? ''} Marked ${parts} as watched in Stremio.`.trim();
     }
 
     async function resolveConflicts(decision: 'keep_local' | 'use_imported') {
         if (!pendingConflicts) return;
         if (decision === 'keep_local') {
             pendingConflicts = null;
+            void markInStremio();
             return;
         }
         dataBusy = 'resolve';
@@ -257,6 +271,7 @@
         }
         dataNote = `Updated ${res.resolved_count} ${res.resolved_count === 1 ? 'title' : 'titles'} from the backup.`;
         pendingConflicts = null;
+        void markInStremio();
     }
 
     // Every shortcut in the app. Keep in step with the key handlers in
