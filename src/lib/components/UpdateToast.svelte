@@ -6,9 +6,20 @@
 
     // Settings has its own Updates row with the same button: one is enough there.
     const onSettings = $derived(appUrl(page.url).pathname === '/settings');
+    /** The download note closed: "ready" still says so when it's done. */
+    let downloadHidden = $state(false);
 </script>
 
-{#if updates.phase === 'ready' && !updates.dismissed && !onSettings}
+{#if updates.phase === 'downloading' && !updates.reloads && updates.version && !downloadHidden && !onSettings}
+    <!-- A new app version (Windows): said as soon as it's found, while it downloads. -->
+    <aside class="toast" role="status" aria-live="polite">
+        <div class="text">
+            <strong>Update available</strong>
+            <span>Downloading version {updates.version}{updates.progress != null ? ` · ${Math.round(updates.progress * 100)}%` : '…'}</span>
+        </div>
+        <button class="close" onclick={() => (downloadHidden = true)} aria-label="Hide"><Icon name="close" size={14} /></button>
+    </aside>
+{:else if updates.phase === 'ready' && !updates.dismissed && !onSettings}
     <aside class="toast" role="status" aria-live="polite">
         <div class="text">
             <strong>Update ready</strong>

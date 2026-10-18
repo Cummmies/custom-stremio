@@ -67,14 +67,20 @@
         setTimeout(confirmWebBundle, 3000);
         // Release builds look for updates shortly after launch.
         if (import.meta.env.PROD) setTimeout(() => updates.check({ quiet: true }), 8000);
-        // Phones rarely relaunch apps: look again when it comes back to the front.
+        // Apps stay open for days: look again when it comes back to the front
+        // (at most every half hour), and every few hours while it's open.
         let lastCheck = Date.now();
-        const onVisible = () => {
-            if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 30 * 60_000) return;
+        const recheck = () => {
+            if (Date.now() - lastCheck < 30 * 60_000) return;
             lastCheck = Date.now();
             updates.check({ quiet: true });
         };
-        if ((isIOS || isTV) && import.meta.env.PROD) document.addEventListener('visibilitychange', onVisible);
+        const onVisible = () => document.visibilityState === 'visible' && recheck();
+        const every = import.meta.env.PROD ? setInterval(recheck, 4 * 3600_000) : undefined;
+        if (import.meta.env.PROD) {
+            document.addEventListener('visibilitychange', onVisible);
+            window.addEventListener('focus', recheck);
+        }
         // iOS ignores user-scalable=no in some cases; pinch gestures are ours to refuse.
         const noPinch = (e: Event) => e.preventDefault();
         if (isIOS) document.addEventListener('gesturestart', noPinch);
@@ -82,6 +88,8 @@
         return () => {
             offMenu?.();
             document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', recheck);
+            clearInterval(every);
             document.removeEventListener('gesturestart', noPinch);
         };
     });

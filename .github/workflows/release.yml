@@ -96,3 +96,7 @@ jobs:
           releaseBody: See the commits since the last release for what changed.
           releaseDraft: false
           includeUpdaterJson: true
+          # The updater's default download is the setup .exe (what people
+          # install), which updates in place: the .msi installs as a separate app
+          # next to it. (An app that knows it came from the .msi gets the .msi.)
+          updaterJsonPreferNsis: true

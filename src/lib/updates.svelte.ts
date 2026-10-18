@@ -32,7 +32,8 @@ class Updates {
     }
 
     async check({ quiet = false } = {}) {
-        if (!this.supported || this.phase === 'checking' || this.phase === 'downloading') return;
+        // One downloaded and waiting: nothing to look for until it's installed.
+        if (!this.supported || this.phase === 'checking' || this.phase === 'downloading' || this.phase === 'ready') return;
         if (isIOS) return this.#checkWeb(quiet);
         if (isTV) return this.#checkTV(quiet);
         this.reloads = false;
