@@ -103,18 +103,26 @@
         [meta?.releaseInfo, meta?.runtime, listSaysAnime ? 'Anime' : null, ...genres.slice(0, 3)].filter(Boolean)
     );
 
-    // Where "Play" goes: the episode you're partway through, else the first one
-    // you haven't watched (by Stremio or the tracker), else the first released one.
+    // Where "Play" goes: the episode you were on, unless it's watched (by Stremio
+    // or the tracker): then the one after it you haven't watched, else the first
+    // you haven't, else the first released one.
+    const lastVideo = $derived.by((): Video | null => {
+        const lastId = cleanVideoId(details?.libraryItem?.state.video_id);
+        return lastId ? (shownVideos.find((v) => v.id === lastId) ?? null) : null;
+    });
     const resumeVideo = $derived.by((): Video | null => {
         if (!meta || !isSeries) return null;
-        const lastId = cleanVideoId(details?.libraryItem?.state.video_id);
-        const last = lastId ? shownVideos.find((v) => v.id === lastId) : null;
-        if (last && (details?.libraryItem?.state.timeOffset || !last.watched)) return last;
+        const last = lastVideo;
+        if (last && !last.watched) return last;
         const seen = new Set(shownVideos.filter((v) => v.watched).map((v) => v.id));
-        const next = regularVideos.find((v) => !seen.has(v.id));
+        const at = last ? regularVideos.findIndex((v) => v.id === last.id) : -1;
+        const next = regularVideos.slice(at + 1).find((v) => !seen.has(v.id)) ?? regularVideos.find((v) => !seen.has(v.id));
         return next ?? last ?? regularVideos[0] ?? meta.videos[0] ?? null;
     });
-    const resuming = $derived(!!details?.libraryItem?.state.timeOffset);
+    // Resume: partway through the episode Play goes to (not one that's watched).
+    const resuming = $derived(
+        !!details?.libraryItem?.state.timeOffset && (!isSeries || (!!lastVideo && resumeVideo?.id === lastVideo.id))
+    );
     const playVerb = $derived(resuming ? 'Resume' : 'Play');
     /** The episode Play starts, if it's a show's ("S2 · E5"). */
     const playEpisode = $derived(resumeVideo ? `S${resumeVideo.season} · E${resumeVideo.episode}` : null);
