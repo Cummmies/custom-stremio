@@ -107,7 +107,7 @@
         lbFailed = false;
         const first = new Date(year, month - 1, 0);
         const last = new Date(year, month, 1);
-        const res = await tracker.request<{ events: LbEvent[] }>(`/calendar?start=${dayKey(first)}&end=${dayKey(last)}`);
+        const res = await tracker.request<{ events: LbEvent[] }>(`/calendar?start=${dayKey(first)}&end=${dayKey(last)}`, { timeout: 20_000 });
         if (lbLoadedFor !== key) return;
         if (res) lbEvents = res.events;
         else lbFailed = true;

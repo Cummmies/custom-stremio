@@ -266,7 +266,9 @@ export const lb = {
     resolveReport: (id: number, action: 'dismiss' | 'hide_review') =>
         tracker.request<{ reports: Report[] }>(`/admin/reports/${id}`, { method: 'POST', body: { action } }),
     /** What you're watching and what's next, and what you've finished (for Continue Watching). */
-    continueWatching: () => tracker.request<import('$lib/continueWatching').TrackerContinue>('/continue'),
+    // Longer than a quick read: a server at home can take a moment, and giving
+    // up would leave the row with Stremio's alone.
+    continueWatching: () => tracker.request<import('$lib/continueWatching').TrackerContinue>('/continue', { timeout: 20_000 }),
     /** A show's episodes you've marked watched or scored. */
     episodes: (id: string) => tracker.request<{ episodes: EpisodeLog[] }>(`/episodes?id=${enc(id)}`),
     /** Marks an episode watched (counting it) and sets what's in `fields`. */
