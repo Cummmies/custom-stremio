@@ -16,6 +16,12 @@
 // seasons or replies), announced the same way; iPhone keeps what it had
 // scheduled.
 //
+// Each pops up once: the first of your devices to see it claims it from the
+// tracker (POST /notifications/announced), so it doesn't pop up again on your
+// other devices, or after a reinstall; it stays under the bell everywhere
+// until read. What the tracker announced counts for the backup too (and the
+// other way round), so a launch that starts on the backup doesn't repeat it.
+//
 // Everything is per account (the Stremio account signed in). Turning system
 // notifications on asks the system's permission (iPhone; Windows doesn't
 // ask). An app built before the notification plugin existed shows the list
@@ -42,6 +48,8 @@ export type AppNotification = {
     /** When it was made (server time, ISO). */
     date: string | null;
     unread: boolean;
+    /** Already shown as a pop-up by one of your devices (the tracker's). */
+    announced?: boolean;
     stremio_id: string | null;
     type: 'movie' | 'series';
     poster: string | null;
@@ -286,7 +294,7 @@ class Notify {
             this.items = res.notifications;
             this.unread = res.unread;
             this.loaded = true;
-            this.#announce(uid, res.notifications);
+            void this.#announce(uid, res.notifications);
             await this.#schedule();
         } finally {
             this.#busy = false;
@@ -345,9 +353,15 @@ class Notify {
     /** The backup's new ones, as system notifications (keys, since they have no numbers). */
     #announceStremio(uid: string, list: AppNotification[]) {
         const name = `notify-stremio-seen:${uid}`;
+        // Its own first look (the tracker's list adds keys too, so those don't tell).
+        const looked = `notify-stremio-looked:${uid}`;
         let first = false;
         try {
-            first = localStorage.getItem(name) == null;
+            first = localStorage.getItem(looked) == null && localStorage.getItem(name) == null;
+            if (first || localStorage.getItem(looked) == null) {
+                first = true;
+                localStorage.setItem(looked, '1');
+            }
         } catch {
             /* treated as seen before */
         }
@@ -377,24 +391,47 @@ class Notify {
     }
 
     /** New ones since the last look, as system notifications. */
-    #announce(uid: string, list: AppNotification[]) {
+    async #announce(uid: string, list: AppNotification[]) {
         const state = read<Delivery>(deliveryKey(uid), { seen: null, scheduled: {}, ids: [] });
         const newest = list.reduce((m, n) => Math.max(m, n.id), 0);
+        // The backup (Stremio's list) mustn't announce these again.
+        this.#seenByBackup(uid, list);
         // The first look on this device: what's there already isn't news.
         if (state.seen == null) {
             write(deliveryKey(uid), { ...state, seen: newest });
             return;
         }
         const now = Date.now();
-        const fresh = list.filter((n) => {
-            if (!n.unread || n.id <= (state.seen ?? 0) || !this.#allowed(n.kind)) return false;
-            // Already announced at its air time (iPhone's schedule).
+        const candidates = list.filter((n) => n.unread && !n.announced && n.id > (state.seen ?? 0) && this.#allowed(n.kind));
+        // Already announced at its air time (iPhone's schedule): claimed, not shown again.
+        const airedHere = (n: AppNotification) => {
             const key = releaseKey(n.stremio_id, n.season, n.episode);
-            return !(key && state.scheduled[key] && state.scheduled[key] <= now);
-        });
+            return !!(key && state.scheduled[key] && state.scheduled[key] <= now);
+        };
         write(deliveryKey(uid), { ...state, seen: Math.max(state.seen, newest) });
-        if (!fresh.length || !this.systemOn) return;
-        void this.#show(fresh);
+        if (!candidates.length || !this.systemOn) return;
+        // The first device to claim one shows it; another already did: not again.
+        const res = await tracker.requestOrStatus<{ ids: number[] }>('/notifications/announced', {
+            method: 'POST',
+            body: { ids: candidates.map((n) => n.id) },
+        });
+        if (uid !== this.#uid) return;
+        // A tracker from before this (404): this device's own memory decides, as before.
+        const claimed = 'data' in res ? new Set(res.data.ids) : res.status === 404 ? new Set(candidates.map((n) => n.id)) : new Set<number>();
+        const fresh = candidates.filter((n) => claimed.has(n.id) && !airedHere(n));
+        if (fresh.length) void this.#show(fresh);
+    }
+
+    /** The tracker's episodes and movies, marked seen for the backup (Stremio's list uses its own keys). */
+    #seenByBackup(uid: string, list: AppNotification[]) {
+        const name = `notify-stremio-seen:${uid}`;
+        const seen = keySet(name);
+        const size = seen.size;
+        for (const n of list) {
+            const key = releaseKey(n.stremio_id, n.season, n.episode);
+            if (key) seen.add(`stremio:${key}`);
+        }
+        if (seen.size !== size) saveKeySet(name, seen);
     }
 
     async #show(fresh: AppNotification[]) {
