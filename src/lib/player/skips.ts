@@ -43,7 +43,9 @@ async function fromTheIntroDB(imdb: string, season: number | null, episode: numb
         q.set('season', String(season));
         q.set('episode', String(episode));
     }
-    const data = await getJson(`https://api.theintrodb.org/v3/media?${q}`);
+    // v4 (v2/v3 are frozen and being retired): the same query (it resolves the
+    // IMDb ID itself) and the same segments; only its own ID field changed.
+    const data = await getJson(`https://api.theintrodb.org/v4/media?${q}`);
     if (!data || data.error) return [];
     const out: Segment[] = [];
     const map: [SkipKind, string][] = [['intro', 'intro'], ['recap', 'recap'], ['credits', 'credits'], ['preview', 'preview']];

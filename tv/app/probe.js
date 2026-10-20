@@ -306,7 +306,7 @@
     }
     netTest('Cinemeta addon', 'https://v3-cinemeta.strem.io/manifest.json');
     netTest('Stremio API', 'https://api.strem.io/api/getUser', { method: 'POST', body: '{}' });
-    netTest('TheIntroDB (CORS?)', 'https://api.theintrodb.org/v3/media?tmdb_id=1396&season=1&episode=1');
+    netTest('TheIntroDB (CORS?)', 'https://api.theintrodb.org/v4/media?imdb_id=tt0903747&season=1&episode=1');
     netTest('IntroDB (CORS?)', 'https://api.introdb.app/segments?imdb_id=tt0903747&season=1&episode=1');
 
     // --- TizenBrew service ---------------------------------------------------------
@@ -358,7 +358,7 @@
                 row(SV, 'CPUs', info.cpus);
                 row(SV, 'WebAssembly in Node', !!info.hasWebAssembly);
                 var p = row(SV, 'Proxy (TheIntroDB)', '…');
-                Promise.race([fetch(SERVICE + '/proxy?url=' + encodeURIComponent('https://api.theintrodb.org/v3/media?tmdb_id=1396&season=1&episode=1')), timeout(15000)])
+                Promise.race([fetch(SERVICE + '/proxy?url=' + encodeURIComponent('https://api.theintrodb.org/v4/media?imdb_id=tt0903747&season=1&episode=1')), timeout(15000)])
                     .then(function (res) { setRow(p, res.status < 500 ? true : 'HTTP ' + res.status); })
                     .catch(function (e) { setRow(p, '✗ ' + short(e), 'no'); });
             })
