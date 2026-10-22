@@ -138,12 +138,65 @@
     ];
     let animeTrack = $state<AnimeTrack | null>(null);
     let animeTrackFailed = $state(false);
+    // Related Titles: an anime's side stories too, or only its prequels and
+    // sequels (the same setting as the website's).
+    type RelatedScope = 'all' | 'main';
+    const relatedOptions: { value: RelatedScope; label: string }[] = [
+        { value: 'all', label: 'Include Spin-offs & Side Stories' },
+        { value: 'main', label: 'Prequels & Sequels Only' },
+    ];
+    let relatedScope = $state<RelatedScope>('all');
+    let relatedFailed = $state(false);
     $effect(() => {
         if (!tracker.ready || !app.user) return;
-        tracker.request<{ anime_track: AnimeTrack }>('/preferences').then((res) => {
-            if (res) animeTrack = res.anime_track;
+        tracker.request<{ anime_track: AnimeTrack; related_scope?: RelatedScope }>('/preferences').then((res) => {
+            if (!res) return;
+            animeTrack = res.anime_track;
+            if (res.related_scope) relatedScope = res.related_scope;
         });
     });
+    async function setRelatedScope(scope: RelatedScope) {
+        const before = relatedScope;
+        relatedScope = scope;
+        relatedFailed = false;
+        const res = await tracker.request('/preferences', { method: 'PUT', body: { related_scope: scope } });
+        if (!res) {
+            relatedScope = before;
+            relatedFailed = true;
+        }
+    }
+
+    // API Keys & Integrations (admins): the keys the server fetches titles with,
+    // the same as the website's. Shown by their last characters only.
+    type ApiKeys = { tmdb: string; omdb: string; animeschedule: string; animeschedule_id: string };
+    const isAdmin = $derived(!!tracker.saved?.user?.is_admin);
+    let apiKeys = $state<ApiKeys | null>(null);
+    let keyEdits = $state({ tmdb: '', omdb: '', animeschedule: '', animeschedule_id: '' });
+    let keysNote = $state<string | null>(null);
+    let keysError = $state(false);
+    let keysBusy = $state(false);
+    $effect(() => {
+        if (!tracker.ready || !isAdmin) return;
+        tracker.request<ApiKeys>('/admin/api-keys').then((res) => res && (apiKeys = res));
+    });
+    async function saveKeys(e: Event) {
+        e.preventDefault();
+        const body = Object.fromEntries(Object.entries(keyEdits).filter(([, v]) => v.trim()));
+        if (!Object.keys(body).length) return;
+        keysBusy = true;
+        keysNote = null;
+        const res = await tracker.requestOrStatus<ApiKeys>('/admin/api-keys', { method: 'PUT', body, timeout: 30_000 });
+        keysBusy = false;
+        if ('data' in res) {
+            apiKeys = res.data;
+            keyEdits = { tmdb: '', omdb: '', animeschedule: '', animeschedule_id: '' };
+            keysError = false;
+            keysNote = 'Saved. The server fetches titles with them now.';
+        } else {
+            keysError = true;
+            keysNote = res.detail ?? 'Couldn’t save. Try again in a moment.';
+        }
+    }
     async function setAnimeTrack(track: AnimeTrack) {
         const before = animeTrack;
         animeTrack = track;
@@ -953,7 +1006,50 @@
                         </div>
                         <PopupButton label="New anime episodes" value={animeTrack} options={animeTrackOptions} onchange={setAnimeTrack} />
                     </div>
+                    <div class="row">
+                        <div>
+                            <div class="title">Related Titles</div>
+                            <div class="sub" class:sync-error={relatedFailed} role={relatedFailed ? 'status' : undefined}>
+                                {relatedFailed ? 'Couldn’t save. Try again in a moment.' : 'What a show’s Related tab lists besides its seasons and films.'}
+                            </div>
+                        </div>
+                        <PopupButton label="Related titles" value={relatedScope} options={relatedOptions} onchange={setRelatedScope} />
+                    </div>
                 </div>
+            </section>
+        {/if}
+
+        {#if app.user && tracker.ready && isAdmin && apiKeys}
+            <section>
+                <h2>API Keys &amp; Integrations</h2>
+                <form class="group" onsubmit={saveKeys}>
+                    <div class="row">
+                        <div>
+                            <div class="title">For Everyone on the Server</div>
+                            <div class="sub" class:sync-error={keysError} role={keysNote ? 'status' : undefined}>
+                                {keysNote ?? 'The keys the server fetches titles, posters and scores with. Only admins see this. Leave a field empty to keep its key.'}
+                            </div>
+                        </div>
+                    </div>
+                    {#each [{ id: 'tmdb', title: 'TMDb Read Access Token', sub: 'Titles, posters, seasons and episodes.' }, { id: 'omdb', title: 'OMDb API Key', sub: 'IMDb, Rotten Tomatoes and Metacritic scores.' }, { id: 'animeschedule', title: 'AnimeSchedule API Key', sub: 'Anime air times, sub and dub.' }, { id: 'animeschedule_id', title: 'AnimeSchedule Client ID', sub: '' }] as k (k.id)}
+                        {@const key = k.id as keyof ApiKeys}
+                        <div class="row">
+                            <div>
+                                <label class="title" for={`key-${k.id}`}>{k.title}</label>
+                                <div class="sub">{apiKeys[key] ? `Set (${apiKeys[key]})` : 'Not set'}{k.sub ? ` · ${k.sub}` : ''}</div>
+                            </div>
+                            <div class="url">
+                                <input id={`key-${k.id}`} type={key === 'animeschedule_id' ? 'text' : 'password'} autocomplete="off" spellcheck="false" placeholder="New key" bind:value={keyEdits[key]} />
+                            </div>
+                        </div>
+                    {/each}
+                    {#if Object.values(keyEdits).some((v) => v.trim())}
+                        <div class="row">
+                            <div></div>
+                            <button class="btn primary" type="submit" disabled={keysBusy}>{keysBusy ? 'Checking…' : 'Save'}</button>
+                        </div>
+                    {/if}
+                </form>
             </section>
         {/if}
 
