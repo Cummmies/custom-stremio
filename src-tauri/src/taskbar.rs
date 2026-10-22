@@ -4,8 +4,8 @@
 //!   app on the taskbar (`ITaskbarList3::ThumbBarAddButtons`); a click comes
 //!   back to the page as a `media://button` "toggle" event, like the media
 //!   overlay's buttons (media_controls.rs);
-//! - the playback position as the taskbar button's progress bar (yellow
-//!   while paused);
+//! - no progress bar on the taskbar button: it filled the button green, and
+//!   yellow while paused, which read as the app asking for attention;
 //! - keeping the PC and screen awake while a video plays (`keep_awake`).
 //!
 //! All but the last run on the main (UI) thread, which owns the window.
@@ -31,7 +31,7 @@ mod imp {
     };
     use windows::Win32::UI::Shell::{
         DefSubclassProc, ITaskbarList3, SetWindowSubclass, TaskbarList, THBF_ENABLED, THBF_HIDDEN, THBN_CLICKED,
-        THB_FLAGS, THB_ICON, THB_TOOLTIP, THUMBBUTTON, THUMBBUTTONMASK, TBPF_NOPROGRESS, TBPF_NORMAL, TBPF_PAUSED,
+        THB_FLAGS, THB_ICON, THB_TOOLTIP, THUMBBUTTON, THUMBBUTTONMASK, TBPF_NOPROGRESS,
     };
     use windows::Win32::UI::WindowsAndMessaging::{CreateIconIndirect, RegisterWindowMessageW, HICON, ICONINFO, WM_COMMAND};
 
@@ -61,32 +61,19 @@ mod imp {
     }
 
     /// Shows the play/pause button for a playing (`Some(false)`) or paused
-    /// (`Some(true)`) video, or hides it and the progress bar (`None`). Main thread.
+    /// (`Some(true)`) video, or hides it (`None`). Main thread.
     pub fn set_state(app: &AppHandle, hwnd: isize, paused: Option<bool>) {
         *STATE.lock().unwrap_or_else(|e| e.into_inner()) = paused;
         let _ = APP.set(app.clone());
         with_taskbar(hwnd, |t| {
             update_button(t);
-            let flag = match paused {
-                None => TBPF_NOPROGRESS,
-                Some(true) => TBPF_PAUSED,
-                Some(false) => TBPF_NORMAL,
-            };
-            let _ = unsafe { t.list.SetProgressState(t.hwnd, flag) };
+            // Clears one an older version left.
+            let _ = unsafe { t.list.SetProgressState(t.hwnd, TBPF_NOPROGRESS) };
         });
     }
 
-    /// The progress bar: `position` of `duration` seconds. Main thread.
-    pub fn set_progress(hwnd: isize, position: f64, duration: f64) {
-        if STATE.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
-            return;
-        }
-        with_taskbar(hwnd, |t| {
-            let total = (duration * 10.0) as u64;
-            let done = ((position * 10.0) as u64).min(total);
-            let _ = unsafe { t.list.SetProgressValue(t.hwnd, done, total) };
-        });
-    }
+    /// Was the progress bar's position; there's no bar any more (see the top).
+    pub fn set_progress(_hwnd: isize, _position: f64, _duration: f64) {}
 
     fn with_taskbar(hwnd: isize, f: impl FnOnce(&mut Taskbar)) {
         TASKBAR.with(|cell| {
