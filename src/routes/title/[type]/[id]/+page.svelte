@@ -576,20 +576,22 @@
         }
     }
 
-    /** Mark Previous as Watched: every released episode before this one, in
-     *  Stremio, and the tracker's progress up to the last of them (one watch
-     *  event, as if it had just been finished; it only ever moves forward). */
+    /** Mark Watched Up to Here: this episode and every released one before it,
+     *  in Stremio, and the tracker's progress up to this one (one watch event,
+     *  as if it had just been finished; it only ever moves forward). */
     function markPreviousWatched(v: Video) {
         if (!meta) return;
         const before = meta.videos
             .filter((x) => (x.season ?? 0) > 0 && !x.upcoming)
-            .filter((x) => (x.season! < v.season! || (x.season === v.season && (x.episode ?? 0) < (v.episode ?? 0))))
+            .filter((x) => (x.season! < v.season! || (x.season === v.season && (x.episode ?? 0) <= (v.episode ?? 0))))
             .sort((a, b) => (a.season! - b.season!) || (a.episode ?? 0) - (b.episode ?? 0));
         const marked = before.filter((x) => !x.watched);
         const mark = (watched: boolean) => {
             for (const x of marked) core.dispatch({ action: 'MetaDetails', args: { action: 'MarkVideoAsWatched', args: [{ id: x.id, released: x.released }, watched] } });
         };
         mark(true);
+        // Ones you'd unmarked here count as watched again.
+        if (unmarked.size) unmarked = new Set([...unmarked].filter((id) => !before.some((x) => x.id === id)));
         const last = before.at(-1);
         if (!last) return;
         const text = `Marked ${marked.length} ${marked.length === 1 ? 'episode' : 'episodes'} watched`;
