@@ -1036,10 +1036,10 @@
                         <div class="row">
                             <div>
                                 <label class="title" for={`key-${k.id}`}>{k.title}</label>
-                                <div class="sub">{apiKeys[key] ? `Set (${apiKeys[key]})` : 'Not set'}{k.sub ? ` · ${k.sub}` : ''}</div>
+                                <div class="sub">{apiKeys[key] ? (apiKeys[key] === 'set' ? 'Set' : `Set (${apiKeys[key]})`) : 'Not set'}{k.sub ? ` · ${k.sub}` : ''}</div>
                             </div>
                             <div class="url">
-                                <input id={`key-${k.id}`} type={key === 'animeschedule_id' ? 'text' : 'password'} autocomplete="off" spellcheck="false" placeholder="New key" bind:value={keyEdits[key]} />
+                                <input id={`key-${k.id}`} type={key === 'animeschedule_id' ? 'text' : 'password'} autocomplete="off" spellcheck="false" placeholder={key === 'animeschedule_id' ? 'New ID' : 'New key'} bind:value={keyEdits[key]} />
                             </div>
                         </div>
                     {/each}
