@@ -7,6 +7,8 @@
         releaseInfo?: string | null;
         /** 0..1, shows a progress bar (continue watching) */
         progress?: number | null;
+        /** Where it opens, when not its own title page (a season of a show, say). */
+        href?: string;
     };
 </script>
 
@@ -63,7 +65,7 @@
 
 <a
     class="card"
-    href={titleHref(item.type, item.id)}
+    href={item.href ?? titleHref(item.type, item.id)}
     use:titleContext={{ type: item.type, id: item.id, name: item.name, preview }}
     use:previewInHero={heroItem}
     onkeydown={arrowNav}

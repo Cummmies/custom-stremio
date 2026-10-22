@@ -110,6 +110,8 @@ export type RelatedItem = {
     poster: string | null;
     status: Status | null;
     here: boolean;
+    /** An anime season that's part of its show on Stremio: that season on the show's page. */
+    season?: number | null;
 };
 export type RelatedGroup = { title: string; items: RelatedItem[] };
 

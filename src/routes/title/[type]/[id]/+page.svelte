@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from 'svelte';
     import DetailsPanel from '$lib/components/detail/DetailsPanel.svelte';
     import LogDialog, { type LogMode, type LogDraft } from '$lib/components/detail/LogDialog.svelte';
     import ReviewsTab from '$lib/components/detail/ReviewsTab.svelte';
@@ -34,6 +35,8 @@
     const type = $derived(page.params.type ?? '');
     const id = $derived(page.params.id ?? '');
     const videoId = $derived(appUrl(page.url).searchParams.get('video'));
+    /** ?season=N (a season opened from Related): that season's episodes. */
+    const seasonParam = $derived(appUrl(page.url).searchParams.get('season'));
 
     let details = $state<MetaDetails | null>(null);
     let season = $state(1);
@@ -142,11 +145,36 @@
         const first = seasonFor !== meta.id && seasonFor !== `${meta.id}:tracker`;
         seasonFor = key;
         if (!first && season !== autoSeason) return;
-        const fromUrl = videoId ? meta.videos.find((v) => v.id === videoId)?.season : undefined;
+        const asked = seasonParam != null && meta.videos.some((v) => (v.season ?? 0) === Number(seasonParam)) ? Number(seasonParam) : undefined;
+        const fromUrl = videoId ? meta.videos.find((v) => v.id === videoId)?.season : asked;
         // Caught up (a Completed show, say): the last season you watched, not the first.
         season = fromUrl ?? lastWatched?.season ?? resumeVideo?.season ?? meta.videos[0]?.season ?? 1;
         autoSeason = season;
         if (first) tab = firstTab();
+    });
+
+    // Another season of the show you're on (Related): that season, on this page.
+    $effect(() => {
+        const asked = seasonParam;
+        if (!meta || asked == null) return;
+        untrack(() => {
+            const n = Number(asked);
+            if (!meta.videos.some((v) => (v.season ?? 0) === n)) return;
+            season = n;
+            autoSeason = n;
+            if (isSeries) tab = 'episodes';
+        });
+    });
+
+    // Never loading (no addon here provides this title, a Kitsu one without the
+    // Kitsu addon, say): after a while, say so instead of loading for ever.
+    let stuck = $state(false);
+    $effect(() => {
+        void id;
+        stuck = false;
+        if (meta || failed) return;
+        const t = setTimeout(() => (stuck = true), 20_000);
+        return () => clearTimeout(t);
     });
 
     // The Details tab only exists on narrow windows; widening goes back to the main section.
@@ -674,10 +702,14 @@
 
 <svelte:head><title>{meta?.name ?? 'Loading'} · Stremio</title></svelte:head>
 
-{#if failed}
+{#if failed || (stuck && !meta)}
     <div class="error">
         <EmptyState icon="info" title="Couldn’t load this title">
-            <p>The addon that provides it didn’t respond. Check your connection, then try again.</p>
+            {#if id?.startsWith('kitsu:') && !failed}
+                <p>It comes from the Kitsu addon, which isn’t installed. Add it in Addons, then try again.</p>
+            {:else}
+                <p>The addon that provides it didn’t respond. Check your connection, then try again.</p>
+            {/if}
             <button onclick={() => location.reload()}>Try Again</button>
         </EmptyState>
     </div>

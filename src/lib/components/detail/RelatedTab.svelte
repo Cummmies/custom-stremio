@@ -6,6 +6,7 @@
     // your status ("Watching" also gets the progress bar Continue Watching
     // uses). Same cards and grid as Library.
     import PosterCard from '$lib/components/PosterCard.svelte';
+    import { titleHref } from '$lib/links';
     import { STATUS_SHORT, type RelatedGroup, type RelatedItem } from '$lib/tracker/api';
 
     let { groups }: { groups: RelatedGroup[] } = $props();
@@ -34,7 +35,8 @@
         <section aria-label={g.title}>
             <h3>{g.title}</h3>
             <ol class="grid">
-                {#each g.items as r (r.id)}
+                <!-- Keyed by place: two parts of one season open the same page. -->
+                {#each g.items as r, i (`${r.id}:${r.season ?? ''}:${i}`)}
                     <li class:here={r.here} aria-current={r.here ? 'page' : undefined}>
                         <PosterCard
                             item={{
@@ -44,6 +46,8 @@
                                 poster: r.poster,
                                 releaseInfo: below(r),
                                 progress: r.status === 'watching' ? 0.45 : null,
+                                // A season of the show you're on (or another show's): its season, on that page.
+                                href: r.season != null ? titleHref('series', r.id, { season: String(r.season) }) : undefined,
                             }}
                         />
                     </li>
