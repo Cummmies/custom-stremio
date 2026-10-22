@@ -67,6 +67,8 @@ export type LibraryItem = {
     recent?: string | null;
     /** Titles: every season's episodes, when known. */
     episodes?: number | null;
+    /** Titles: Completed, with a new season out since. */
+    new_season?: boolean;
     anime?: boolean;
 };
 

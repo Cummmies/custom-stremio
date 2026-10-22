@@ -175,6 +175,8 @@
         return parts.length ? parts.join(' · ') : i.year;
     }
     function below(i: LibraryItem): string | null {
+        // A Completed show with a new season out says so (where the sort doesn't need the line).
+        if (i.new_season && (sort === 'recent' || sort === 'title' || sort === 'year')) return 'New season';
         switch (sort) {
             case 'recent':
                 return i.status === 'completed' ? lastWatch(i) : i.year;

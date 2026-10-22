@@ -119,6 +119,11 @@
         const next = regularVideos.slice(at + 1).find((v) => !seen.has(v.id)) ?? regularVideos.find((v) => !seen.has(v.id));
         return next ?? last ?? regularVideos[0] ?? meta.videos[0] ?? null;
     });
+    /** Caught up (every released episode watched): the last one, where the page opens. */
+    const lastWatched = $derived.by((): Video | null => {
+        const seen = new Set(shownVideos.filter((v) => v.watched).map((v) => v.id));
+        return regularVideos.length && regularVideos.every((v) => seen.has(v.id)) ? (regularVideos.at(-1) ?? null) : null;
+    });
     // Resume: partway through the episode Play goes to (not one that's watched).
     const resuming = $derived(
         !!details?.libraryItem?.state.timeOffset && (!isSeries || (!!lastVideo && resumeVideo?.id === lastVideo.id))
@@ -138,7 +143,8 @@
         seasonFor = key;
         if (!first && season !== autoSeason) return;
         const fromUrl = videoId ? meta.videos.find((v) => v.id === videoId)?.season : undefined;
-        season = fromUrl ?? resumeVideo?.season ?? meta.videos[0]?.season ?? 1;
+        // Caught up (a Completed show, say): the last season you watched, not the first.
+        season = fromUrl ?? lastWatched?.season ?? resumeVideo?.season ?? meta.videos[0]?.season ?? 1;
         autoSeason = season;
         if (first) tab = firstTab();
     });
@@ -834,6 +840,7 @@
                                 bind:season
                                 selectedId={videoId}
                                 currentId={resuming ? (resumeVideo?.id ?? null) : null}
+                                scrollToId={lastWatched?.id ?? resumeVideo?.id ?? null}
                                 onselect={(v) => (v.upcoming ? openSources(v.id) : playVideo(v.id))}
                                 ontogglewatched={toggleEpisodeWatched}
                                 logs={episodeLogs}

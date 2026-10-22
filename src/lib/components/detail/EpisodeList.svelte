@@ -13,6 +13,7 @@
     let {
         videos,
         season = $bindable(),
+        scrollToId = null,
         selectedId,
         currentId = null,
         onselect,
@@ -23,6 +24,8 @@
     }: {
         videos: Video[];
         season: number;
+        /** Brought into view when nothing's selected or playing (the next, or last watched, episode). */
+        scrollToId?: string | null;
         selectedId: string | null;
         /** The episode you're up to; the list opens scrolled to it. */
         currentId?: string | null;
@@ -70,7 +73,7 @@
     // On opening a season, bring the relevant episode into view (inside the list only).
     $effect(() => {
         season;
-        const target = selectedId ?? currentId;
+        const target = selectedId ?? currentId ?? scrollToId;
         const row = target && list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(target)}"]`);
         if (list) list.scrollTop = row ? Math.max(0, row.offsetTop - list.offsetTop - 8) : 0;
         updateEdges();
@@ -84,6 +87,26 @@
         videos.filter((v) => (v.season ?? 0) === season).sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0))
     );
 
+    /**
+     * Where you are in each season, for the picker: "✓" (all watched), "2 of 10",
+     * or "New" (out, none watched yet, and you'd finished the one before).
+     */
+    function seasonState(s: number): string {
+        if (s === 0) return '';
+        const eps = videos.filter((v) => (v.season ?? 0) === s);
+        const seen = eps.filter((v) => v.watched).length;
+        if (eps.length && seen === eps.length) return '✓';
+        if (seen) return `${seen} of ${eps.length}`;
+        const out = eps.some((v) => !v.upcoming);
+        const before = videos.filter((v) => (v.season ?? 0) > 0 && (v.season ?? 0) < s && !v.upcoming);
+        return out && before.length && before.every((v) => v.watched) ? 'New' : '';
+    }
+    function seasonLabel(s: number) {
+        if (s === 0) return 'Specials';
+        const state = seasonState(s);
+        return state === '✓' ? `Season ${s} ✓` : state ? `Season ${s} · ${state}` : `Season ${s}`;
+    }
+
     // Stremio's dates are calendar days (lib/released.ts).
     const fmtDate = (iso: string | null) => releasedDate(iso);
 </script>
@@ -93,10 +116,10 @@
         <PopupButton
             label="Season"
             bind:value={season}
-            options={seasons.map((s) => ({ value: s, label: s === 0 ? 'Specials' : `Season ${s}` }))}
+            options={seasons.map((s) => ({ value: s, label: seasonLabel(s) }))}
         />
     {:else}
-        <h3>{season === 0 ? 'Specials' : `Season ${season}`}</h3>
+        <h3>{seasonLabel(season)}</h3>
     {/if}
     <span class="count">{episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}</span>
 </div>

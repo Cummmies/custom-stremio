@@ -20,6 +20,8 @@ export type TrackerContinue = {
         progress: number;
         next: { video_id: string; season: number; episode: number } | null;
         at: string | null;
+        /** A Completed show with a new season out (it stays Completed). */
+        new_season?: boolean;
     }[];
     finished: string[];
 };
