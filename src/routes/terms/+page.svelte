@@ -1,12 +1,13 @@
 <script lang="ts">
     // The Terms of Use, in plain words. Who runs the app: lib/legal.ts.
     import LegalPage from '$lib/components/LegalPage.svelte';
-    import { CONTACT, OPERATOR } from '$lib/legal';
+    import { APP_NAME, CONTACT, JURISDICTION, MIN_AGE, OPERATOR } from '$lib/legal';
 </script>
 
 <LegalPage title="Terms of Use">
     <p>
-        This app is run by <strong>{OPERATOR}</strong>. By using it you agree to these terms. If you don’t agree, please don’t use it.
+        {APP_NAME} (“the app”) is run by <strong>{OPERATOR}</strong> (“we”). By using the app or its website you agree to these terms and
+        to the Privacy Policy. If you don’t agree, please don’t use them.
     </p>
 
     <h2>What it is</h2>
@@ -20,6 +21,9 @@
         The app doesn’t host, provide or choose any video. Streams come from the addons you install, which are run by others. You’re
         responsible for what you install and watch, and for following the law where you live, including copyright.
     </p>
+
+    <h2>Who can use it</h2>
+    <p>You need to be at least {MIN_AGE}, and old enough where you live to agree to these terms (or have a parent or guardian agree for you).</p>
 
     <h2>Your account</h2>
     <p>
@@ -42,6 +46,12 @@
         them may be removed. A suspension keeps your data; the app tells you until when, and why.
     </p>
 
+    <h2>Other services</h2>
+    <p>
+        The app works with services run by others: Stremio for your account and library, the addons you install, and title information from
+        services such as TMDb, AniList and Kitsu. Their own terms apply to them, and we aren’t responsible for them.
+    </p>
+
     <h2>No guarantees</h2>
     <p>
         The app is provided as it is, without warranties. It may change, pause or stop, and features may come and go. As far as the law allows,
@@ -54,8 +64,11 @@
         breaks these terms.
     </p>
 
+    <h2>Governing law</h2>
+    <p>These terms follow the laws of {JURISDICTION}, apart from any rule that would apply another place’s laws.</p>
+
     <h2>Changes</h2>
-    <p>If these terms change, the date above changes with them.</p>
+    <p>If these terms change, the date above changes with them. Big changes are announced in the app first.</p>
 
     <h2>Questions</h2>
     <p>Write to <strong>{CONTACT}</strong>.</p>

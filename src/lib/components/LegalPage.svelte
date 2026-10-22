@@ -1,9 +1,10 @@
 <script lang="ts">
     // The Privacy Policy's and Terms of Use's page: a readable column, a way back
-    // to Settings, and when it took effect.
+    // to Settings, when it took effect, numbered sections, and who runs the app
+    // and how to reach them (lib/legal.ts) at the end.
     import type { Snippet } from 'svelte';
     import Icon from './Icon.svelte';
-    import { EFFECTIVE } from '$lib/legal';
+    import { APP_NAME, CONTACT, EFFECTIVE, OPERATOR } from '$lib/legal';
 
     let { title, children }: { title: string; children: Snippet } = $props();
 </script>
@@ -13,8 +14,16 @@
 <article class="page">
     <a class="back" href="/settings"><Icon name="back" size={16} />Settings</a>
     <h1>{title}</h1>
-    <p class="effective">In effect from {EFFECTIVE}</p>
-    {@render children()}
+    <p class="effective">{APP_NAME} · Effective and last updated {EFFECTIVE}</p>
+    <div class="body">{@render children()}</div>
+    <footer class="operator">
+        <p><strong>{OPERATOR}</strong></p>
+        <p>Contact: <a href="mailto:{CONTACT}">{CONTACT}</a></p>
+        <p class="note">
+            {APP_NAME} is an independent app. It isn’t made by, endorsed by or affiliated with Stremio or Smart Code. Stremio is a trademark of
+            its owners.
+        </p>
+    </footer>
 </article>
 
 <style>
@@ -49,6 +58,32 @@
     .effective {
         margin: 4px 0 28px;
         color: var(--label-2);
+        font-size: 13px;
+    }
+    /* Numbered sections, as legal pages are. */
+    .body {
+        counter-reset: section;
+    }
+    .body :global(h2)::before {
+        counter-increment: section;
+        content: counter(section) '. ';
+        color: var(--label-2);
+    }
+    .operator {
+        margin-top: 36px;
+        padding: 16px 18px;
+        border: 1px solid var(--separator);
+        border-radius: var(--radius-l);
+        background: var(--elevated);
+    }
+    .operator p {
+        margin: 0 0 4px;
+    }
+    .operator a {
+        color: var(--accent-text);
+    }
+    .operator .note {
+        margin-top: 10px;
         font-size: 13px;
     }
     .page :global(h2) {

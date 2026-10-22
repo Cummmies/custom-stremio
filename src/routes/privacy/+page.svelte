@@ -2,12 +2,13 @@
     // The Privacy Policy, in plain words: what the app and its server keep, why,
     // who else sees it, and how to have it removed. Who runs it: lib/legal.ts.
     import LegalPage from '$lib/components/LegalPage.svelte';
-    import { CONTACT, OPERATOR } from '$lib/legal';
+    import { APP_NAME, CONTACT, DATA_LOCATION, MIN_AGE, OPERATOR } from '$lib/legal';
 </script>
 
 <LegalPage title="Privacy Policy">
     <p>
-        This app is run by <strong>{OPERATOR}</strong>. This page explains what it keeps about you, why, and what you can do about it.
+        {APP_NAME} (“the app”) is run by <strong>{OPERATOR}</strong> (“we”), who looks after what it keeps about you. This page explains
+        what that is, why, and what you can do about it.
         There are no ads, no analytics and no tracking, and nothing about you is sold.
     </p>
 
@@ -84,8 +85,24 @@
         email address, and it will be removed from the server. Signing a device out (Settings → Devices) removes its sign-in.
     </p>
 
+    <h2>Where it’s kept, and how it’s protected</h2>
+    <p>
+        On the app’s server, in {DATA_LOCATION}, run by {OPERATOR}. Everything travels encrypted (HTTPS). Passwords are stored only as secure
+        hashes, sign-ins on devices are kept as hashes too, and the server is backed up daily. No system is perfectly secure, but these are the
+        usual protections.
+    </p>
+
+    <h2>Your rights</h2>
+    <ul>
+        <li><strong>See and take it:</strong> download everything in Settings → Data.</li>
+        <li><strong>Correct it:</strong> change your profile, scores, reviews and lists in the app at any time.</li>
+        <li><strong>Limit who sees it:</strong> your profile’s privacy (everyone, friends, or only you) and what it shares.</li>
+        <li><strong>Delete it:</strong> write to <strong>{CONTACT}</strong> from your Stremio account’s email address.</li>
+    </ul>
+    <p>Depending on where you live, you may have more rights under your local law. Write to us and we’ll help.</p>
+
     <h2>Children</h2>
-    <p>The app isn’t meant for children under 13, and doesn’t knowingly keep data about them.</p>
+    <p>The app isn’t meant for children under {MIN_AGE}, and doesn’t knowingly keep data about them.</p>
 
     <h2>Changes</h2>
     <p>If this policy changes, the date above changes with it.</p>
