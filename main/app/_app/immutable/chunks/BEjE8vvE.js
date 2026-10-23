@@ -1,0 +1,1 @@
+import{c as e}from"./Cier5uoC.js";var t=e=>/^tt\d+$/.test(e);function n(n){return n.background?e(n.background,`backdrop`):t(n.id)?`https://images.metahub.space/background/medium/${n.id}/img`:null}function r(e){return e.logo?e.logo:t(e.id)?`https://images.metahub.space/logo/medium/${e.id}/img`:null}export{r as n,n as t};

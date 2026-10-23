@@ -1,0 +1,1 @@
+import{U as e}from"./CsnyJ4tG.js";async function t(t,n){await e(`plugin:opener|open_url`,{url:t,with:n})}function n(e,t,n){let r=n?`?${new URLSearchParams(n)}`:``;return`/title/${encodeURIComponent(e)}/${encodeURIComponent(t)}${r}`}async function r(e){`__TAURI_INTERNALS__`in window?await t(e):window.open(e,`_blank`,`noopener`)}export{n,r as t};
