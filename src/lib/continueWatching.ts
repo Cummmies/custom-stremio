@@ -3,6 +3,8 @@
 // (GET /app-api/v1/continue) knows what you've watched anywhere. So:
 //
 //   * a title you've marked Completed or Dropped leaves the row;
+//   * so does one on Plan to Watch that Stremio put there for a new episode
+//     (one you've started playing stays: it's Watching once that syncs);
 //   * a show the tracker has you further along in moves on to your next
 //     episode (from the start, not Stremio's resume point for an earlier one);
 //   * a show you're watching that Stremio doesn't have joins the row after
@@ -24,14 +26,17 @@ export type TrackerContinue = {
         new_season?: boolean;
     }[];
     finished: string[];
+    /** Plan to Watch. */
+    planned?: string[];
 };
 
 export function mergeContinueWatching(stremio: LibraryItem[], tracker: TrackerContinue | null): LibraryItem[] {
     if (!tracker) return stremio;
     const finished = new Set(tracker.finished);
+    const planned = new Set(tracker.planned ?? []);
     const watching = new Map(tracker.watching.map((w) => [w.id, w]));
     const kept = stremio
-        .filter((i) => !finished.has(i._id))
+        .filter((i) => !finished.has(i._id) && !(planned.has(i._id) && !i.progress))
         .map((i): LibraryItem => {
             const next = watching.get(i._id)?.next;
             if (i.type !== 'series' || !next) return i;
