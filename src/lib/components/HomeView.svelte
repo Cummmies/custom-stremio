@@ -9,7 +9,7 @@
     import { onMount, untrack } from 'svelte';
     import { app } from '$lib/app.svelte';
     import { libraryItemPreview } from '$lib/library';
-    import { tracker } from '$lib/tracker.svelte';
+    import { reachableUrl, tracker } from '$lib/tracker.svelte';
     import { lb } from '$lib/tracker/api';
     import { mergeContinueWatching, type TrackerContinue } from '$lib/continueWatching';
     import { isTV } from '$lib/platform';
@@ -140,7 +140,12 @@
         if (!addon || !rest.length) return [];
         const base = addon.transportUrl.replace(/\/manifest\.json$/, '');
         try {
-            const res = await fetch(`${base}/catalog/${encodeURIComponent(catType)}/${encodeURIComponent(rest.join('/'))}.json`);
+            // The server's own rows by the way it's reached now (at home, its public
+            // address doesn't answer), and never waited on for long.
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 10_000);
+            const url = reachableUrl(`${base}/catalog/${encodeURIComponent(catType)}/${encodeURIComponent(rest.join('/'))}.json`);
+            const res = await fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
             const body = res.ok ? await res.json() : null;
             return Array.isArray(body?.metas) ? body.metas : [];
         } catch {

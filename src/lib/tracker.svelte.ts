@@ -109,6 +109,11 @@ export function reachable(server: string): string {
     return server === BUILT_IN_SERVER && trackerRoute.viaHome && HOME_SERVER ? HOME_SERVER : server;
 }
 
+/** A URL on the built-in server (its rows' catalogs, say), by the way it's reached now. */
+export function reachableUrl(url: string): string {
+    return BUILT_IN_SERVER && url.startsWith(BUILT_IN_SERVER) ? reachable(BUILT_IN_SERVER) + url.slice(BUILT_IN_SERVER.length) : url;
+}
+
 /**
  * At home, links in a response that this device opens itself go to the home
  * name too: pictures (/m/) and the phone's handoff page (/h/, opened on the
@@ -265,7 +270,7 @@ async function fetchManifest(url: string): Promise<unknown> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     try {
-        const r = await fetch(BUILT_IN_SERVER && url.startsWith(BUILT_IN_SERVER) ? reachable(BUILT_IN_SERVER) + url.slice(BUILT_IN_SERVER.length) : url, { signal: ctrl.signal });
+        const r = await fetch(reachableUrl(url), { signal: ctrl.signal });
         const m = r.ok ? await r.json() : null;
         return m && typeof m === 'object' && 'id' in m ? m : null;
     } catch {
@@ -599,7 +604,11 @@ class Tracker {
             });
             return;
         }
-        if (this.status !== 'ok') this.status = 'checking';
+        // Signed in here before: connected from the start, so everything loads
+        // alongside the check instead of after it. The check still has the
+        // last word (signed out, suspended or unreachable).
+        if (this.status === 'off' && saved.user) this.status = 'ok';
+        else if (this.status !== 'ok') this.status = 'checking';
         const res = await call<{ user: TrackerUser }>(saved.server, '/me', { token: saved.token });
         if (uid !== this.#uid || saved !== this.saved) return; // switched meanwhile
         if (res.ok) {
