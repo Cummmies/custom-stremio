@@ -167,7 +167,7 @@
     }
 
     // API Keys & Integrations (admins): the keys the server fetches titles with,
-    // the same as the website's. Shown by their last characters only.
+    // the same as the website's. Shown only as set or not.
     type ApiKeys = { tmdb: string; omdb: string; animeschedule: string; animeschedule_id: string };
     const isAdmin = $derived(!!tracker.saved?.user?.is_admin);
     let apiKeys = $state<ApiKeys | null>(null);
@@ -1027,19 +1027,19 @@
                         <div>
                             <div class="title">For Everyone on the Server</div>
                             <div class="sub" class:sync-error={keysError} role={keysNote ? 'status' : undefined}>
-                                {keysNote ?? 'The keys the server fetches titles, posters and scores with. Only admins see this. Leave a field empty to keep its key.'}
+                                {keysNote ?? 'The services the server looks shows and movies up with, for everyone on it. Only admins see this.'}
                             </div>
                         </div>
                     </div>
-                    {#each [{ id: 'tmdb', title: 'TMDb Read Access Token', sub: 'Titles, posters, seasons and episodes.' }, { id: 'omdb', title: 'OMDb API Key', sub: 'IMDb, Rotten Tomatoes and Metacritic scores.' }, { id: 'animeschedule', title: 'AnimeSchedule API Key', sub: 'Anime air times, sub and dub.' }, { id: 'animeschedule_id', title: 'AnimeSchedule Client ID', sub: '' }] as k (k.id)}
+                    {#each [{ id: 'tmdb', title: 'TMDb', sub: 'Show and movie details, posters and episodes.' }, { id: 'omdb', title: 'OMDb', sub: 'IMDb, Rotten Tomatoes and Metacritic ratings.' }, { id: 'animeschedule', title: 'AnimeSchedule', sub: 'When anime episodes come out, subbed and dubbed.' }, { id: 'animeschedule_id', title: 'AnimeSchedule Client ID', sub: 'Goes with the AnimeSchedule key.' }] as k (k.id)}
                         {@const key = k.id as keyof ApiKeys}
                         <div class="row">
                             <div>
                                 <label class="title" for={`key-${k.id}`}>{k.title}</label>
-                                <div class="sub">{apiKeys[key] ? (apiKeys[key] === 'set' ? 'Set' : `Set (${apiKeys[key]})`) : 'Not set'}{k.sub ? ` · ${k.sub}` : ''}</div>
+                                <div class="sub">{k.sub}{apiKeys[key] ? '' : ' Not set up yet.'}</div>
                             </div>
                             <div class="url">
-                                <input id={`key-${k.id}`} type={key === 'animeschedule_id' ? 'text' : 'password'} autocomplete="off" spellcheck="false" placeholder={key === 'animeschedule_id' ? 'New ID' : 'New key'} bind:value={keyEdits[key]} />
+                                <input id={`key-${k.id}`} type={key === 'animeschedule_id' ? 'text' : 'password'} autocomplete="off" spellcheck="false" placeholder={apiKeys[key] ? 'Saved · paste to replace' : key === 'animeschedule_id' ? 'Paste ID' : 'Paste key'} bind:value={keyEdits[key]} />
                             </div>
                         </div>
                     {/each}
