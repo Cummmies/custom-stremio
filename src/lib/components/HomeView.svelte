@@ -12,7 +12,7 @@
     import { reachableUrl, tracker } from '$lib/tracker.svelte';
     import { backupState } from '$lib/backupState.svelte';
     import { lb } from '$lib/tracker/api';
-    import { mergeContinueWatching, type TrackerContinue } from '$lib/continueWatching';
+    import { lastTrackerContinue, mergeContinueWatching, rememberTrackerContinue, type TrackerContinue } from '$lib/continueWatching';
     import { isTV } from '$lib/platform';
     import { core } from '$lib/core';
     import { holdBoard } from '$lib/board';
@@ -61,21 +61,30 @@
 
     // Continue Watching: Stremio's, with what the tracker knows folded in
     // (lib/continueWatching.ts). Looked up again when the app comes back.
-    let trackerContinue = $state<TrackerContinue | null>(null);
+    let trackerContinue = $state<TrackerContinue | null>(lastTrackerContinue(app.user?._id));
     $effect(() => {
+        const uid = app.user?._id;
         if (!tracker.ready) {
             trackerContinue = null;
             return;
         }
-        const load = () => lb.continueWatching().then((res) => res && (trackerContinue = res));
+        // The last answer while a fresh one comes (coming back to Home, or another profile's).
+        trackerContinue = lastTrackerContinue(uid);
+        const load = () =>
+            lb.continueWatching().then((res) => {
+                if (!res || uid !== app.user?._id) return;
+                rememberTrackerContinue(uid, res);
+                trackerContinue = res;
+            });
         void load();
         const onVisible = () => document.visibilityState === 'visible' && load();
         document.addEventListener('visibilitychange', onVisible);
         return () => document.removeEventListener('visibilitychange', onVisible);
     });
-    // With only Stremio's to go on (the tracker down), your statuses kept with the account still count.
+    // With only Stremio's to go on (the tracker down, or its first answer not in
+    // yet), your statuses kept with the account still count.
     const cwItems = $derived(
-        (tracker.ready
+        (tracker.ready && trackerContinue
             ? mergeContinueWatching(continueWatching?.items ?? [], trackerContinue)
             : backupState.filterContinue(continueWatching?.items ?? [])
         ).filter((i) => !type || i.type === type)

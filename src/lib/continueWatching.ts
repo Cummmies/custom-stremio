@@ -30,6 +30,17 @@ export type TrackerContinue = {
     planned?: string[];
 };
 
+/**
+ * The tracker's last answer, per profile, for as long as the app is open: Home
+ * shows it again at once when you come back to it (no moment of Stremio's row
+ * as it is, with what you've finished or dropped in it), then looks again.
+ */
+const lastAnswer = new Map<string, TrackerContinue>();
+export const lastTrackerContinue = (uid: string | null | undefined) => (uid ? (lastAnswer.get(uid) ?? null) : null);
+export function rememberTrackerContinue(uid: string | null | undefined, answer: TrackerContinue) {
+    if (uid) lastAnswer.set(uid, answer);
+}
+
 export function mergeContinueWatching(stremio: LibraryItem[], tracker: TrackerContinue | null): LibraryItem[] {
     if (!tracker) return stremio;
     const finished = new Set(tracker.finished);
