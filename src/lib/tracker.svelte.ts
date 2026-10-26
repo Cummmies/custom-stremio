@@ -610,7 +610,7 @@ class Tracker {
         if (this.status === 'off' && saved.user) this.status = 'ok';
         else if (this.status !== 'ok') this.status = 'checking';
         const res = await call<{ user: TrackerUser }>(saved.server, '/me', { token: saved.token });
-        if (uid !== this.#uid || saved !== this.saved) return; // switched meanwhile
+        if (uid !== this.#uid || !this.#same(saved)) return; // switched meanwhile
         if (res.ok) {
             const { name, handle, avatar_url, is_admin, is_staff } = res.data.user;
             this.#save({ ...saved, user: { name, handle, avatar_url, is_admin: !!is_admin, is_staff: !!(is_staff ?? is_admin) } });
@@ -746,12 +746,21 @@ class Tracker {
         return res?.ok ? { data: res.data } : { status: res ? res.status : null, detail: res && !res.ok ? res.detail : undefined };
     }
 
+    /**
+     * Still the connection `saved` was (same server and token). Saving the
+     * account's details makes a new record of the same one: a request that
+     * was out meanwhile (everything on launch is, alongside the first check) counts.
+     */
+    #same(saved: Saved) {
+        return this.saved?.server === saved.server && this.saved?.token === saved.token;
+    }
+
     /** Like request, with the failure's HTTP status; null when not connected or switched meanwhile. */
     async #send<T>(path: string, opts: { method?: string; body?: unknown; timeout?: number }): Promise<Result<T> | null> {
         const saved = this.saved;
         if (!saved?.token || this.status === 'removed') return null;
         const res = await call<T>(saved.server, path, { ...opts, token: saved.token });
-        if (saved !== this.saved) return null;
+        if (!this.#same(saved)) return null;
         if (res.ok) {
             if (this.status !== 'ok') this.#setStatus('ok');
         } else if (res.status === 401) this.#forgetToken();
