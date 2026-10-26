@@ -10,9 +10,10 @@
     import { tracker } from '$lib/tracker.svelte';
     import { undo } from '$lib/undo.svelte';
     import { backupState } from '$lib/backupState.svelte';
+    import { animeRelated } from '$lib/animeRelated';
     import { shareLink, titleLink } from '$lib/share';
     import RecommendDialog from '$lib/components/RecommendDialog.svelte';
-    import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/tracker/api';
+    import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type RelatedGroup, type Status, type Summary } from '$lib/tracker/api';
     import { menu, type MenuEntry } from '$lib/menu.svelte';
     import { goto, appUrl } from '$lib/nav';
     import { page } from '$app/state';
@@ -291,7 +292,32 @@
     $effect(() => lbt.watchForChanges());
     const lbOn = $derived(lbt.on);
     const main = $derived(lbOn ? lbt.main : null);
-    const related = $derived(lbOn ? (lbt.related ?? []) : []);
+    // Without the tracker (down, or not connected), an anime's Related comes from AniList.
+    let aniRelated = $state<RelatedGroup[]>([]);
+    $effect(() => {
+        const m = meta;
+        aniRelated = [];
+        if (lbOn || !m || !anime.isAnime(m.id)) return;
+        let stale = false;
+        const sideStories = backupState.mine.relatedScope !== 'main';
+        untrack(() =>
+            animeRelated(m.id, null, { sideStories, statusOf: (sid) => backupState.statusOf(sid) }).then((groups) => {
+                if (!stale && groups) aniRelated = groups;
+            })
+        );
+        return () => {
+            stale = true;
+        };
+    });
+    // On the season you're on: that season is the one marked as here.
+    const related = $derived(
+        lbOn
+            ? (lbt.related ?? [])
+            : aniRelated.map((g) => ({
+                  ...g,
+                  items: g.items.map((r) => ({ ...r, here: r.id === meta?.id && (r.season == null || r.season === season) })),
+              }))
+    );
     const watches = $derived(main?.log ?? []);
     /** An anime that's several the tracker titles: each season is scored on its own. */
     const seasons = $derived(lbOn && (lbt.titles?.length ?? 0) > 1 ? lbt.titles! : []);
@@ -319,7 +345,7 @@
     function firstTab() {
         return isSeries ? 'episodes' : trailers.length ? 'extras' : 'reviews';
     }
-    const hasTabs = $derived(isSeries || trailers.length > 0 || lbOn);
+    const hasTabs = $derived(isSeries || trailers.length > 0 || lbOn || related.length > 0);
 
     // Stremio's library keeps a copy of what you save in the tracker.
     function addToStremio() {

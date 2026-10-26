@@ -31,6 +31,8 @@ export type Mine = {
     statuses: Record<string, Status>;
     ratings: Record<string, number>;
     pending: Record<string, PendingStatus>;
+    /** What Related lists (Settings' Related Titles). */
+    relatedScope?: 'all' | 'main';
 };
 
 const EMPTY: Mine = { statuses: {}, ratings: {}, pending: {} };
@@ -79,7 +81,8 @@ class BackupState {
     }
 
     #set(next: Mine) {
-        const tidy = { statuses: sorted(next.statuses), ratings: sorted(next.ratings), pending: sorted(next.pending) };
+        const tidy: Mine = { statuses: sorted(next.statuses), ratings: sorted(next.ratings), pending: sorted(next.pending) };
+        if (next.relatedScope) tidy.relatedScope = next.relatedScope;
         this.mine = tidy;
         if (!this.#uid) return;
         try {
@@ -96,7 +99,7 @@ class BackupState {
         if (uid === this.#uid) return this.mine;
         try {
             const v = JSON.parse(localStorage.getItem(key(uid)) ?? 'null');
-            if (v && typeof v === 'object') return { statuses: v.statuses ?? {}, ratings: v.ratings ?? {}, pending: v.pending ?? {} };
+            if (v && typeof v === 'object') return { statuses: v.statuses ?? {}, ratings: v.ratings ?? {}, pending: v.pending ?? {}, ...(v.relatedScope ? { relatedScope: v.relatedScope } : {}) };
         } catch {}
         return EMPTY;
     }
@@ -105,7 +108,7 @@ class BackupState {
     applySynced(uid: string, m: Partial<Mine> | null | undefined) {
         if (!m) return;
         this.#switchTo(uid);
-        this.#set({ statuses: m.statuses ?? {}, ratings: m.ratings ?? {}, pending: m.pending ?? {} });
+        this.#set({ statuses: m.statuses ?? {}, ratings: m.ratings ?? {}, pending: m.pending ?? {}, relatedScope: m.relatedScope });
     }
 
     statusOf(id: string): Status | null {
@@ -125,10 +128,13 @@ class BackupState {
         try {
             await this.#sendPending(uid);
             if (uid !== this.#uid) return;
-            const res = await tracker.request<{ statuses: Record<string, Status>; ratings: Record<string, number> }>('/backup-state', { timeout: 20_000 });
+            const res = await tracker.request<{ statuses: Record<string, Status>; ratings: Record<string, number>; related_scope?: 'all' | 'main' }>(
+                '/backup-state',
+                { timeout: 20_000 }
+            );
             if (!res || uid !== this.#uid) return;
             this.#lastRefresh = Date.now();
-            this.#set({ statuses: res.statuses ?? {}, ratings: res.ratings ?? {}, pending: this.mine.pending });
+            this.#set({ statuses: res.statuses ?? {}, ratings: res.ratings ?? {}, pending: this.mine.pending, relatedScope: res.related_scope ?? this.mine.relatedScope });
         } finally {
             this.#refreshing = false;
             // Switched profile meanwhile: that one's turn.
@@ -163,6 +169,11 @@ class BackupState {
         const before = this.statusOf(id);
         this.#set({ ...this.mine, pending: { ...this.mine.pending, [id]: { status, type, name, at: Date.now() } } });
         this.#stremioNotifications(id, before, status);
+    }
+
+    /** Settings' Related Titles, set with the tracker there. */
+    noteRelatedScope(scope: 'all' | 'main') {
+        if (this.mine.relatedScope !== scope) this.#set({ ...this.mine, relatedScope: scope });
     }
 
     /** A score given with the tracker there: the copy here follows at once. */

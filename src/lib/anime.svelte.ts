@@ -25,6 +25,8 @@ class Anime {
     #ids: Set<string> | null = null;
     #parts: Record<string, Part[]> = {};
     #kitsu: Record<string, number> = {};
+    /** MyAnimeList id → where Stremio has it (built when first asked). */
+    #places: Map<number, { imdb?: string; season: number | null; kitsu?: number }> | null = null;
     /** Bumped when the list arrives, so screens re-check. */
     version = $state(0);
     #loading: Promise<void> | null = null;
@@ -73,6 +75,7 @@ class Anime {
         this.#ids = new Set(ids);
         this.#parts = parts;
         this.#kitsu = kitsu;
+        this.#places = null;
         this.version++;
     }
 
@@ -96,6 +99,44 @@ class Anime {
         // One entry with no seasons (a single-season show): season 1 is it.
         if (!best && season === 1 && parts.length === 1 && parts[0][0] === -1) best = parts[0];
         return best ? { mal: best[2], episode: episode - best[1] } : null;
+    }
+
+    /** Waits for the list (cached, or downloaded on first use). */
+    async ready() {
+        this.start();
+        await this.#loading;
+    }
+
+    /**
+     * The MyAnimeList entry a Stremio title is: a Kitsu or MyAnimeList id says
+     * so; an IMDb show's `season` (its first part), or its only entry. null when unknown.
+     */
+    malOf(id: string, season: number | null = 1): number | null {
+        const [kind, num] = id.split(':');
+        if (kind === 'kitsu') return this.#kitsu[num] ?? null;
+        if (kind === 'mal') return Number(num) || null;
+        const parts = this.#parts[kind] ?? [];
+        const inSeason = parts.filter((p) => p[0] === season).sort((a, b) => a[1] - b[1]);
+        if (inSeason.length) return inSeason[0][2];
+        // The earliest season it has (a film, or a show listed without seasons).
+        const any = [...parts].sort((a, b) => (a[0] < 0 ? 999 : a[0]) - (b[0] < 0 ? 999 : b[0]) || a[1] - b[1]);
+        return any[0]?.[2] ?? null;
+    }
+
+    /**
+     * Where Stremio has a MyAnimeList entry: as a season of its IMDb show (as
+     * Cinemeta numbers it), an IMDb film or show with no season given, or a Kitsu id.
+     */
+    placeOf(mal: number): { imdb?: string; season: number | null; kitsu?: number } | null {
+        if (!this.#places) {
+            const places = new Map<number, { imdb?: string; season: number | null; kitsu?: number }>();
+            for (const [k, m] of Object.entries(this.#kitsu)) places.set(m, { season: null, kitsu: Number(k) });
+            for (const [imdb, parts] of Object.entries(this.#parts)) {
+                for (const [season, , m] of parts) places.set(m, { ...places.get(m), imdb, season: season < 0 ? null : season });
+            }
+            this.#places = places;
+        }
+        return this.#places.get(mal) ?? null;
     }
 
     /** true / false, or null when we can't tell yet (list not loaded, unknown id kind). */

@@ -37,6 +37,7 @@
     import { displayHdr } from '$lib/player/hdr.svelte';
     import { setLinkHandlingWanted } from '$lib/addonLinks';
     import { tracker } from '$lib/tracker.svelte';
+    import { backupState } from '$lib/backupState.svelte';
     import { day, lb, today, type BackupConflict, type SignedInDevice } from '$lib/tracker/api';
     import { pushWatchedToStremio, type PushResult } from '$lib/stremioPush';
     import { menu } from '$lib/menu.svelte';
@@ -163,7 +164,7 @@
         if (!res) {
             relatedScope = before;
             relatedFailed = true;
-        }
+        } else backupState.noteRelatedScope(scope);
     }
 
     // API Keys & Integrations (admins): the keys the server fetches titles with,
