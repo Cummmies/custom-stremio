@@ -10,6 +10,10 @@
 import { tracker } from '$lib/tracker.svelte';
 import { lb, STATUS_LABEL, type ListInfo, type RelatedGroup, type Reviews, type Status, type Summary, type WatchFields } from './api';
 import { undo } from '$lib/undo.svelte';
+import { backupState } from '$lib/backupState.svelte';
+
+/** Which status a Stremio title gets when its seasons here differ (core/backup_state.py). */
+const ORDER: Status[] = ['watching', 'plan_to_watch', 'dropped', 'completed'];
 
 /** Kept on this device to send later: said once, and treated as done. */
 function offline(): 'kept' {
@@ -51,6 +55,7 @@ export class TrackerTitle {
         lb.titles(id).then((res) => {
             if (this.#key !== id || !res) return;
             this.titles = res.titles;
+            this.#mirror();
             this.#loadExtras();
         });
         lb.lists().then((res) => {
@@ -77,7 +82,10 @@ export class TrackerTitle {
         const id = this.#key;
         if (!id || this.busy || !tracker.ready || document.visibilityState !== 'visible') return;
         lb.titles(id).then((res) => {
-            if (this.#key === id && res && !this.busy) this.titles = res.titles;
+            if (this.#key === id && res && !this.busy) {
+                this.titles = res.titles;
+                this.#mirror();
+            }
         });
     }
 
@@ -105,6 +113,7 @@ export class TrackerTitle {
             return null;
         }
         this.titles = res.titles;
+        this.#mirror();
         this.#loadExtras();
         return this.main;
     }
@@ -113,6 +122,22 @@ export class TrackerTitle {
         if (!updated || !this.titles) return;
         const at = this.titles.findIndex((s) => s.title_id === updated.title_id);
         this.titles = at === -1 ? [updated, ...this.titles] : this.titles.map((s, i) => (i === at ? updated : s));
+        this.#mirror();
+    }
+
+    /** Your status and score for this title, as kept with the account for when the tracker's down. */
+    #mirror() {
+        const id = this.#title?.id;
+        const titles = this.titles;
+        if (!id || !titles) return;
+        const statuses = titles.map((t) => t.status).filter((st): st is Status => !!st);
+        const status = ORDER.find((st) => statuses.includes(st)) ?? (titles.some((t) => t.watches > 0) ? 'completed' : null);
+        if (backupState.statusOf(id) !== status) backupState.noteStatus(id, status);
+        const rated = titles
+            .filter((t) => t.rating != null)
+            .sort((a, b) => (b.last_watched ?? '').localeCompare(a.last_watched ?? ''));
+        const score = rated[0]?.rating ?? null;
+        if (backupState.ratingOf(id) !== score) backupState.noteRating(id, score);
     }
 
     async #do<T>(work: () => Promise<T>, failed: string): Promise<T | null> {
@@ -192,6 +217,7 @@ export class TrackerTitle {
             const res = await lb.remove(main.title_id);
             if (res) {
                 this.titles = [];
+                this.#mirror();
                 this.lists = this.lists.map((l) => (main.lists.includes(l.id) ? { ...l, count: Math.max(0, l.count - 1) } : l));
             }
             return res;

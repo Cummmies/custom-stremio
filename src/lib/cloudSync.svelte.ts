@@ -23,6 +23,7 @@ import { homeLayout, type Layout } from '$lib/homeLayout.svelte';
 import { playerPrefs, type DevicePrefs, type SyncedPrefs } from '$lib/player/prefs.svelte';
 import { isDesktop, isIOS, isTV } from '$lib/platform';
 import { tracker } from '$lib/tracker.svelte';
+import { backupState, type Mine } from '$lib/backupState.svelte';
 import type { MediaCrop } from '$lib/tracker/api';
 import { NAME_BEFORE } from '$lib/serverIds';
 
@@ -54,9 +55,11 @@ type Payload = {
     tracker?: { server: string | null; token?: string | null; addonUrl?: string | null };
     /** Device settings, by kind of device ('desktop', 'ios', …). */
     devices?: Record<string, DevicePrefs>;
+    /** Your statuses and scores, for when the tracker's down (backupState.svelte.ts). */
+    mine?: Mine;
 };
 
-const PARTS = ['profile', 'home', 'prefs', 'tracker'] as const;
+const PARTS = ['profile', 'home', 'prefs', 'tracker', 'mine'] as const;
 type Part = (typeof PARTS)[number];
 type Stamps = Record<Part | 'devices', number>;
 
@@ -146,6 +149,7 @@ function remoteStamps(r: Payload): Stamps {
         home: s.home ?? r.updated,
         prefs: s.prefs ?? r.updated,
         tracker: s.tracker ?? 0,
+        mine: s.mine ?? 0,
         devices: r.updated,
     };
 }
@@ -153,7 +157,7 @@ function remoteStamps(r: Payload): Stamps {
 class CloudSync {
     #uid: string | null = null;
     /** Each part as last sent or received, as JSON; a difference is a change made here. */
-    #lastParts: Record<Part | 'devices', string | null> = { profile: null, home: null, prefs: null, tracker: null, devices: null };
+    #lastParts: Record<Part | 'devices', string | null> = { profile: null, home: null, prefs: null, tracker: null, mine: null, devices: null };
     /** Other kinds of devices' settings from the account, passed along untouched. */
     #devices: Record<string, DevicePrefs> = {};
     #timer: ReturnType<typeof setTimeout> | undefined;
@@ -188,7 +192,7 @@ class CloudSync {
                         homeLayout.sync();
                         // What's here now is where changes are measured from: a new
                         // device's defaults aren't changes to send.
-                        this.#lastParts = uid ? this.#parts(uid) : { profile: null, home: null, prefs: null, tracker: null, devices: null };
+                        this.#lastParts = uid ? this.#parts(uid) : { profile: null, home: null, prefs: null, tracker: null, mine: null, devices: null };
                     });
                 }
                 if (uid) untrack(() => this.#pull(uid, addons));
@@ -229,6 +233,7 @@ class CloudSync {
             prefs: JSON.stringify(playerPrefs.synced()),
             // Always a value, so connecting (from none) counts as a change to send.
             tracker: JSON.stringify(tracker.sharedFor(uid)),
+            mine: JSON.stringify(backupState.forSync(uid)),
             devices: JSON.stringify(playerPrefs.device()),
         };
     }
@@ -237,11 +242,11 @@ class CloudSync {
     #stamps(uid: string): Stamps {
         try {
             const s = JSON.parse(localStorage.getItem(partsKey(uid)) ?? 'null');
-            if (s) return { profile: 0, home: 0, prefs: 0, tracker: 0, devices: 0, ...s };
+            if (s) return { profile: 0, home: 0, prefs: 0, tracker: 0, mine: 0, devices: 0, ...s };
         } catch {}
         // From before parts had their own: everything as of the last sync.
         const all = Number(localStorage.getItem(stampKey(uid))) || 0;
-        return { profile: all, home: all, prefs: all, tracker: 0, devices: all };
+        return { profile: all, home: all, prefs: all, tracker: 0, mine: 0, devices: all };
     }
 
     #saveStamps(uid: string, s: Stamps) {
@@ -293,6 +298,11 @@ class CloudSync {
             mine.tracker = theirs.tracker;
             took = true;
         }
+        if (remote.mine && theirs.mine > mine.mine) {
+            backupState.applySynced(uid, remote.mine);
+            mine.mine = theirs.mine;
+            took = true;
+        }
         this.#devices = remote.devices ?? {};
         const forMe = this.#devices[DEVICE_KIND];
         if (forMe && theirs.devices > mine.devices) {
@@ -324,6 +334,7 @@ class CloudSync {
             home: here.home ? JSON.parse(here.home) : undefined,
             prefs: here.prefs ? JSON.parse(here.prefs) : undefined,
             tracker: here.tracker ? JSON.parse(here.tracker) : undefined,
+            mine: here.mine ? JSON.parse(here.mine) : undefined,
         };
 
         // Each part: this device's copy if it has one at least as new as the
@@ -350,7 +361,7 @@ class CloudSync {
                         version: '1.0.0',
                         name: 'Stremio Sync',
                         description:
-                            'Added by this app to keep your profile picture, Home rows, app settings and watch-history sign-in the same on every device you log in to. It stores those in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. Removing it only stops that syncing (the app adds it back when a setting changes).',
+                            'Added by this app to keep your profile picture, Home rows, app settings, statuses and watch-history sign-in the same on every device you log in to. It stores those in your Stremio account and nothing else: no catalogs, no streams, and it never connects anywhere. It also keeps your Plan to Watch, Dropped and other statuses and your scores, for when the app’s server can’t be reached. Removing it only stops that syncing (the app adds it back when a setting changes).',
                         contactEmail: encode(payload),
                         types: [],
                         resources: [],

@@ -10,6 +10,7 @@
     import { app } from '$lib/app.svelte';
     import { libraryItemPreview } from '$lib/library';
     import { reachableUrl, tracker } from '$lib/tracker.svelte';
+    import { backupState } from '$lib/backupState.svelte';
     import { lb } from '$lib/tracker/api';
     import { mergeContinueWatching, type TrackerContinue } from '$lib/continueWatching';
     import { isTV } from '$lib/platform';
@@ -72,8 +73,12 @@
         document.addEventListener('visibilitychange', onVisible);
         return () => document.removeEventListener('visibilitychange', onVisible);
     });
+    // With only Stremio's to go on (the tracker down), your statuses kept with the account still count.
     const cwItems = $derived(
-        mergeContinueWatching(continueWatching?.items ?? [], trackerContinue).filter((i) => !type || i.type === type)
+        (tracker.ready
+            ? mergeContinueWatching(continueWatching?.items ?? [], trackerContinue)
+            : backupState.filterContinue(continueWatching?.items ?? [])
+        ).filter((i) => !type || i.type === type)
     );
 
     // Rows in the order set in Customize Home (per profile): hidden ones left out,

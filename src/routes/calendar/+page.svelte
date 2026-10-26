@@ -8,6 +8,7 @@
     import { core } from '$lib/core';
     import { app } from '$lib/app.svelte';
     import { tracker } from '$lib/tracker.svelte';
+    import { backupState } from '$lib/backupState.svelte';
     import { titleHref } from '$lib/links';
     import Icon from '$lib/components/Icon.svelte';
     import Segmented from '$lib/components/Segmented.svelte';
@@ -207,7 +208,8 @@
         let list: CalEvent[] = [];
         if (source === 'tracker') list = (lbEvents ?? []).map(fromTracker);
         else if (stremio?.selected?.year === year && stremio.selected.month === month)
-            list = stremio.items.flatMap((d) => d.items.map((it, i) => fromStremio(d.date, it, i)));
+            // Not what you've dropped or completed (your statuses, kept with the account).
+            list = stremio.items.flatMap((d) => d.items.filter((it) => backupState.inCalendar(it.id)).map((it, i) => fromStremio(d.date, it, i)));
         for (const e of list) {
             if (!e.day.startsWith(`${year}-${pad(month)}`)) continue;
             if (!map.has(e.day)) map.set(e.day, []);

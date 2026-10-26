@@ -9,6 +9,7 @@
     import { TrackerTitle } from '$lib/tracker/title.svelte';
     import { tracker } from '$lib/tracker.svelte';
     import { undo } from '$lib/undo.svelte';
+    import { backupState } from '$lib/backupState.svelte';
     import { shareLink, titleLink } from '$lib/share';
     import RecommendDialog from '$lib/components/RecommendDialog.svelte';
     import { STATUS_LABEL, day, lb, score, today, type EpisodeLog, type Status, type Summary } from '$lib/tracker/api';
@@ -302,14 +303,18 @@
         return rest || t.name;
     }
     /** Your score: your latest watch's, or (a rewatch not scored yet) the one before; for seasons, the one you rated last. */
+    /** Signed in to the tracker, but it can't be reached: your status and score kept with the account stand in. */
+    const backup = $derived(!lbOn && !!tracker.saved?.token);
+    const backupStatus = $derived(backup && meta ? backupState.statusOf(meta.id) : null);
     const myScore = $derived.by(() => {
+        if (backup) return meta ? backupState.ratingOf(meta.id) : null;
         if (!seasons.length) return main ? scoreOf(main) : null;
         const rated = seasons.filter((t) => scoreOf(t) != null).sort((a, b) => (b.last_watched ?? '').localeCompare(a.last_watched ?? ''));
         return rated[0] ? scoreOf(rated[0]) : null;
     });
     const myReview = $derived(main?.review ?? null);
     const STATUSES: Status[] = ['plan_to_watch', 'watching', 'completed', 'dropped'];
-    const saved = $derived(lbOn ? !!main && (main.status !== null || main.lists.length > 0) : !!meta?.inLibrary);
+    const saved = $derived(lbOn ? !!main && (main.status !== null || main.lists.length > 0) : !!backupStatus || !!meta?.inLibrary);
 
     function firstTab() {
         return isSeries ? 'episodes' : trailers.length ? 'extras' : 'reviews';
@@ -332,6 +337,25 @@
 
     function toggleLibrary(e: MouseEvent) {
         if (!meta) return;
+        if (backup) {
+            // The tracker can't be reached: the status waits here (and with the account) until it's back.
+            const current = backupStatus;
+            const m = meta;
+            menu.toggleFor(e.currentTarget as HTMLElement, [
+                { header: 'Status', detail: 'Saved now, sent when the server’s back.' },
+                ...STATUSES.map((st) => ({
+                    label: STATUS_LABEL[st],
+                    checked: current === st,
+                    onselect: () => {
+                        addToStremio();
+                        backupState.setOffline(m.id, m.type, m.name, st);
+                        if (current) undo.show(`Marked ${STATUS_LABEL[st]}`, () => backupState.setOffline(m.id, m.type, m.name, current));
+                        else undo.note(`Marked ${STATUS_LABEL[st]}. It’ll be sent when the server’s back.`);
+                    },
+                })),
+            ]);
+            return;
+        }
         if (!lbOn) {
             core.dispatch({
                 action: 'Ctx',
@@ -522,6 +546,7 @@
 
     // Details' Status and Lists rows.
     const statusLine = $derived.by(() => {
+        if (backup) return backupStatus ? STATUS_LABEL[backupStatus] : null;
         const s = main?.status;
         if (!main || !s) return null;
         if (s === 'watching') return main.episodes ? `Watching · ${main.progress ?? 0} of ${main.episodes} episodes` : 'Watching';
@@ -755,7 +780,11 @@
                         <!-- A phone keeps it on one line: the episode, with the icon for "Play". -->
                         <span class:verb={!!playEpisode}>{playVerb}</span>{#if playEpisode}<span>{playEpisode}</span>{/if}
                     </button>
-                    {#if lbOn}
+                    {#if backup}
+                        <button class="round" class:on={!!backupStatus} onclick={toggleLibrary} aria-haspopup="menu" aria-label="Status" title={backupStatus ? STATUS_LABEL[backupStatus] : 'Save'}>
+                            <Icon name={backupStatus ? 'check' : 'plus'} size={18} />
+                        </button>
+                    {:else if lbOn}
                         <button class="round" class:on={saved} onclick={toggleLibrary} aria-haspopup="menu" aria-label="Status and Lists" title={saved ? 'Saved' : 'Save'}>
                             <Icon name={saved ? 'check' : 'plus'} size={18} />
                         </button>

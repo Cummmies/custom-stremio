@@ -31,6 +31,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { untrack } from 'svelte';
 import { app } from '$lib/app.svelte';
 import { tracker } from '$lib/tracker.svelte';
+import { backupState } from '$lib/backupState.svelte';
 import { goto } from '$lib/nav';
 import { core } from '$lib/core';
 import { cleanVideoId } from '$lib/player/deeplink';
@@ -315,7 +316,8 @@ class Notify {
         const items: AppNotification[] = [];
         for (const [metaId, videos] of Object.entries(found)) {
             const show = library.get(metaId);
-            if (!show) continue;
+            // Not a show you've dropped (your statuses, kept with the account).
+            if (!show || !backupState.notifies(metaId)) continue;
             // Not one you're already on or past (as Continue Watching's +N).
             const at = seasonEpisode(show.state?.videoId);
             for (const [videoId, video] of Object.entries(videos)) {

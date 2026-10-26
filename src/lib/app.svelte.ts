@@ -6,6 +6,7 @@ import { profiles } from '$lib/profiles.svelte';
 import { anime } from '$lib/anime.svelte';
 import { cloudSync } from '$lib/cloudSync.svelte';
 import { tracker } from '$lib/tracker.svelte';
+import { backupState } from '$lib/backupState.svelte';
 import { playerPrefs } from '$lib/player/prefs.svelte';
 import { addonLinkUrl, linkHandlingWanted } from '$lib/addonLinks';
 import { isDesktop } from '$lib/platform';
@@ -39,6 +40,8 @@ class AppState {
         cloudSync.start();
         // Your tracker tracker, when this profile has connected one.
         tracker.start();
+        // Your statuses and scores, kept with the account for when it's down.
+        backupState.start();
         watchServer((s) => (this.server = s));
 
         // The whole library stays loaded; screens filter it locally, which is instant.
