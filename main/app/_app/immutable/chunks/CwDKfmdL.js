@@ -1,0 +1,1 @@
+import{X as e}from"./BmDmSno3.js";async function t(){await e(`plugin:process|restart`)}export{t as relaunch};
