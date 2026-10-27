@@ -921,7 +921,7 @@
 
     // The tracker's rating prompt: when finishing this logged something new and
     // unscored there (a movie, or the last episode of a show), ask for a score
-    // during the credits. Closing it is fine: it waits on the tracker's Home.
+    // once the credits start. Closing it is fine: it waits on the tracker's Home.
     type RatePrompt = { logId: number; name: string; state: 'ask' | 'saving' | 'done' | 'failed'; score?: number };
     let ratePrompt = $state<RatePrompt | null>(null);
     /** The score on the prompt's slider; the tracker's own starts at 5. */
@@ -944,14 +944,32 @@
             rateReview = '';
             rateTyping = false;
             // The title the tracker logged: for an anime, the season just finished ("… Season 2").
-            ratePrompt = { logId, name: last.result.title_name ?? last.event.name ?? heading, state: 'ask' };
+            ratePending = { logId, name: last.result.title_name ?? last.event.name ?? heading, state: 'ask' };
+        });
+    });
+    // Logged 90% in when where the credits are isn't known: it waits for them
+    // (where they start, else the last few minutes of a movie, the last
+    // seconds of an episode), so it doesn't cover the ending.
+    let ratePending = $state<RatePrompt | null>(null);
+    const RATE_FALLBACK_SHARE = 0.03;
+    $effect(() => {
+        const pending = ratePending;
+        const t = player.time;
+        const d = player.duration;
+        if (!pending || !d) return;
+        const credits = segments.find((s) => s.kind === 'credits');
+        const at = credits?.start ?? d - Math.max(nextThreshold, d * RATE_FALLBACK_SHARE);
+        if (currentSegment?.kind !== 'credits' && t < at) return;
+        untrack(() => {
+            ratePrompt = pending;
+            ratePending = null;
         });
     });
     // Another episode or movie: the prompt was about the last one.
     $effect(() => {
         void id;
         void videoId;
-        untrack(() => (ratePrompt = null));
+        untrack(() => (ratePrompt = ratePending = null));
     });
 
     /** TV: score it on your phone (a QR code); the tracker saves it, and the card says so. */
