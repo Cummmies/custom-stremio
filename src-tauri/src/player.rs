@@ -349,6 +349,20 @@ pub fn mpv_start(
         let (k, v) = (cstr(k)?, cstr(v)?);
         unsafe { (api.set_option_string)(handle, k.as_ptr(), v.as_ptr()) };
     }
+    // The read-ahead cache goes to a file in the app's cache folder rather than
+    // RAM, so it can hold minutes of a big file. mpv deletes the file itself.
+    // Without a usable folder it stays in memory (the default).
+    let cache_dir = app.path().app_cache_dir().map(|d| d.join("player-cache"));
+    if let Ok(dir) = cache_dir {
+        if std::fs::create_dir_all(&dir).is_ok() {
+            if let Some(dir) = dir.to_str() {
+                for (k, v) in [("demuxer-cache-dir", dir), ("cache-on-disk", "yes")] {
+                    let (k, v) = (cstr(k)?, cstr(v)?);
+                    unsafe { (api.set_option_string)(handle, k.as_ptr(), v.as_ptr()) };
+                }
+            }
+        }
+    }
     for (k, v) in &options {
         let (kc, vc) = (cstr(k)?, cstr(v)?);
         let code = unsafe { (api.set_option_string)(handle, kc.as_ptr(), vc.as_ptr()) };

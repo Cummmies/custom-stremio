@@ -374,11 +374,17 @@ function buildOptions(settings: StartSettings): Record<string, string> {
         hwdec: settings.hardwareDecoding === false ? 'no' : playerPrefs.upscaler === 'rtx' ? 'd3d11va' : 'auto-safe',
         'target-colorspace-hint': playerPrefs.hdrPassthrough ? 'yes' : 'no',
         'tone-mapping': 'auto',
+        // Read ahead as far as this allows (with the cache on, mpv buffers until
+        // it's full). 300 MiB was only ~30 s of a 4K remux, too little to ride
+        // out a slow patch. On PC the cache is a file on disk (player.rs), not RAM.
         cache: 'yes',
-        'demuxer-max-bytes': '300MiB',
-        'demuxer-max-back-bytes': '100MiB',
+        'demuxer-max-bytes': '1536MiB',
+        'demuxer-max-back-bytes': '256MiB',
         'demuxer-readahead-secs': '60',
         'network-timeout': '30',
+        // When the connection drops mid-file (a debrid host hiccups, Wi-Fi
+        // blips), pick up where it stopped instead of stalling until a seek.
+        'stream-lavf-o': 'reconnect_on_network_error=1,reconnect_on_http_error=5xx,reconnect_delay_max=10',
         volume: String(playerPrefs.volume),
         'volume-max': '130',
         'sub-auto': 'fuzzy',
