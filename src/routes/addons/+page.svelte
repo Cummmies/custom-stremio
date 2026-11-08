@@ -9,6 +9,8 @@
     import Icon from '$lib/components/Icon.svelte';
     import { isInternalAddon } from '$lib/serverIds';
     import Segmented from '$lib/components/Segmented.svelte';
+    import { page } from '$app/state';
+    import { appUrl } from '$lib/nav';
 
     type Source = 'installed' | 'official' | 'community';
     const sources: { id: Source; label: string }[] = [
@@ -17,7 +19,9 @@
         { id: 'community', label: 'Community' },
     ];
 
-    let source = $state<Source>('installed');
+    // ?source=community (Home's "Add a source" prompt) opens on that list.
+    const asked = appUrl(page.url).searchParams.get('source');
+    let source = $state<Source>(sources.some((x) => x.id === asked) ? (asked as Source) : 'installed');
     let type = $state<string | null>(null);
     let query = $state('');
     let installOpen = $state(false);

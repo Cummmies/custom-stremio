@@ -14,6 +14,7 @@
     import { HIDDEN_LABELS, hideSources, loadSort, saveSort, sortSources, SORTS, type SourceEntry, type SourceSort } from '$lib/player/sourceSort';
     import { hidesHdr } from '$lib/player/hdr.svelte';
     import Icon from '../Icon.svelte';
+    import { hasSourceAddon } from '$lib/streamCheck.svelte';
 
     let {
         title,
@@ -264,7 +265,12 @@
             {#if !loading && total === 0}
                 <div class="empty">
                     <p class="empty-title">No sources found</p>
-                    <p>None of your addons have streams for this title. Install a streaming addon from the Stremio addon catalog to see sources here.</p>
+                    {#if hasSourceAddon() === false}
+                        <p>None of your addons can play anything yet.</p>
+                        <a class="add-source" href="/addons?source=community">Add a Source</a>
+                    {:else}
+                        <p>None of your addons have a source for this one yet.</p>
+                    {/if}
                 </div>
             {/if}
         </div>
@@ -559,6 +565,23 @@
         padding: 48px 12px;
         text-align: center;
         color: var(--label-2);
+    }
+    .add-source {
+        display: inline-flex;
+        align-items: center;
+        height: 36px;
+        margin-top: 14px;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 1px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .add-source:hover,
+    .add-source:focus-visible {
+        background: var(--fill-hover);
     }
     .empty-title {
         color: var(--label);

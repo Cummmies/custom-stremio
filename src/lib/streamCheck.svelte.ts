@@ -8,6 +8,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { app } from '$lib/app.svelte';
 import { reachableUrl } from '$lib/tracker.svelte';
+import { isInternalAddon } from '$lib/serverIds';
 
 const YES_KEY = 'stream-ok:';
 const YES_FOR_MS = 30 * 24 * 3600_000;
@@ -44,6 +45,21 @@ function streamAddons(type: string, videoId: string): string[] {
         if (ok) out.push(a.transportUrl.replace(/\/manifest\.json$/, ''));
     }
     return out;
+}
+
+/**
+ * Whether any installed addon can give sources to play. Stremio's own (local
+ * files, WatchHub's "Open in …" links, a few public-domain films) don't count:
+ * with only those, a new account can't play anything. Null until addons load.
+ */
+export function hasSourceAddon(): boolean | null {
+    const addons = app.ctx?.profile.addons;
+    if (!addons) return null;
+    return addons.some((a) => {
+        if (a.flags?.official || isInternalAddon(a.manifest.id)) return false;
+        const m = a.manifest as Manifest;
+        return (m.resources ?? []).some((r) => (typeof r === 'string' ? r : r.name) === 'stream');
+    });
 }
 
 async function anySources(base: string, type: string, videoId: string, signal: AbortSignal): Promise<boolean> {

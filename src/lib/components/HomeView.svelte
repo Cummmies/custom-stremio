@@ -9,7 +9,7 @@
     import { onMount, untrack } from 'svelte';
     import { app } from '$lib/app.svelte';
     import { libraryItemPreview, upNextEpisode } from '$lib/library';
-    import { hasSources } from '$lib/streamCheck.svelte';
+    import { hasSourceAddon, hasSources } from '$lib/streamCheck.svelte';
     import { reachableUrl, tracker } from '$lib/tracker.svelte';
     import { backupState } from '$lib/backupState.svelte';
     import { lb } from '$lib/tracker/api';
@@ -84,6 +84,10 @@
     });
     // With only Stremio's to go on (the tracker down, or its first answer not in
     // yet), your statuses kept with the account still count.
+    // A new account has addons that list titles but none that play them: say so,
+    // once, where everything starts.
+    const needsSources = $derived(hasSourceAddon() === false);
+
     // A show that's here to start a new episode waits until some addon has a
     // source for it: an announced season (often with a placeholder date) isn't out.
     const cwItems = $derived(
@@ -249,6 +253,16 @@
         <CategoryTiles {tiles} />
     {/if}
 
+    {#if needsSources}
+        <a class="sources-prompt" href="/addons?source=community">
+            <span>
+                <span class="sources-title">Add a source to start watching</span>
+                <span class="sources-sub">Your addons show what’s out there, but none of them can play it yet.</span>
+            </span>
+            <Icon name="chevronRight" size={16} />
+        </a>
+    {/if}
+
     {#if board && ofType.length === 0}
         <EmptyState icon="library" title="Nothing here yet">
             <p>None of your addons provide {type === 'series' ? 'series' : type === 'movie' ? 'movie' : ''} catalogs. Install an addon like Cinemeta to fill this page.</p>
@@ -329,6 +343,41 @@
         font-weight: 600;
         text-decoration: none;
         transition: background var(--fast);
+    }
+    .sources-prompt {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin: 0 var(--gutter) 8px;
+        padding: 14px 18px;
+        border-radius: 14px;
+        border: 1px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        text-decoration: none;
+        transition: background var(--fast);
+    }
+    .sources-prompt:hover,
+    .sources-prompt:focus-visible {
+        background: var(--fill-hover);
+    }
+    .sources-prompt > span {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .sources-title {
+        font-weight: 600;
+    }
+    .sources-sub {
+        color: var(--label-2);
+        font-size: var(--text-body);
+    }
+    .sources-prompt :global(svg) {
+        flex: none;
+        color: var(--label-2);
     }
     .customize-btn:hover {
         background: var(--fill-hover);
