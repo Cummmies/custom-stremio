@@ -87,25 +87,7 @@
         videos.filter((v) => (v.season ?? 0) === season).sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0))
     );
 
-    /**
-     * Where you are in each season, for the picker: "✓" (all watched), "2 of 10",
-     * or "New" (out, none watched yet, and you'd finished the one before).
-     */
-    function seasonState(s: number): string {
-        if (s === 0) return '';
-        const eps = videos.filter((v) => (v.season ?? 0) === s);
-        const seen = eps.filter((v) => v.watched).length;
-        if (eps.length && seen === eps.length) return '✓';
-        if (seen) return `${seen} of ${eps.length}`;
-        const out = eps.some((v) => !v.upcoming);
-        const before = videos.filter((v) => (v.season ?? 0) > 0 && (v.season ?? 0) < s && !v.upcoming);
-        return out && before.length && before.every((v) => v.watched) ? 'New' : '';
-    }
-    function seasonLabel(s: number) {
-        if (s === 0) return 'Specials';
-        const state = seasonState(s);
-        return state === '✓' ? `Season ${s} ✓` : state ? `Season ${s} · ${state}` : `Season ${s}`;
-    }
+    const seasonLabel = (s: number) => (s === 0 ? 'Specials' : `Season ${s}`);
 
     // Stremio's dates are calendar days (lib/released.ts).
     const fmtDate = (iso: string | null) => releasedDate(iso);
