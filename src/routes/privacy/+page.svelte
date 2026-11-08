@@ -81,8 +81,11 @@
         What you add is kept while you use the app. You can download all of it (a full backup, with your profile and friends), or bring a
         backup back, in Settings → Data. A watch you delete is kept for 30 days, so it can be brought back if you ask, then it’s gone.
         To protect against loss, the server keeps daily backup copies for a short while; a deletion reaches those as they’re replaced.
-        To have your data deleted, write to <strong>{CONTACT}</strong> from your Stremio account’s
-        email address, and it will be removed from the server. Signing a device out (Settings → Devices) removes its sign-in.
+        To delete it all, use Delete Account in Settings → Data (or write to <strong>{CONTACT}</strong> from your Stremio account’s
+        email address): everything is removed from the server, on every device. Only a one-way code made from your Stremio account’s ID
+        is kept, so the app doesn’t start a new account for it by itself; it can’t be turned back into your account or email. Your Stremio
+        account is Stremio’s, so it and what’s saved in it stay until you delete it there. Signing a device out (Settings → Devices) removes
+        its sign-in.
     </p>
 
     <h2>Where it’s kept, and how it’s protected</h2>
@@ -97,7 +100,7 @@
         <li><strong>See and take it:</strong> download everything in Settings → Data.</li>
         <li><strong>Correct it:</strong> change your profile, scores, reviews and lists in the app at any time.</li>
         <li><strong>Limit who sees it:</strong> your profile’s privacy (everyone, friends, or only you) and what it shares.</li>
-        <li><strong>Delete it:</strong> write to <strong>{CONTACT}</strong> from your Stremio account’s email address.</li>
+        <li><strong>Delete it:</strong> Delete Account in Settings → Data, or write to <strong>{CONTACT}</strong> from your Stremio account’s email address.</li>
     </ul>
     <p>Depending on where you live, you may have more rights under your local law. Write to us and we’ll help.</p>
 
