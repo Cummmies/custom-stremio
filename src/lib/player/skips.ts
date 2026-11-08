@@ -232,7 +232,8 @@ const AGREE_SECS = 15;
 export function pickSegments(chapters: Segment[], sources: Segment[][], duration: number, movie: boolean): Segment[] {
     const ok = (s: Segment) => plausible(s, duration, movie);
     const out: Segment[] = [];
-    for (const s of chapters.filter(ok)) {
+    // The file's own chapters are trusted however long their credits run.
+    for (const s of chapters.filter((c) => plausible(c, duration, movie, true))) {
         if (!out.some((m) => m.kind === s.kind && s.start < m.end && m.start < s.end)) out.push(s);
     }
     const fromChapters = new Set(out.map((s) => s.kind));
@@ -258,7 +259,7 @@ export function pickSegments(chapters: Segment[], sources: Segment[][], duration
 }
 
 /** Leaves out sections that can't be what they claim (bad chapter names, bad submissions). */
-function plausible(s: Segment, duration: number, movie: boolean): boolean {
+function plausible(s: Segment, duration: number, movie: boolean, fromFile = false): boolean {
     const len = s.end - s.start;
     if (movie) return s.kind === 'credits' && s.start >= duration * 0.6;
     switch (s.kind) {
@@ -268,10 +269,11 @@ function plausible(s: Segment, duration: number, movie: boolean): boolean {
         case 'recap':
             return len <= 300 && s.start <= Math.max(300, duration * 0.25);
         // Credits and previews come at the end.
-        // TV credits are a few minutes at most: a longer "credits" that runs to the
-        // end started early (a bad submission), and skipping it would skip story.
+        // From the databases, TV credits longer than 5 minutes (or 15% of a long
+        // episode) started early: a bad submission, and skipping it would skip
+        // story. Movies (above) and the file's own chapters have no such limit.
         case 'credits':
-            return s.start >= duration * 0.6 && len <= Math.max(300, duration * 0.15);
+            return s.start >= duration * 0.6 && (fromFile || len <= Math.max(300, duration * 0.15));
         case 'preview':
             return s.start >= duration * 0.6;
     }
