@@ -15,7 +15,7 @@
 //! update can't lock you out.
 //!
 //! Beta updates (a hidden switch in Settings, for testing before everyone gets
-//! it) come the same way from `web-beta`, built from the `test` branch. Turning
+//! it) come the same way from `web-beta`, built from the `beta` branch. Turning
 //! it on or off switches to that channel's newest bundle even when it's older,
 //! or to the built-in files when the regular channel has nothing newer.
 //!

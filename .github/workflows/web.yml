@@ -3,14 +3,14 @@
 # reach the phone without re-sideloading.
 #
 # The files go to a pre-release named "web" (never "latest", which the desktop
-# updater reads). Pushes to test go to "web-beta" instead, for devices with
+# updater reads). Pushes to beta go to "web-beta" instead, for devices with
 # Beta Updates on (Settings; web_update.rs). Signed with the updater key:
 #   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 name: Web update
 
 on:
   push:
-    branches: [main, test]
+    branches: [main, beta]
     paths:
       - 'src/**'
       - 'static/**'
@@ -68,8 +68,8 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name == 'test' && 'web-beta' || 'web' }}
-          TITLE: ${{ github.ref_name == 'test' && 'Beta web updates (Windows and iOS)' || 'Web updates (Windows and iOS)' }}
+          TAG: ${{ github.ref_name == 'beta' && 'web-beta' || 'web' }}
+          TITLE: ${{ github.ref_name == 'beta' && 'Beta web updates (Windows and iOS)' || 'Web updates (Windows and iOS)' }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --prerelease --latest=false \
             --target "$GITHUB_SHA" --title "$TITLE" \

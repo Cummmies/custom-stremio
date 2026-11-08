@@ -37,7 +37,7 @@ class Updates {
     reloads = $state(isIOS || isTV);
 
     /**
-     * Beta updates (this device): the screens built from the test branch, before
+     * Beta updates (this device): the screens built from the beta branch, before
      * everyone gets them. Windows and iPhone; a hidden switch in Settings.
      */
     beta = $state(readBeta());
