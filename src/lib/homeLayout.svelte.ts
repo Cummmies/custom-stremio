@@ -19,7 +19,16 @@ export type Merge = { name: string; parts: string[] };
  * whose titles the banner at the top shows (a row key); none: Popular
  * (bannerRow below).
  */
-export type Layout = { order: RowEntry[]; merges: Record<string, Merge>; dismissed?: string[]; banner?: string | null };
+export type Layout = {
+    order: RowEntry[];
+    merges: Record<string, Merge>;
+    dismissed?: string[];
+    banner?: string | null;
+    /** No banner at all: Home starts with its rows. */
+    bannerOff?: boolean;
+    /** No category tiles under the banner. */
+    tilesOff?: boolean;
+};
 
 export type SpecialKey = 'cw';
 export const SPECIAL_NAMES: Record<SpecialKey, string> = { cw: 'Continue Watching' };
@@ -283,6 +292,18 @@ class HomeLayout {
     }
 
     /** The banner shows this row's titles (null: Popular, the default). */
+    setBannerOff(off: boolean) {
+        this.#change(off ? 'Turned the banner off' : 'Turned the banner on', (l) => {
+            l.bannerOff = off || undefined;
+        });
+    }
+
+    setTilesOff(off: boolean) {
+        this.#change(off ? 'Hid the category tiles' : 'Showed the category tiles', (l) => {
+            l.tilesOff = off || undefined;
+        });
+    }
+
     setBanner(rows: ResolvedRow[], key: string | null) {
         const row = key ? rows.find((r) => r.key === key) : null;
         this.#change(row ? `The banner shows “${row.name}”` : 'The banner shows Popular', (l) => {

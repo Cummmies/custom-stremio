@@ -17,6 +17,7 @@
     import { catalogTitle } from '$lib/components/CatalogList.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import Toggle from '$lib/components/Toggle.svelte';
+    import { isTV } from '$lib/platform';
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import { TRACKER_ROWS_ADDON, TRACKER_ROW_DETAIL } from '$lib/serverIds';
 
@@ -78,8 +79,19 @@
 
     // --- Banner: one of the rows on Home (Popular unless another is chosen) ---
     const bannerRow = $derived(pickBannerRow(rows, homeLayout.layout.banner));
-    const bannerKey = $derived(bannerRow?.key ?? '');
-    const bannerOptions = $derived(onHome.map((r) => ({ value: r.key, label: r.name })));
+    const OFF = '__off';
+    const bannerOff = $derived(!!homeLayout.layout.bannerOff && !isTV);
+    const bannerKey = $derived(bannerOff ? OFF : (bannerRow?.key ?? ''));
+    // Off isn't offered on the TV, whose Home is built around the banner.
+    const bannerOptions = $derived([
+        ...onHome.map((r) => ({ value: r.key, label: r.name })),
+        ...(isTV ? [] : [{ value: OFF, label: 'Off' }]),
+    ]);
+    function chooseBanner(v: string) {
+        if (v === OFF) return homeLayout.setBannerOff(true);
+        if (homeLayout.layout.bannerOff) homeLayout.setBannerOff(false);
+        homeLayout.setBanner(rows, v);
+    }
 
     // --- Suggestions: rows that belong together ("Popular · Movie" + "Popular · Series") ---
     const suggestion = $derived.by(() => {
@@ -274,11 +286,11 @@
     {/if}
 
     <section class="banner" aria-labelledby="banner-head">
-        <h2 id="banner-head">Banner</h2>
+        <h2 id="banner-head">Top of Home</h2>
         <div class="list">
             <div class="banner-row">
-                <div class="art" aria-hidden="true">
-                    {#each bannerRow ? posters(bannerRow) : [null] as pic, i (i)}
+                <div class="art" class:off={bannerOff} aria-hidden="true">
+                    {#each bannerRow && !bannerOff ? posters(bannerRow) : [null] as pic, i (i)}
                         {#if pic}<img src={pic} alt="" loading="lazy" />{:else}<span></span>{/if}
                     {/each}
                 </div>
@@ -286,7 +298,14 @@
                     <span class="name">Shows</span>
                     <span class="detail">The large picture at the top of Home.</span>
                 </div>
-                <PopupButton label="Banner shows" value={bannerKey} options={bannerOptions} onchange={(v) => homeLayout.setBanner(rows, v)} />
+                <PopupButton label="Banner shows" value={bannerKey} options={bannerOptions} onchange={chooseBanner} />
+            </div>
+            <div class="banner-row">
+                <div class="text">
+                    <span class="name">Category Tiles</span>
+                    <span class="detail">The row of shortcuts to each row, under the banner.</span>
+                </div>
+                <Toggle label="Show category tiles" checked={!homeLayout.layout.tilesOff} onchange={(on) => homeLayout.setTilesOff(!on)} />
             </div>
         </div>
     </section>
@@ -487,6 +506,13 @@
     }
     .banner {
         margin-bottom: 28px;
+    }
+    .banner-row + .banner-row {
+        border-top: 1px solid var(--separator);
+        padding-left: 14px;
+    }
+    .art.off {
+        opacity: 0.4;
     }
     .banner-row {
         display: flex;

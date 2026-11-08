@@ -205,6 +205,9 @@
             })
     );
 
+    // Customize Home: no banner (not on TV, whose Home is built around it).
+    const bannerOff = $derived(!!homeLayout.layout.bannerOff && !isTV);
+
     const pageTitle = $derived(type === 'movie' ? 'Movies' : type === 'series' ? 'Series' : 'Home');
 
     // The opening screen (the banner's height is what's left of the window,
@@ -245,11 +248,11 @@
 
 <svelte:head><title>{pageTitle} · Stremio</title></svelte:head>
 
-<div class="home" style:--below={below != null ? `${below}px` : null}>
-<Hero items={featured} />
+<div class="home" class:no-banner={bannerOff} style:--below={below != null ? `${below}px` : null}>
+{#if !bannerOff}<Hero items={featured} />{/if}
 
 <div class="content" bind:this={content}>
-    {#if tiles.length > 1}
+    {#if tiles.length > 1 && !homeLayout.layout.tilesOff}
         <CategoryTiles {tiles} />
     {/if}
 
@@ -324,6 +327,10 @@
         .home {
             --hero-max: 62svh;
         }
+    }
+    /* No banner: the rows start under the nav. */
+    .home.no-banner .content {
+        padding-top: calc(var(--nav-h) + 12px);
     }
     .customize {
         display: flex;
