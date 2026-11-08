@@ -192,9 +192,9 @@ export function fromChapters(chapters: RawChapter[], duration: number): Segment[
 }
 
 /**
- * All known segments for a title. Chapters win (they match this exact file),
- * then AniSkip for anime, then TheIntroDB (consensus of several submissions),
- * then IntroDB.
+ * All known segments for a title. Chapters win (they match this exact file);
+ * otherwise AniSkip for anime, TheIntroDB and IntroDB vote, in that order
+ * when they tie (see `pickSegments`).
  */
 export async function lookupSegments(opts: {
     imdb: string | null;
@@ -216,12 +216,45 @@ export async function lookupSegments(opts: {
         isImdb ? fromTheIntroDB(imdb!, season, episode, duration) : [],
         isImdb ? fromIntroDB(imdb!, season, episode, duration) : [],
     ]);
-    const merged: Segment[] = [];
-    for (const s of [...chapters, ...k, ...a, ...b].filter((s) => plausible(s, duration, movie))) {
-        const clash = merged.some((m) => m.kind === s.kind && s.start < m.end && m.start < s.end);
-        if (!clash) merged.push(s);
+    return pickSegments(chapters, [k, a, b], duration, movie);
+}
+
+/** How far apart two sources' starts can be and still be the same section. */
+const AGREE_SECS = 15;
+
+/**
+ * One answer per kind of section. The file's chapters win outright. Otherwise
+ * the databases vote: the section the most of them agree on wins, the best
+ * source breaking a tie. Never several sources' sections of one kind side by
+ * side: a wrong submission (TheIntroDB has Code Geass's credits 5 minutes early)
+ * would then come first and bring up Skip Credits and Next Episode mid-scene.
+ */
+export function pickSegments(chapters: Segment[], sources: Segment[][], duration: number, movie: boolean): Segment[] {
+    const ok = (s: Segment) => plausible(s, duration, movie);
+    const out: Segment[] = [];
+    for (const s of chapters.filter(ok)) {
+        if (!out.some((m) => m.kind === s.kind && s.start < m.end && m.start < s.end)) out.push(s);
     }
-    return merged.sort((x, y) => x.start - y.start);
+    const fromChapters = new Set(out.map((s) => s.kind));
+    const kinds: SkipKind[] = ['intro', 'recap', 'credits', 'preview'];
+    for (const kind of kinds) {
+        if (fromChapters.has(kind)) continue;
+        // Each source's first plausible section of this kind, best source first.
+        const candidates = sources
+            .map((list) => list.filter((s) => s.kind === kind && ok(s)).sort((x, y) => x.start - y.start)[0])
+            .filter((s): s is Segment => !!s);
+        let best: Segment | null = null;
+        let bestVotes = 0;
+        for (const c of candidates) {
+            const votes = candidates.filter((o) => Math.abs(o.start - c.start) <= AGREE_SECS).length;
+            if (votes > bestVotes) {
+                best = c;
+                bestVotes = votes;
+            }
+        }
+        if (best) out.push(best);
+    }
+    return out.sort((x, y) => x.start - y.start);
 }
 
 /** Leaves out sections that can't be what they claim (bad chapter names, bad submissions). */
@@ -235,7 +268,10 @@ function plausible(s: Segment, duration: number, movie: boolean): boolean {
         case 'recap':
             return len <= 300 && s.start <= Math.max(300, duration * 0.25);
         // Credits and previews come at the end.
+        // TV credits are a few minutes at most: a longer "credits" that runs to the
+        // end started early (a bad submission), and skipping it would skip story.
         case 'credits':
+            return s.start >= duration * 0.6 && len <= Math.max(300, duration * 0.15);
         case 'preview':
             return s.start >= duration * 0.6;
     }
