@@ -239,9 +239,14 @@
         clearTimeout(autoTimer);
         if (readyToPick(streams, ranked, like, elapsed)) {
             startEasy(picks, pickedAnime);
-        } else if (!pending && !picks.length) {
+        } else if (!picks.length && (!pending || elapsed > PICK_WAIT_MS)) {
+            // Nothing to play yet: show the list rather than waiting on addons
+            // that may never answer (it keeps filling in as they do). It says
+            // nothing matched only when there were sources to match.
             autoStarted = 0;
-            goto(titleHref(type, id, { video: videoId, nomatch: '1' }), { noScroll: true, keepFocus: true, replaceState: true });
+            const any = streams.some((g) => g.content.type === 'Ready' && g.content.content.length);
+            const params: Record<string, string> = any ? { video: videoId, nomatch: '1' } : { video: videoId };
+            goto(titleHref(type, id, params), { noScroll: true, keepFocus: true, replaceState: true });
         } else {
             // Re-check when the slowest addons time out.
             autoTimer = setTimeout(() => (details = details ? { ...details } : details), Math.max(250, PICK_WAIT_MS - elapsed));
