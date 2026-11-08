@@ -50,6 +50,9 @@
 
     // stremio:// link handling (registered per user in Windows, not synced).
     let handlesLinks = $state(false);
+    // Beta Updates stays hidden until the version line is tapped five times.
+    let aboutTaps = 0;
+    let showBeta = $state(false);
     let tvSize = $state<TvSize>(isTV ? getTvSize() : 'medium');
     $effect(() => {
         if (!inTauri) return;
@@ -1280,7 +1283,7 @@
                 <div class="row">
                     <div>
                         <div class="title">
-                            {#if updates.phase === 'ready'}Version {updates.version} is ready
+                            {#if updates.phase === 'ready'}{updates.version ? `Version ${updates.version} is ready` : 'An update is ready'}
                             {:else if updates.phase === 'downloading'}Downloading version {updates.version}…{#if updates.progress != null} {Math.round(updates.progress * 100)}%{/if}
                             {:else if updates.phase === 'checking'}Checking for updates…
                             {:else if updates.phase === 'up-to-date'}You’re up to date
@@ -1301,6 +1304,15 @@
                         </button>
                     {/if}
                 </div>
+                {#if updates.betaSupported && (showBeta || updates.beta)}
+                    <div class="row">
+                        <div>
+                            <div class="title">Beta Updates</div>
+                            <div class="sub">Changes before everyone else gets them. Something may not work yet.</div>
+                        </div>
+                        <Toggle label="Beta Updates" checked={updates.beta} onchange={(v) => updates.setBeta(v)} />
+                    </div>
+                {/if}
                 {#if whatsNew.available}
                     <div class="row">
                         <div>
@@ -1335,7 +1347,9 @@
         </div>
     </section>
 
-    {#if !searching}<p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
+    <!-- Tapping this five times shows Beta Updates (under Updates). -->
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+    {#if !searching}<p class="about" onclick={() => (aboutTaps += 1) >= 5 && (showBeta = true)}>Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
     </div>
 </div>
 

@@ -3,13 +3,14 @@
 # reach the phone without re-sideloading.
 #
 # The files go to a pre-release named "web" (never "latest", which the desktop
-# updater reads). Signed with the updater key:
+# updater reads). Pushes to test go to "web-beta" instead, for devices with
+# Beta Updates on (Settings; web_update.rs). Signed with the updater key:
 #   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 name: Web update
 
 on:
   push:
-    branches: [main]
+    branches: [main, test]
     paths:
       - 'src/**'
       - 'static/**'
@@ -24,7 +25,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: web-update
+  group: web-update-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -67,10 +68,12 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name == 'test' && 'web-beta' || 'web' }}
+          TITLE: ${{ github.ref_name == 'test' && 'Beta web updates (Windows and iOS)' || 'Web updates (Windows and iOS)' }}
         run: |
-          gh release view web >/dev/null 2>&1 || gh release create web --prerelease --latest=false \
-            --title "Web updates (Windows and iOS)" \
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --prerelease --latest=false \
+            --target "$GITHUB_SHA" --title "$TITLE" \
             --notes "The Windows and iOS apps download their screens from here. Not an installable release."
           # web.json last, so an app never sees a version whose files aren't up yet.
-          gh release upload web web.zip web.zip.sig --clobber
-          gh release upload web web.json --clobber
+          gh release upload "$TAG" web.zip web.zip.sig --clobber
+          gh release upload "$TAG" web.json --clobber

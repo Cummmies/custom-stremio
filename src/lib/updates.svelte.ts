@@ -14,6 +14,15 @@ import * as tvUpdate from '$lib/tv/webUpdate';
 
 type Phase = 'idle' | 'checking' | 'downloading' | 'ready' | 'up-to-date' | 'error';
 
+const BETA_KEY = 'beta-updates';
+function readBeta(): boolean {
+    try {
+        return localStorage.getItem(BETA_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
 class Updates {
     phase = $state<Phase>('idle');
     current = $state<string | null>(null);
@@ -26,6 +35,29 @@ class Updates {
 
     /** The update waiting installs with a page reload (web side) rather than a restart (Windows installer). */
     reloads = $state(isIOS || isTV);
+
+    /**
+     * Beta updates (this device): the screens built from the test branch, before
+     * everyone gets them. Windows and iPhone; a hidden switch in Settings.
+     */
+    beta = $state(readBeta());
+
+    get betaSupported() {
+        return inTauri && !import.meta.env.DEV;
+    }
+
+    setBeta(on: boolean) {
+        this.beta = on;
+        try {
+            if (on) localStorage.setItem(BETA_KEY, '1');
+            else localStorage.removeItem(BETA_KEY);
+        } catch {
+            /* stays as set until the app restarts */
+        }
+        // Switch over now: forget what was found for the other channel.
+        if (this.phase !== 'downloading' && this.phase !== 'checking') this.phase = 'idle';
+        void this.check();
+    }
 
     get supported() {
         return isDesktop || isIOS || (isTV && tvUpdate.canUpdate());
@@ -76,7 +108,7 @@ class Updates {
         this.phase = 'checking';
         this.error = null;
         try {
-            const r = await invoke<{ ready: boolean; label: string | null }>('web_update_check');
+            const r = await invoke<{ ready: boolean; label: string | null }>('web_update_check', { beta: this.beta });
             this.version = r.label;
             this.phase = r.ready ? 'ready' : 'up-to-date';
         } catch (e) {

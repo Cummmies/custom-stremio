@@ -14,6 +14,11 @@
 //! throws the bundle away and goes back to the built-in files, so a broken
 //! update can't lock you out.
 //!
+//! Beta updates (a hidden switch in Settings, for testing before everyone gets
+//! it) come the same way from `web-beta`, built from the `test` branch. Turning
+//! it on or off switches to that channel's newest bundle even when it's older,
+//! or to the built-in files when the regular channel has nothing newer.
+//!
 //! Changes to native code (Rust, the Swift player) still need a new .ipa: a
 //! bundle names the native API it was built for (native-api.txt) and is only
 //! used by an app with the same one.
@@ -29,7 +34,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{utils::assets::AssetKey, Assets, Runtime};
 
-const BASE_URL: &str = "https://github.com/Cummmies/custom-stremio/releases/download/web";
+const RELEASES: &str = "https://github.com/Cummmies/custom-stremio/releases/download";
+
+fn base_url(beta: bool) -> String {
+    format!("{RELEASES}/{}", if beta { "web-beta" } else { "web" })
+}
 
 /// Bumped whenever the web side needs native commands an older app lacks.
 pub const NATIVE_API: u32 = parse_u32(include_str!("../native-api.txt"));
@@ -93,6 +102,25 @@ fn set_current(version: Option<u64>) {
     };
 }
 
+/// The bundle in use came from the beta channel.
+fn on_beta() -> bool {
+    root().join("channel").exists()
+}
+
+fn set_beta(beta: bool) {
+    let path = root().join("channel");
+    if beta {
+        fs::write(path, "beta").ok();
+    } else {
+        fs::remove_file(path).ok();
+    }
+}
+
+/// A bundle that never loaded: not downloaded again.
+fn rejected() -> Option<u64> {
+    fs::read_to_string(root().join("rejected")).ok()?.trim().parse().ok()
+}
+
 /// Marks the bundle as not yet proven to load (cleared by `web_update_confirm`).
 fn unconfirmed() -> PathBuf {
     root().join("unconfirmed")
@@ -107,6 +135,8 @@ fn active_at_launch() -> Option<PathBuf> {
     if !usable || unconfirmed().exists() {
         eprintln!("web update: going back to the built-in files (bundle {current} unusable or never confirmed)");
         set_current(None);
+        set_beta(false);
+        fs::write(root().join("rejected"), current.to_string()).ok();
         fs::remove_file(unconfirmed()).ok();
         fs::remove_dir_all(bundle_dir(current)).ok();
         return None;
@@ -122,11 +152,18 @@ pub struct WebAssets<R: Runtime> {
     active: Arc<RwLock<Option<PathBuf>>>,
 }
 
+struct Staged {
+    version: u64,
+    label: Option<String>,
+    beta: bool,
+}
+
 #[derive(Clone)]
 pub struct WebUpdate {
     active: Arc<RwLock<Option<PathBuf>>>,
-    /// A verified, unpacked bundle waiting for Reload.
-    staged: Arc<RwLock<Option<(u64, String)>>>,
+    /// What's waiting for Reload: a verified, unpacked bundle (or 0: the
+    /// built-in files), its label, and whether it's from the beta channel.
+    staged: Arc<RwLock<Option<Staged>>>,
 }
 
 /// Wraps the built-in assets; returns the state the commands need.
@@ -184,26 +221,61 @@ fn safe_join(dir: &Path, key: &str) -> Option<PathBuf> {
 
 // --- commands -----------------------------------------------------------------
 
-/// Downloads a newer bundle if there is one. Doesn't switch to it.
+/// Downloads a newer bundle if there is one (from the beta channel when
+/// `beta`), or the one to switch to when the channel changed. Doesn't switch.
 #[tauri::command(async)]
-pub fn web_update_check(state: tauri::State<'_, WebUpdate>) -> Result<CheckResult, String> {
-    if let Some((_, label)) = state.staged.read().unwrap().as_ref() {
-        return Ok(CheckResult { ready: true, label: Some(label.clone()) });
+pub fn web_update_check(state: tauri::State<'_, WebUpdate>, beta: Option<bool>) -> Result<CheckResult, String> {
+    let beta = beta.unwrap_or(false);
+    if let Some(staged) = state.staged.read().unwrap().as_ref() {
+        if staged.beta == beta {
+            return Ok(CheckResult { ready: true, label: staged.label.clone() });
+        }
     }
-    let manifest: Manifest = get(&format!("{BASE_URL}/web.json"))?
-        .into_json()
-        .map_err(|e| format!("web.json: {e}"))?;
-    let newest_here = current_version().unwrap_or(0).max(BUILT_IN);
-    if manifest.version <= newest_here || manifest.native_api != NATIVE_API {
-        return Ok(CheckResult { ready: false, label: None });
+    // Staged for the other channel: not wanted any more.
+    if let Some(old) = state.staged.write().unwrap().take() {
+        if old.version != 0 && Some(old.version) != current_version() {
+            fs::remove_dir_all(bundle_dir(old.version)).ok();
+        }
     }
+    let switching = beta != on_beta();
+    let manifest: Option<Manifest> = get(&format!("{}/web.json", base_url(beta)))
+        .and_then(|r| r.into_json().map_err(|e| format!("web.json: {e}")))
+        .ok();
+    let usable = manifest
+        .as_ref()
+        .filter(|m| m.native_api == NATIVE_API && m.version > BUILT_IN && Some(m.version) != rejected());
+    let wanted = match usable {
+        // Switching channels: that channel's newest, newer or not.
+        Some(m) if switching => m.version != current_version().unwrap_or(0),
+        Some(m) => m.version > current_version().unwrap_or(0).max(BUILT_IN),
+        None => false,
+    };
+    if wanted {
+        let m = usable.unwrap();
+        download(beta, m.version)?;
+        *state.staged.write().unwrap() = Some(Staged { version: m.version, label: Some(m.label.clone()), beta });
+        return Ok(CheckResult { ready: true, label: Some(m.label.clone()) });
+    }
+    // Leaving beta with nothing newer to go to: back to the built-in files.
+    if switching && !beta && usable.is_none() {
+        *state.staged.write().unwrap() = Some(Staged { version: 0, label: None, beta });
+        return Ok(CheckResult { ready: true, label: None });
+    }
+    if manifest.is_none() && !switching {
+        return Err("Couldn't reach the update server.".into());
+    }
+    Ok(CheckResult { ready: false, label: None })
+}
 
-    let zip = read_all(get(&format!("{BASE_URL}/web.zip"))?)?;
-    let sig = read_all(get(&format!("{BASE_URL}/web.zip.sig"))?)?;
+/// Downloads, verifies and unpacks a bundle into its folder.
+fn download(beta: bool, version: u64) -> Result<(), String> {
+    let base = base_url(beta);
+    let zip = read_all(get(&format!("{base}/web.zip"))?)?;
+    let sig = read_all(get(&format!("{base}/web.zip.sig"))?)?;
     verify(&zip, &sig)?;
 
     // Unpack beside the others, then move into place in one step.
-    let staging = root().join(format!("{}.part", manifest.version));
+    let staging = root().join(format!("{version}.part"));
     fs::remove_dir_all(&staging).ok();
     fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
     unzip(&zip, &staging)?;
@@ -212,24 +284,32 @@ pub fn web_update_check(state: tauri::State<'_, WebUpdate>) -> Result<CheckResul
         return Err("The update has no index.html.".into());
     }
     fs::write(staging.join(".native-api"), NATIVE_API.to_string()).map_err(|e| e.to_string())?;
-    let dest = bundle_dir(manifest.version);
+    let dest = bundle_dir(version);
+    if Some(version) == current_version() {
+        fs::remove_dir_all(&staging).ok();
+        return Ok(());
+    }
     fs::remove_dir_all(&dest).ok();
-    fs::rename(&staging, &dest).map_err(|e| e.to_string())?;
-
-    *state.staged.write().unwrap() = Some((manifest.version, manifest.label.clone()));
-    Ok(CheckResult { ready: true, label: Some(manifest.label) })
+    fs::rename(&staging, &dest).map_err(|e| e.to_string())
 }
 
 /// Switches to the downloaded bundle; the page reloads itself right after.
 #[tauri::command]
 pub fn web_update_apply(state: tauri::State<'_, WebUpdate>) -> Result<(), String> {
-    let Some((version, _)) = state.staged.write().unwrap().take() else {
+    let Some(Staged { version, beta, .. }) = state.staged.write().unwrap().take() else {
         return Err("No update is ready.".into());
     };
     let previous = current_version();
-    fs::write(unconfirmed(), version.to_string()).map_err(|e| e.to_string())?;
-    set_current(Some(version));
-    *state.active.write().unwrap() = Some(bundle_dir(version));
+    set_beta(beta);
+    if version == 0 {
+        // Back to the files built into the app.
+        set_current(None);
+        *state.active.write().unwrap() = None;
+    } else {
+        fs::write(unconfirmed(), version.to_string()).map_err(|e| e.to_string())?;
+        set_current(Some(version));
+        *state.active.write().unwrap() = Some(bundle_dir(version));
+    }
     // The old bundle is no longer needed (the built-in files stay as the fallback).
     if let Some(p) = previous.filter(|p| *p != version) {
         fs::remove_dir_all(bundle_dir(p)).ok();
