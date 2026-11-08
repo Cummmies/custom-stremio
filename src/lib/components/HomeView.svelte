@@ -8,7 +8,8 @@
     // Home, Movies and Series share this layout; `type` narrows it to one kind.
     import { onMount, untrack } from 'svelte';
     import { app } from '$lib/app.svelte';
-    import { libraryItemPreview } from '$lib/library';
+    import { libraryItemPreview, upNextEpisode } from '$lib/library';
+    import { hasSources } from '$lib/streamCheck.svelte';
     import { reachableUrl, tracker } from '$lib/tracker.svelte';
     import { backupState } from '$lib/backupState.svelte';
     import { lb } from '$lib/tracker/api';
@@ -83,11 +84,17 @@
     });
     // With only Stremio's to go on (the tracker down, or its first answer not in
     // yet), your statuses kept with the account still count.
+    // A show that's here to start a new episode waits until some addon has a
+    // source for it: an announced season (often with a placeholder date) isn't out.
     const cwItems = $derived(
         (tracker.ready && trackerContinue
             ? mergeContinueWatching(continueWatching?.items ?? [], trackerContinue)
             : backupState.filterContinue(continueWatching?.items ?? [])
-        ).filter((i) => !type || i.type === type)
+        ).filter((i) => {
+            if (type && i.type !== type) return false;
+            const next = upNextEpisode(i, app.ctx?.notifications?.items[i._id]);
+            return !next || hasSources('series', next) === true;
+        })
     );
 
     // Rows in the order set in Customize Home (per profile): hidden ones left out,

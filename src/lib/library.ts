@@ -63,6 +63,22 @@ export function seasonEpisode(videoId: string | null | undefined): [number, numb
  * watched, so one watched before its listed time (a show out at 9 PM listed
  * for the next morning) would stay "+1" after you've seen it.
  */
+/**
+ * The episode a show is in Continue Watching for, when it's there to start a
+ * new one (rather than to finish one you're partway through): the first new
+ * episode Stremio told of, else the next episode it points at. null otherwise.
+ */
+export function upNextEpisode(item: LibraryItem, notified: Record<string, unknown> | undefined): string | null {
+    if (item.type !== 'series') return null;
+    const at = seasonEpisode(item.state?.videoId);
+    const fresh = Object.keys(notified ?? {})
+        .map((id) => ({ id, se: seasonEpisode(id) }))
+        .filter((x): x is { id: string; se: [number, number] } => !!x.se && (!at || x.se[0] > at[0] || (x.se[0] === at[0] && x.se[1] > at[1])))
+        .sort((a, b) => a.se[0] - b.se[0] || a.se[1] - b.se[1]);
+    if (fresh.length) return fresh[0].id;
+    return !item.progress && item.state?.videoId ? cleanVideoId(item.state.videoId) : null;
+}
+
 export function newEpisodeCount(item: LibraryItem, notified: Record<string, unknown> | undefined): number {
     const ids = Object.keys(notified ?? {});
     if (ids.length === 0) return item.notifications ?? 0;
