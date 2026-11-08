@@ -46,6 +46,8 @@
     --accent-hover: #7b5bf5;
     --accent-text: #a48dff; /* 7.2:1, for accent-colored text on --bg */
     --on-accent: #fff;
+    /* A focus ring around a text field, in the accent */
+    --accent-ring: rgb(109 74 240 / 0.35);
     /* Text drawn straight on artwork or scrims */
     --on-media: #fff;
 
@@ -72,7 +74,9 @@
     --radius: 10px;
     --radius-l: 16px;
     --radius-segment: 7px;
-    --poster-w: clamp(132px, 11vw, 168px);
+    /* Settings → Appearance scales it (theme.svelte.ts) */
+    --poster-scale: 1;
+    --poster-w: calc(clamp(132px, 11vw, 168px) * var(--poster-scale));
     --nav-h: 68px;
     --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --fast: 140ms;
@@ -97,7 +101,7 @@
         --text-title3: 17px;
         --text-title2: 22px;
         --text-large: 28px;
-        --poster-w: 104px;
+        --poster-w: calc(104px * var(--poster-scale));
         --nav-h: calc(52px + var(--safe-top));
         --tabbar-h: calc(50px + var(--safe-bottom));
     }
@@ -216,4 +220,27 @@ html {
     :focus-visible {
         outline: none;
     }
+}
+
+/*
+ * Settings → Appearance (lib/theme.svelte.ts). Black: true black behind
+ * everything, for OLED screens, with the raised surfaces and glass just above
+ * it. The accent is set by the theme code itself (any color).
+ */
+:root[data-background='black'] {
+    --bg: #000;
+    --elevated: #0e0e11;
+    --elevated-2: #18181d;
+    --glass: rgb(20 20 24 / 0.86);
+    --glass-strong: rgb(20 20 24 / 0.94);
+    --glass-thin: rgb(16 16 20 / 0.55);
+    --scrim: rgb(0 0 0 / 0.55);
+    --scrim-strong: rgb(0 0 0 / 0.7);
+    --scrim-tag: rgb(0 0 0 / 0.72);
+}
+:root[data-poster-size='small'] {
+    --poster-scale: 0.85;
+}
+:root[data-poster-size='large'] {
+    --poster-scale: 1.2;
 }

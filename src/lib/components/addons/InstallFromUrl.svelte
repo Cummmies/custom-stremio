@@ -176,7 +176,7 @@
     input:focus {
         outline: none;
         border-color: var(--accent-hover);
-        box-shadow: 0 0 0 3px rgb(109 74 240 / 0.35);
+        box-shadow: 0 0 0 3px var(--accent-ring);
     }
     .preview {
         display: flex;

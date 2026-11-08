@@ -6,6 +6,7 @@ import { profiles } from '$lib/profiles.svelte';
 import { anime } from '$lib/anime.svelte';
 import { cloudSync } from '$lib/cloudSync.svelte';
 import { tracker } from '$lib/tracker.svelte';
+import { startTheme } from '$lib/theme.svelte';
 import { backupState } from '$lib/backupState.svelte';
 import { playerPrefs } from '$lib/player/prefs.svelte';
 import { addonLinkUrl, linkHandlingWanted } from '$lib/addonLinks';
@@ -40,6 +41,8 @@ class AppState {
         cloudSync.start();
         // Your tracker tracker, when this profile has connected one.
         tracker.start();
+        // Settings → Appearance, kept with the account.
+        startTheme();
         // Your statuses and scores, kept with the account for when it's down.
         backupState.start();
         watchServer((s) => (this.server = s));

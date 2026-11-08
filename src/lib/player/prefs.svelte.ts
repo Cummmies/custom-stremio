@@ -36,6 +36,12 @@ export type Prefs = {
     blurSpoilers: boolean;
     /** Episodes you haven't watched show their picture blurred (it can give things away). */
     blurUnwatchedStills: boolean;
+    /** Appearance (lib/theme.svelte.ts): the accent color ("#rrggbb"), or null for the violet. */
+    accent: string | null;
+    /** The background: the usual near-black, or true black (OLED screens). */
+    background: 'dark' | 'black';
+    /** Poster size everywhere. */
+    posterSize: 'small' | 'medium' | 'large';
 };
 
 const KEY = 'playerPrefs';
@@ -59,6 +65,9 @@ const defaults: Prefs = {
     subStyle: DEFAULT_SUB_STYLE,
     blurSpoilers: true,
     blurUnwatchedStills: true,
+    accent: null,
+    background: 'dark',
+    posterSize: 'medium',
 };
 
 function read(key: string): Partial<Prefs> | null {
@@ -127,6 +136,24 @@ class PlayerPrefs {
     }
     set volume(v: number) {
         this.#save({ volume: v });
+    }
+    get accent() {
+        return this.#p.accent;
+    }
+    set accent(v: string | null) {
+        this.#save({ accent: v });
+    }
+    get background() {
+        return this.#p.background;
+    }
+    set background(v: 'dark' | 'black') {
+        this.#save({ background: v });
+    }
+    get posterSize() {
+        return this.#p.posterSize;
+    }
+    set posterSize(v: 'small' | 'medium' | 'large') {
+        this.#save({ posterSize: v });
     }
     get easyMode() {
         return this.#p.easyMode;
@@ -249,7 +276,7 @@ export const playerPrefs = new PlayerPrefs();
  * iPhone…) and only reach devices of that kind, since they're about its
  * screen, speakers and window.
  */
-export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence', 'subStyle', 'blurSpoilers', 'blurUnwatchedStills'] as const;
+export const SYNCED_PREFS = ['easyMode', 'easyLanguage', 'maxResolution', 'allowTorrents', 'autoSkip', 'askStillWatching', 'discordPresence', 'subStyle', 'blurSpoilers', 'blurUnwatchedStills', 'accent', 'background', 'posterSize'] as const;
 export type SyncedPrefs = Pick<Prefs, (typeof SYNCED_PREFS)[number]>;
 export const DEVICE_PREFS = ['upscaler', 'hdrPassthrough', 'audioPassthrough', 'volume', 'pauseOnMinimize', 'pauseOnLostFocus', 'hideHdrOnSdr'] as const;
 export type DevicePrefs = Pick<Prefs, (typeof DEVICE_PREFS)[number]>;

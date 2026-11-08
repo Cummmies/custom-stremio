@@ -6,7 +6,9 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import { getTvSize, setTvSize, tvSizes, type TvSize } from '$lib/tv/size';
     import Toggle from '$lib/components/Toggle.svelte';
+    import Segmented from '$lib/components/Segmented.svelte';
     import DeleteAccountDialog from '$lib/components/DeleteAccountDialog.svelte';
+    import { ACCENTS, DEFAULT_ACCENT } from '$lib/theme.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
@@ -450,6 +452,7 @@
         'Streaming Server': 'link',
         Display: 'tv',
         Home: 'home',
+        Appearance: 'palette',
         'Keyboard Shortcuts': 'grip',
         Updates: 'replay',
         Privacy: 'eyeOff',
@@ -1248,6 +1251,68 @@
     {/if}
 
     <section>
+        <h2>Appearance</h2>
+        <div class="group">
+            <div class="row appearance">
+                <div>
+                    <div class="title">Accent Color</div>
+                    <div class="sub">Buttons, highlights and links. It follows your account to every device.</div>
+                </div>
+                <div class="swatches" role="radiogroup" aria-label="Accent color">
+                    {#each ACCENTS as a, i (a.color)}
+                        {@const on = (playerPrefs.accent ?? DEFAULT_ACCENT).toLowerCase() === a.color}
+                        <button
+                            class="swatch"
+                            class:on
+                            role="radio"
+                            aria-checked={on}
+                            aria-label={a.name}
+                            title={a.name}
+                            style:--swatch={a.color}
+                            onclick={() => (playerPrefs.accent = i === 0 ? null : a.color)}
+                        ></button>
+                    {/each}
+                    {#if !isTV}
+                        {@const custom = !!playerPrefs.accent && !ACCENTS.some((a) => a.color === playerPrefs.accent?.toLowerCase())}
+                        <label class="swatch custom" class:on={custom} title="Any Color" style:--swatch={custom ? playerPrefs.accent : null}>
+                            <input
+                                type="color"
+                                aria-label="Any color"
+                                value={playerPrefs.accent ?? DEFAULT_ACCENT}
+                                onchange={(e) => (playerPrefs.accent = (e.currentTarget as HTMLInputElement).value.toLowerCase())}
+                            />
+                        </label>
+                    {/if}
+                </div>
+            </div>
+            <div class="row">
+                <div>
+                    <div class="title">Background</div>
+                    <div class="sub">Black turns off the pixels of an OLED screen.</div>
+                </div>
+                <Segmented
+                    label="Background"
+                    options={[{ value: 'dark', label: 'Dark' }, { value: 'black', label: 'Black' }]}
+                    value={playerPrefs.background}
+                    onchange={(v) => (playerPrefs.background = v)}
+                />
+            </div>
+            <div class="row">
+                <div>
+                    <div class="title">Poster Size</div>
+                    <div class="sub">On Home, in rows and in the Library.</div>
+                </div>
+                <Segmented
+                    label="Poster size"
+                    options={[{ value: 'small', label: 'Small' }, { value: 'medium', label: 'Medium' }, { value: 'large', label: 'Large' }]}
+                    value={playerPrefs.posterSize}
+                    onchange={(v) => (playerPrefs.posterSize = v)}
+                />
+            </div>
+        </div>
+    </section>
+
+    <section>
         <h2>Home</h2>
         <div class="group">
             <a class="row link" href="/customize">
@@ -1670,6 +1735,60 @@
     }
     .btn:hover {
         background: var(--fill-hover);
+    }
+    .swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+    .swatch {
+        position: relative;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--swatch);
+        cursor: pointer;
+        flex: none;
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+    }
+    .swatch.on,
+    .swatch:focus-visible {
+        outline: 2px solid var(--label);
+        outline-offset: 3px;
+    }
+    /* Any color: a rainbow until one's picked, then that color. */
+    .swatch.custom {
+        background: var(--swatch, conic-gradient(#e5484d, #e8772e, #f2c94c, #2fa865, #2d7cf0, #6d4af0, #d6409f, #e5484d));
+        overflow: hidden;
+    }
+    .swatch.custom input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        border: 0;
+        padding: 0;
+    }
+    @media (pointer: coarse) {
+        .swatch {
+            width: 32px;
+            height: 32px;
+        }
+    }
+    @media (max-width: 700px) {
+        .row.appearance {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .row.appearance .swatches {
+            justify-content: flex-start;
+        }
     }
     .btn.destructive {
         color: var(--bad-text);
