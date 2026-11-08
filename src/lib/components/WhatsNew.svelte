@@ -11,7 +11,7 @@
 
 {#if whatsNew.open}
     <dialog bind:this={dialog} aria-labelledby="whats-new-title" onclose={() => (whatsNew.open = false)}>
-        <h2 id="whats-new-title">What’s New</h2>
+        <h2 id="whats-new-title">{whatsNew.title}</h2>
         <ul>
             {#each whatsNew.items as change (change.at + change.text)}
                 <li>{change.text}</li>

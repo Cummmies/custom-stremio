@@ -10,7 +10,8 @@ const coreVersion = JSON.parse(readFileSync(new URL("./node_modules/@stremio/str
 // What's New (src/lib/whatsNew.svelte.ts): this build's commit time, and the
 // latest commits' subjects (written for people), minus housekeeping. The
 // workflows check out enough history for it (fetch-depth).
-const SKIP_SUBJECT = /^(merge|revert|ci|docs?|notes?|tests?|chore|build|wip|temp)\b|\[skip/i;
+// "Version 0.4.8" (a release's number) isn't a change either.
+const SKIP_SUBJECT = /^(merge|revert|ci|docs?|notes?|tests?|chore|build|wip|temp)\b|^version \d|\[skip/i;
 // The tracker behind the app has no name to the people using it
 // (docs/tracker.md): older subjects that say it stay out.
 const INTERNAL_NAME = /lightboxd/i;
@@ -32,6 +33,19 @@ function gitChanges() {
   }
 }
 const build = gitChanges();
+// Which update channel this build is (Settings → Updates): the beta branch's
+// builds are Beta; main's, a release's and anything else are Stable.
+function buildChannel() {
+  let branch = process.env.GITHUB_REF_NAME;
+  if (!branch) {
+    try {
+      branch = execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+      branch = "";
+    }
+  }
+  return branch === "beta" ? "beta" : "stable";
+}
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
@@ -64,6 +78,7 @@ export default defineConfig(() => ({
     "import.meta.env.CORE_VERSION": JSON.stringify(coreVersion),
     "import.meta.env.BUILD_TIME": JSON.stringify(build.at),
     "import.meta.env.CHANGES": JSON.stringify(build.changes),
+    "import.meta.env.BUILD_CHANNEL": JSON.stringify(buildChannel()),
   },
 
   // Samsung TVs from 2020 sometimes run apps on their built-in Chromium 69 and

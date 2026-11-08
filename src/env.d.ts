@@ -9,6 +9,8 @@ interface ImportMetaEnv {
     readonly BUILD_TIME: number;
     /** Recent commits' subjects, newest first, for What's New (vite.config.js). */
     readonly CHANGES: { at: number; text: string }[];
+    /** The update channel this build is from (vite.config.js). */
+    readonly BUILD_CHANNEL: 'stable' | 'beta';
     /**
      * The hosted tracker every profile signs in to with its Stremio account
      * (docs/tracker.md), e.g. https://tracker.example.com. Unset: this PC,

@@ -18,7 +18,7 @@
     import { errorReportsOn, setErrorReports } from '$lib/errorReports';
     import { player } from '$lib/player/player';
     import { updates } from '$lib/updates.svelte';
-    import { whatsNew } from '$lib/whatsNew.svelte';
+    import { channel as buildChannel, whatsNew } from '$lib/whatsNew.svelte';
     import {
         presetOf,
         subtitleBottom,
@@ -1436,8 +1436,8 @@
                 {#if whatsNew.available}
                     <div class="row">
                         <div>
-                            <div class="title">What’s New</div>
-                            <div class="sub">The latest changes to this app.</div>
+                            <div class="title">{whatsNew.title}</div>
+                            <div class="sub">{buildChannel === 'beta' ? 'The latest changes in Beta, before everyone else gets them.' : 'The latest changes to this app.'}</div>
                         </div>
                         <button class="btn" onclick={() => whatsNew.showRecent()}>Show</button>
                     </div>
@@ -1467,7 +1467,7 @@
         </div>
     </section>
 
-    {#if !searching}<p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
+    {#if !searching}<p class="about">Stremio {updates.current ?? '0.1.0'}{buildChannel === 'beta' ? ' Beta' : ''} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
     </div>
 </div>
 
