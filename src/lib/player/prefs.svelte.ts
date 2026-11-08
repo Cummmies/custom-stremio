@@ -44,7 +44,9 @@ const defaults: Prefs = {
     hdrPassthrough: true,
     audioPassthrough: false,
     volume: 100,
-    easyMode: false,
+    // On for new profiles: Play just plays. Existing ones keep what they had
+    // (saved per profile, and with the account).
+    easyMode: true,
     easyLanguage: 'eng',
     maxResolution: 1080,
     allowTorrents: true,
