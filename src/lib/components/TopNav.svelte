@@ -510,13 +510,9 @@
         padding: 0;
         border-radius: 50%;
     }
+    /* iPad mini upright (744) and other narrow windows: the brand, the pill and
+       the buttons all still fit (the pill has four sections); a little tighter. */
     @media (min-width: 701px) and (max-width: 760px) {
-        .brand {
-            display: none;
-        }
-        .nav {
-            grid-template-columns: auto 1fr;
-        }
         .pill a {
             padding: 0 12px;
         }
