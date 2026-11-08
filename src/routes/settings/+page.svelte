@@ -6,6 +6,7 @@
     import PopupButton from '$lib/components/menu/PopupButton.svelte';
     import { getTvSize, setTvSize, tvSizes, type TvSize } from '$lib/tv/size';
     import Toggle from '$lib/components/Toggle.svelte';
+    import DeleteAccountDialog from '$lib/components/DeleteAccountDialog.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
     import { inTauri } from '$lib/player/mpv.svelte';
@@ -50,6 +51,16 @@
 
     // stremio:// link handling (registered per user in Windows, not synced).
     let handlesLinks = $state(false);
+    // Delete Account (Data): its confirmation, and what went wrong.
+    let deleteOpen = $state(false);
+    let deleteBusy = $state(false);
+    let deleteError = $state<string | null>(null);
+    async function deleteAccount() {
+        deleteBusy = true;
+        deleteError = await tracker.deleteAccount();
+        deleteBusy = false;
+        if (!deleteError) deleteOpen = false;
+    }
     // Beta Updates stays hidden until the version line is tapped five times.
     let aboutTaps = 0;
     let showBeta = $state(false);
@@ -1107,6 +1118,8 @@
             <section>
                 <h2>Data</h2>
                 <div class="group">
+                    <!-- Nothing to download or add to once the account's deleted. -->
+                    {#if tracker.ready || !tracker.deleted}
                     <div class="row">
                         <div>
                             <div class="title">Download a Full Backup</div>
@@ -1135,6 +1148,7 @@
                         </button>
                         <input bind:this={importInput} type="file" accept="application/json,.json" onchange={importBackup} hidden />
                     </div>
+                    {/if}
                     {#if pendingConflicts}
                         {@const n = pendingConflicts.length}
                         <div class="row">
@@ -1148,7 +1162,26 @@
                             </div>
                         </div>
                     {/if}
-                    {#if dataNote || !tracker.ready}
+                    {#if tracker.ready}
+                        <div class="row">
+                            <div>
+                                <div class="title">Delete Account</div>
+                                <div class="sub">Deletes everything this app keeps about you, on every device. Your Stremio account stays.</div>
+                            </div>
+                            <button class="btn destructive" onclick={() => ((deleteError = null), (deleteOpen = true))} disabled={!!dataBusy}>Delete…</button>
+                        </div>
+                    {:else if tracker.deleted}
+                        <div class="row">
+                            <div>
+                                <div class="title">Watch History Is Off</div>
+                                <div class="sub">Your account was deleted. Turn it on to start again from your Stremio library.</div>
+                            </div>
+                            <button class="btn" onclick={() => tracker.connect('', true)} disabled={tracker.connecting}>
+                                {tracker.connecting ? 'Turning On…' : 'Turn On'}
+                            </button>
+                        </div>
+                    {/if}
+                    {#if dataNote || (!tracker.ready && !tracker.deleted)}
                         <div class="row">
                             <div class="sub" class:sync-error={dataError || !tracker.ready} role="status">
                                 {dataNote ?? 'Couldn’t connect. Try again in a moment.'}
@@ -1352,6 +1385,10 @@
     {#if !searching}<p class="about" onclick={() => (aboutTaps += 1) >= 5 && (showBeta = true)}>Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
     </div>
 </div>
+
+{#if deleteOpen}
+    <DeleteAccountDialog busy={deleteBusy} error={deleteError} ondelete={deleteAccount} onclose={() => (deleteOpen = false)} />
+{/if}
 
 <style>
     .page {
@@ -1633,6 +1670,9 @@
     }
     .btn:hover {
         background: var(--fill-hover);
+    }
+    .btn.destructive {
+        color: var(--bad-text);
     }
     .btn.primary {
         background: var(--accent);

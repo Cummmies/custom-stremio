@@ -345,6 +345,9 @@ class Tracker {
     connecting = $state(false);
     /** The tracker was reached but has no one with this Stremio account connected: it took a code instead. */
     stremioNotLinked = $state(false);
+    /** This Stremio account's watch history was deleted (Delete Account, here or
+     *  elsewhere): it isn't made again by itself, only by Turn On (`connect(…, true)`). */
+    deleted = $state(false);
 
     /** Connected and reachable: the tracker features show. */
     ready = $derived(this.status === 'ok');
@@ -958,6 +961,7 @@ class Tracker {
                     this.status = 'suspended';
                     return;
                 }
+                if (res.status === 410) this.deleted = true;
                 if (res.status !== null) return; // it answered, and said no
             }
         } finally {
@@ -971,7 +975,7 @@ class Tracker {
      * account when the tracker has that account connected (no code), else with a
      * pairing code to approve there.
      */
-    async connect(address: string) {
+    async connect(address: string, create = false) {
         this.cancelPairing();
         this.error = null;
         this.stremioNotLinked = false;
@@ -996,12 +1000,13 @@ class Tracker {
             if (key) {
                 const signIn = await call<{ token: string }>(s, '/pair/stremio', {
                     method: 'POST',
-                    body: { auth_key: key, name: DEVICE_NAME, platform: PLATFORM },
+                    body: { auth_key: key, name: DEVICE_NAME, platform: PLATFORM, create },
                     timeout: 15_000,
                 });
                 if (run !== this.#pairRun) return;
                 if (signIn.ok) {
                     this.connecting = false;
+                    this.deleted = false;
                     // Signed in here: check() makes it the account's, for its other devices.
                     this.#save({ server: s, token: signIn.data.token });
                     await this.check();
@@ -1087,6 +1092,28 @@ class Tracker {
             this.#setStatus('off');
         }
         if (saved?.token && saved.token !== shared.token) call(saved.server, '/disconnect', { method: 'POST', token: saved.token });
+    }
+
+    /**
+     * Delete Account: the tracker deletes everything it keeps for this account,
+     * on every device (they find their sign-in gone). The Stremio account isn't
+     * touched. Null when done, else what went wrong.
+     */
+    async deleteAccount(): Promise<string | null> {
+        const saved = this.saved;
+        if (!saved?.token) return 'Couldn’t connect. Try again in a moment.';
+        const res = await call<{ status: string }>(saved.server, '/account/delete', {
+            method: 'POST',
+            token: saved.token,
+            body: { confirm: 'delete' },
+            timeout: 30_000,
+        });
+        if (!res.ok) return res.status === null ? 'Couldn’t connect. Try again in a moment.' : 'Couldn’t delete it. Try again in a moment.';
+        this.#forgetToken();
+        // Nothing of the account kept here either (its name and picture).
+        this.#save({ server: saved.server, token: null });
+        this.deleted = true;
+        return null;
     }
 
     /**
