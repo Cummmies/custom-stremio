@@ -9,6 +9,7 @@
     import { menu } from '$lib/menu.svelte';
     import { goto } from '$lib/nav';
     import Icon from './Icon.svelte';
+    import { untrack } from 'svelte';
 
     let { onnavigate }: { onnavigate?: () => void } = $props();
 
@@ -68,6 +69,20 @@
         }
     }
 
+    // Opening the list counts what's in it as read (the bell's number goes),
+    // but what was new keeps its dot while the list is open, so you can see
+    // which. Ones that arrive while it's open count as read too.
+    let fresh = $state(new Set<AppNotification['id']>());
+    $effect(() => {
+        if (!notify.loaded || !notify.unread) return;
+        untrack(() => {
+            const next = new Set(fresh);
+            for (const n of notify.items) if (n.unread) next.add(n.id);
+            fresh = next;
+            void notify.markAllRead();
+        });
+    });
+
     function open(n: AppNotification) {
         notify.open(n);
         if (n.stremio_id || n.link) onnavigate?.();
@@ -114,7 +129,7 @@
             <h3>{g.title}</h3>
             <ul>
                 {#each g.items as n (n.id)}
-                    <li class:unread={n.unread}>
+                    <li class:unread={n.unread || fresh.has(n.id)}>
                         <button class="row" onclick={() => open(n)}>
                             <span class="dot" aria-hidden="true"></span>
                             <span class="art">
