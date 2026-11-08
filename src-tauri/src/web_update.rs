@@ -14,7 +14,7 @@
 //! throws the bundle away and goes back to the built-in files, so a broken
 //! update can't lock you out.
 //!
-//! Beta updates (a hidden switch in Settings, for testing before everyone gets
+//! Beta updates (Settings → Updates → Update Channel, for testing before everyone gets
 //! it) come the same way from `web-beta`, built from the `beta` branch. Turning
 //! it on or off switches to that channel's newest bundle even when it's older,
 //! or to the built-in files when the regular channel has nothing newer.

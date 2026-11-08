@@ -8,6 +8,7 @@
     import Toggle from '$lib/components/Toggle.svelte';
     import Segmented from '$lib/components/Segmented.svelte';
     import DeleteAccountDialog from '$lib/components/DeleteAccountDialog.svelte';
+    import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
     import { ACCENTS, DEFAULT_ACCENT } from '$lib/theme.svelte';
     import Icon from '$lib/components/Icon.svelte';
     import ServerStatus from '$lib/components/ServerStatus.svelte';
@@ -63,9 +64,21 @@
         deleteBusy = false;
         if (!deleteError) deleteOpen = false;
     }
-    // Beta Updates stays hidden until the version line is tapped five times.
-    let aboutTaps = 0;
-    let showBeta = $state(false);
+    // Update Channel: Beta asks first (what it means), Stable doesn't.
+    let betaConfirm = $state(false);
+    // What the control shows: back to Stable when the question is cancelled.
+    let channel = $state<'stable' | 'beta'>(updates.beta ? 'beta' : 'stable');
+    $effect(() => {
+        channel = updates.beta ? 'beta' : 'stable';
+    });
+    function cancelBeta() {
+        betaConfirm = false;
+        channel = 'stable';
+    }
+    function chooseChannel(v: 'stable' | 'beta') {
+        if (v === 'beta' && !updates.beta) betaConfirm = true;
+        else if (v === 'stable' && updates.beta) updates.setBeta(false);
+    }
     let tvSize = $state<TvSize>(isTV ? getTvSize() : 'medium');
     $effect(() => {
         if (!inTauri) return;
@@ -1402,13 +1415,22 @@
                         </button>
                     {/if}
                 </div>
-                {#if updates.betaSupported && (showBeta || updates.beta)}
+                {#if updates.betaSupported}
                     <div class="row">
                         <div>
-                            <div class="title">Beta Updates</div>
-                            <div class="sub">Changes before everyone else gets them. Something may not work yet.</div>
+                            <div class="title">Update Channel</div>
+                            <div class="sub">
+                                {updates.beta
+                                    ? 'Beta: new changes first, before everyone else. Something may not work yet.'
+                                    : 'Stable: the version everyone gets, once it’s been tried out.'}
+                            </div>
                         </div>
-                        <Toggle label="Beta Updates" checked={updates.beta} onchange={(v) => updates.setBeta(v)} />
+                        <Segmented
+                            label="Update channel"
+                            options={[{ value: 'stable', label: 'Stable' }, { value: 'beta', label: 'Beta' }]}
+                            bind:value={channel}
+                            onchange={chooseChannel}
+                        />
                     </div>
                 {/if}
                 {#if whatsNew.available}
@@ -1445,11 +1467,25 @@
         </div>
     </section>
 
-    <!-- Tapping this five times shows Beta Updates (under Updates). -->
-    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-    {#if !searching}<p class="about" onclick={() => (aboutTaps += 1) >= 5 && (showBeta = true)}>Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
+    {#if !searching}<p class="about">Stremio {updates.current ?? '0.1.0'} · stremio-core-web {import.meta.env.CORE_VERSION}</p>{/if}
     </div>
 </div>
+
+{#if betaConfirm}
+    <ConfirmDialog
+        title="Switch to Beta?"
+        confirmLabel="Switch to Beta"
+        onconfirm={() => ((betaConfirm = false), updates.setBeta(true))}
+        onclose={cancelBeta}
+    >
+        <p>Beta gets new changes as soon as they’re made, before they’ve been tried out. Expect the odd bug:</p>
+        <ul>
+            <li>something may look wrong or not work for a while;</li>
+            <li>a fix can take a day or two to arrive.</li>
+        </ul>
+        <p>Your watch history, settings and account aren’t affected. Switch back to Stable any time; it takes effect when the app reloads.</p>
+    </ConfirmDialog>
+{/if}
 
 {#if deleteOpen}
     <DeleteAccountDialog busy={deleteBusy} error={deleteError} ondelete={deleteAccount} onclose={() => (deleteOpen = false)} />

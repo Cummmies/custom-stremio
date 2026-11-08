@@ -38,7 +38,7 @@ class Updates {
 
     /**
      * Beta updates (this device): the screens built from the beta branch, before
-     * everyone gets them. Windows and iPhone; a hidden switch in Settings.
+     * everyone gets them. Windows and iPhone; Settings → Updates → Update Channel.
      */
     beta = $state(readBeta());
 
