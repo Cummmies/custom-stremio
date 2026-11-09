@@ -392,27 +392,36 @@
         if (stuck && easyCanAct()) stallTimer = setTimeout(tryNextSource, 30000);
     });
 
-    // Caught up with what's downloaded, and nothing more is arriving: mpv can wait
-    // there for good, until you jump back or forward. That jump, made for you
-    // (a seek to the same spot gets the download going again), a few times;
-    // Easy Mode's 30s switch to another source (above) still stands behind it.
-    // Only mpv reports its cache (the TV's player buffers its own way).
+    // Caught up with what's downloaded while playing, and nothing more is
+    // arriving: mpv can wait there for good, until you jump back or forward.
+    // That jump, made for you (a seek to the same spot gets the download going
+    // again), a few times; Easy Mode's 30s switch to another source (above)
+    // still stands behind it. Never while a jump of yours is still loading (a
+    // torrent can take a while to fetch a new spot): starting it over would
+    // only make it longer. Only mpv reports its cache (the TV's player buffers
+    // its own way).
     const NUDGE_AFTER_MS = 8000;
     const MAX_NUDGES = 3;
     let nudgeTimer: ReturnType<typeof setTimeout> | undefined;
     let nudges = 0;
+    let nudged = false;
     $effect(() => {
-        const stuck = player.buffering && firstFrameSeen && fileReady && !player.paused && player.cacheTime != null;
+        const loadingYourSeek = player.seeking && !nudged;
+        const stuck =
+            player.buffering && firstFrameSeen && fileReady && !player.paused && !loadingYourSeek && player.cacheTime != null;
         // More arriving, however slowly, isn't stuck: the wait starts over.
         void player.cacheTime;
         clearTimeout(nudgeTimer);
         if (!stuck) {
-            nudges = 0;
+            // Playing again (not just this nudge's seek under way): a fresh start next time.
+            if (!player.seeking) nudges = 0;
+            if (!player.buffering) nudged = false;
             return;
         }
         if (nudges >= MAX_NUDGES) return;
         nudgeTimer = setTimeout(() => {
             nudges++;
+            nudged = true;
             player.seek(player.time);
         }, NUDGE_AFTER_MS);
     });
@@ -803,9 +812,14 @@
         const duration = player.duration;
         if (!duration) return;
         const forVideo = videoId;
+        // This episode's own numbers: from its id when that has them (an IMDb show's
+        // "tt…:2:5"), which can't still be the last episode's the way the Player
+        // model's can for a moment after Next; otherwise (Kitsu's "kitsu:…:5"
+        // has no season) from the model.
+        const tt = /^tt\d+:(\d+):(\d+)$/.exec(videoId ?? '');
         const parts = videoId?.split(':') ?? [];
-        const season = model?.seriesInfo?.season ?? (parts.length >= 3 ? Number(parts[parts.length - 2]) : null);
-        const episode = model?.seriesInfo?.episode ?? (parts.length >= 3 ? Number(parts[parts.length - 1]) : null);
+        const season = tt ? Number(tt[1]) : (model?.seriesInfo?.season ?? null);
+        const episode = tt ? Number(tt[2]) : (model?.seriesInfo?.episode ?? (parts.length >= 2 ? Number(parts.at(-1)) || null : null));
         const chapters = fromChapters(await player.chapters(), duration);
         const found = await lookupSegments({
             imdb: id,
@@ -2020,7 +2034,7 @@
 
     <!-- Touch: keep the controls up while dragging the seek bar. -->
     <footer class="bottom" onpointerdown={poke} onpointermove={poke}>
-        <SeekBar time={shownTime} duration={player.duration} buffered={player.cacheTime} chapters={seekChapters} onseek={(s) => player.seek(s)}>
+        <SeekBar time={shownTime} duration={player.duration} buffered={player.cacheTime} ranges={player.cacheRanges} chapters={seekChapters} onseek={(s) => player.seek(s)}>
             {#snippet preview(t: number)}
                 {#if thumbs && !pip}<SeekPreview {thumbs} time={t} />{/if}
             {/snippet}

@@ -74,6 +74,8 @@ class AVPlayBackend implements PlayerBackend {
     buffering = $state(true);
     bufferingPercent = $state<number | null>(null);
     cacheTime = $state<number | null>(null);
+    cacheRanges: { start: number; end: number }[] = [];
+    seeking = false;
     // The TV's own volume (remote) is the volume; the app doesn't change it.
     volume = $state(100);
     muted = $state(false);

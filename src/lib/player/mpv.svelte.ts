@@ -91,6 +91,9 @@ class Mpv implements PlayerBackend {
     buffering = $state(true);
     bufferingPercent = $state<number | null>(null);
     cacheTime = $state<number | null>(null);
+    cacheRanges = $state<{ start: number; end: number }[]>([]);
+    seeking = $state(false);
+    #cacheTimer: ReturnType<typeof setInterval> | undefined;
     volume = $state(100);
     muted = $state(false);
     speed = $state(1);
@@ -164,6 +167,7 @@ class Mpv implements PlayerBackend {
                         this.error = null;
                     } else if (ev.kind === 'playback-restart') {
                         this.buffering = false;
+                        this.seeking = false;
                     } else if (ev.kind === 'end-file' && ev.reason === 'error') {
                         this.error = ev.error ?? 'This stream couldn’t be played.';
                     } else if (ev.kind === 'shutdown') {
@@ -177,6 +181,33 @@ class Mpv implements PlayerBackend {
         await transport.start(options);
         this.running = true;
         await this.sync();
+        // What's downloaded, for the seek bar: every stretch, not just the one
+        // ahead (after a jump forward, the part before is still there). Asked
+        // for each second rather than watched, so it needs no new app.
+        clearInterval(this.#cacheTimer);
+        this.#cacheTimer = setInterval(() => void this.#readCache(), 1000);
+    }
+
+    async #readCache() {
+        if (!this.running || !this.loaded) {
+            if (this.cacheRanges.length) this.cacheRanges = [];
+            return;
+        }
+        try {
+            const raw = await this.get('demuxer-cache-state');
+            const ranges = raw ? (JSON.parse(raw)['seekable-ranges'] as { start: number; end: number }[] | undefined) : null;
+            const next = (ranges ?? [])
+                .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start)
+                .map((r) => ({ start: r.start, end: r.end }))
+                .sort((a, b) => a.start - b.start);
+            // Only when it changed: the seek bar redraws on every new array.
+            const same =
+                next.length === this.cacheRanges.length &&
+                next.every((r, i) => Math.abs(r.start - this.cacheRanges[i].start) < 0.5 && Math.abs(r.end - this.cacheRanges[i].end) < 0.5);
+            if (!same) this.cacheRanges = next;
+        } catch {
+            /* not yet known */
+        }
     }
 
     /**
@@ -200,6 +231,8 @@ class Mpv implements PlayerBackend {
         this.error = null;
         this.time = startSeconds;
         this.duration = null;
+        this.cacheRanges = [];
+        this.seeking = false;
         // Set `start` as a property so it works across mpv versions' loadfile syntax.
         await this.set('start', startSeconds > 0 ? String(startSeconds) : 'none');
         // mpv keeps `pause` from file to file: a new file plays (the one before may
@@ -243,6 +276,7 @@ class Mpv implements PlayerBackend {
 
     seek(seconds: number) {
         this.time = Math.max(0, seconds);
+        this.seeking = true;
         return this.command('seek', String(Math.max(0, seconds)), 'absolute');
     }
 

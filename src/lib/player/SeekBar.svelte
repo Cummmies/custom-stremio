@@ -8,6 +8,7 @@
         time,
         duration,
         buffered,
+        ranges = [],
         onseek,
         preview,
         chapters = [],
@@ -15,6 +16,8 @@
         time: number;
         duration: number | null;
         buffered: number | null;
+        /** Every stretch downloaded (all drawn), when the player says; else `buffered` ahead of the playhead. */
+        ranges?: { start: number; end: number }[];
         onseek: (seconds: number) => void;
         /** Rendered above the hover position (e.g. a thumbnail). */
         preview?: Snippet<[number]>;
@@ -112,7 +115,17 @@
                 style:left="{d ? pct(part.start) : 0}%"
                 style:width="calc({d ? pct(part.end) - pct(part.start) : 100}% - {part.last ? 0 : GAP_PX}px)"
             >
-                {#if buffered != null && d && buffered > shown && buffered > part.start && shown < part.end}
+                {#if ranges.length && d}
+                    {#each ranges as r (r.start)}
+                        {#if r.end > part.start && r.start < part.end}
+                            <div
+                                class="buffered"
+                                style:left="{within(r.start, part) * 100}%"
+                                style:width="{(within(r.end, part) - within(r.start, part)) * 100}%"
+                            ></div>
+                        {/if}
+                    {/each}
+                {:else if buffered != null && d && buffered > shown && buffered > part.start && shown < part.end}
                     <div
                         class="buffered"
                         style:left="{within(shown, part) * 100}%"

@@ -80,6 +80,10 @@ export interface PlayerBackend {
     readonly bufferingPercent: number | null;
     /** How far ahead is buffered, in seconds of the video (for the seek bar). */
     readonly cacheTime: number | null;
+    /** Every stretch already downloaded, in seconds of the video (empty when the player doesn't say). */
+    readonly cacheRanges: { start: number; end: number }[];
+    /** A seek you (or the app) asked for hasn't shown its first frame yet. */
+    readonly seeking: boolean;
     readonly volume: number;
     readonly muted: boolean;
     readonly speed: number;
