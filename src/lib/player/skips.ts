@@ -255,7 +255,28 @@ export function pickSegments(chapters: Segment[], sources: Segment[][], duration
         }
         if (best) out.push(best);
     }
-    return out.sort((x, y) => x.start - y.start);
+    return trimOverlaps(out).sort((x, y) => x.start - y.start);
+}
+
+/**
+ * A recap and the intro never overlap. One that takes in the whole intro is a
+ * bad submission (TheIntroDB has Code Geass's "recap" as 0:00 to the end of the
+ * opening, which labelled the opening Skip Recap and skipped both): it goes,
+ * since what it covers besides the opening may well be story. One that only
+ * runs into the intro stops where the intro starts (or starts where it ends),
+ * and goes if what's left is too short to skip.
+ */
+function trimOverlaps(list: Segment[]): Segment[] {
+    const intro = list.find((s) => s.kind === 'intro');
+    if (!intro) return list;
+    return list.flatMap((s) => {
+        if (s.kind !== 'recap' || s.end <= intro.start || s.start >= intro.end) return [s];
+        if (s.start <= intro.start + 1 && s.end >= intro.end - 1) return [];
+        const t = { ...s };
+        if (t.start < intro.start) t.end = intro.start;
+        else t.start = intro.end;
+        return t.end - t.start >= MIN_LENGTH ? [t] : [];
+    });
 }
 
 /** Leaves out sections that can't be what they claim (bad chapter names, bad submissions). */

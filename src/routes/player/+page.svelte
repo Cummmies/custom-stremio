@@ -392,6 +392,31 @@
         if (stuck && easyCanAct()) stallTimer = setTimeout(tryNextSource, 30000);
     });
 
+    // Caught up with what's downloaded, and nothing more is arriving: mpv can wait
+    // there for good, until you jump back or forward. That jump, made for you
+    // (a seek to the same spot gets the download going again), a few times;
+    // Easy Mode's 30s switch to another source (above) still stands behind it.
+    // Only mpv reports its cache (the TV's player buffers its own way).
+    const NUDGE_AFTER_MS = 8000;
+    const MAX_NUDGES = 3;
+    let nudgeTimer: ReturnType<typeof setTimeout> | undefined;
+    let nudges = 0;
+    $effect(() => {
+        const stuck = player.buffering && firstFrameSeen && fileReady && !player.paused && player.cacheTime != null;
+        // More arriving, however slowly, isn't stuck: the wait starts over.
+        void player.cacheTime;
+        clearTimeout(nudgeTimer);
+        if (!stuck) {
+            nudges = 0;
+            return;
+        }
+        if (nudges >= MAX_NUDGES) return;
+        nudgeTimer = setTimeout(() => {
+            nudges++;
+            player.seek(player.time);
+        }, NUDGE_AFTER_MS);
+    });
+
     // Pick up where you left off. The Player model carries the stored library
     // record (position in ms and which episode it belongs to).
     async function resumeFrom() {
@@ -460,23 +485,26 @@
     const subtitleTitle = (s: { lang: string; label?: string | null }) => s.label || langName(s.lang);
 
     // Preferred subtitle language: if the file has none built in, add the first
-    // matching addon subtitle a few seconds after playback starts.
+    // matching addon subtitle as soon as the file's own tracks are known (mpv
+    // downloads it on its own thread, so playback carries on meanwhile).
     $effect(() => {
         const pref = settings?.subtitlesLanguage as string | null | undefined;
-        if (!pref || !firstFrameSeen || !model?.subtitles.length || subtitlesAdded) return;
+        // The file's tracks are in once it's open with its audio listed; a file
+        // with no audio, once it's playing.
+        const tracksKnown = fileReady && (player.audioTracks.length > 0 || firstFrameSeen);
+        if (!pref || !tracksKnown || !model?.subtitles.length || subtitlesAdded) return;
         subtitlesAdded = true;
         // You chose subtitles for this show yourself: that wins (below).
         if (titleTracks.get(id)?.subs) return;
         const subs = model.subtitles;
-        // Decide after a short delay, once mpv has reported the file's own tracks.
-        setTimeout(() => {
+        untrack(() => {
             // Listening in that language already (e.g. an English dub): no subtitles needed.
             const audio = player.audioTracks.find((t) => t.selected);
             if (audio && sameLanguage(audio.lang, pref)) return;
             const builtIn = player.subTracks.some((t) => !t.external && sameLanguage(t.lang, pref));
             const match = subs.find((s) => sameLanguage(s.lang, pref) && s.url);
             if (!builtIn && match) addAddonSubtitle(match, player.sid === 'no');
-        }, 3000);
+        });
     });
 
     // Addons answer a debrid failure with a short video of the error (Torrentio's
@@ -813,7 +841,10 @@
     );
 
     // The section you're in right now (ends a moment early so the button doesn't flash at the edge).
-    const currentSegment = $derived(segments.find((s) => player.time >= s.start && player.time < s.end - 0.75) ?? null);
+    // The latest-starting one when two overlap: the intro inside a long recap is the intro.
+    const currentSegment = $derived(
+        segments.filter((s) => player.time >= s.start && player.time < s.end - 0.75).sort((a, b) => b.start - a.start)[0] ?? null
+    );
 
     // The Skip button shows for 10s when a section starts, then gets out of the way
     // (it comes back while the controls are up, and S works throughout).
@@ -2376,6 +2407,8 @@
         position: absolute;
         right: 24px;
         bottom: 120px;
+        /* Above the controls' gradient, which otherwise covers its buttons while the controls are up. */
+        z-index: 3;
         width: 340px;
         display: flex;
         flex-direction: column;
