@@ -1512,6 +1512,21 @@
         });
     }
 
+    // A control you clicked or tapped (the video, the seek bar, Play, Mute…) doesn't keep
+    // the keyboard focus: the arrows and the other shortcuts are the player's,
+    // and the first key press would otherwise light it up as focused (the seek
+    // bar grows and shows its dot) for no reason. Tabbing to one still shows
+    // it. Not on the TV, where the remote moves the focus. After the click,
+    // so a menu it opens can take the focus first.
+    function onpointerup() {
+        if (isTV) return;
+        requestAnimationFrame(() => {
+            const el = document.activeElement;
+            // The video itself is a button too (a click pauses). A menu keeps its focus.
+            if (el instanceof HTMLElement && el.closest('.player') && el.matches('button, .seek') && !el.closest('[data-menu]')) el.blur();
+        });
+    }
+
     /** TV: focus is on the video itself, not on one of the controls. */
     const onVideo = () => document.activeElement === surface || document.activeElement === document.body;
 
@@ -1844,7 +1859,8 @@
 <svelte:window
     {onkeydown}
     {onkeyup}
-    onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()} />
+    onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()}
+    {onpointerup} />
 
 <div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI} bind:clientHeight={playerHeight}>
     <!-- Transparent surface over the video that takes clicks. -->
