@@ -136,6 +136,36 @@
         model?.seriesInfo ? `S${model.seriesInfo.season} · E${model.seriesInfo.episode}${episodeTitle ? ` · ${episodeTitle}` : ''}` : null
     );
     const loadingVideo = $derived(!player.loaded || (player.buffering && !player.paused));
+
+    // A torrent loading: what it's waiting on (peers found, download speed),
+    // from the streaming server, under the spinner. A black screen that says
+    // "3 peers · 120 KB/s" explains itself; one that says nothing looks broken.
+    let torrentStats = $state<{ peers: number; speed: number } | null>(null);
+    $effect(() => {
+        const s = playingStream;
+        const server = app.ctx?.profile.settings?.streamingServerUrl ?? 'http://127.0.0.1:11470/';
+        if (!loadingVideo || !isDesktop || !s?.infoHash || s.url || params.get('url')) {
+            torrentStats = null;
+            return;
+        }
+        const url = `${server.endsWith('/') ? server : `${server}/`}${s.infoHash}/${s.fileIdx ?? -1}/stats.json`;
+        let stopped = false;
+        const read = async () => {
+            try {
+                const j = await fetch(url).then((r) => r.json());
+                if (!stopped && j) torrentStats = { peers: Number(j.peers) || 0, speed: Number(j.downloadSpeed) || 0 };
+            } catch {
+                /* not up yet */
+            }
+        };
+        void read();
+        const timer = setInterval(read, 1000);
+        return () => {
+            stopped = true;
+            clearInterval(timer);
+        };
+    });
+    const fmtSpeed = (b: number) => (b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MB/s` : `${Math.round(b / 1024)} KB/s`);
     const nextThreshold = $derived(((settings?.nextVideoNotificationDuration as number | undefined) ?? 35000) / 1000);
 
     // --- lifecycle ---------------------------------------------------------
@@ -1905,6 +1935,13 @@
         <div class="spinner" role="status" aria-label="Loading">
             <span></span>
             {#if player.bufferingPercent != null && player.bufferingPercent < 100}<em>{player.bufferingPercent}%</em>{/if}
+            {#if torrentStats}
+                <small class="torrent-stats">
+                    {torrentStats.peers
+                        ? `${torrentStats.peers} ${torrentStats.peers === 1 ? 'peer' : 'peers'} · ${fmtSpeed(torrentStats.speed)}`
+                        : 'Looking for peers…'}
+                </small>
+            {/if}
         </div>
     {/if}
 
@@ -2362,6 +2399,15 @@
         font-style: normal;
         font-size: 11px;
         font-weight: 600;
+    }
+    .torrent-stats {
+        position: absolute;
+        top: calc(100% + 14px);
+        white-space: nowrap;
+        font-size: 13px;
+        color: rgb(255 255 255 / 0.75);
+        text-shadow: 0 1px 6px rgb(0 0 0 / 0.6);
+        font-variant-numeric: tabular-nums;
     }
     @keyframes spin {
         to {

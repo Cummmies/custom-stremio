@@ -370,11 +370,38 @@ export function looksLikeAnime(streams: Stream[]): boolean {
 const KIND_RANK: Record<Kind, number> = { debrid: 0, 'debrid-uncached': 1, torrent: 2, skip: 9 };
 
 /**
+ * A torrent's health by its seeders: 0 plenty (starts in seconds and keeps
+ * up), 1 some or not said, 2 a handful (a long black screen, then stalls).
+ */
+function torrentHealth(p: Parsed): number {
+    if (p.kind !== 'torrent' || p.seeders == null) return 1;
+    return p.seeders >= 20 ? 0 : p.seeders >= 5 ? 1 : 2;
+}
+
+const GB = 1024 ** 3;
+/**
+ * Too big to stream smoothly: a remux or the like, whose bitrate needs a fast
+ * connection (and, as a torrent, many peers) to start quickly and not stop to
+ * buffer. Roughly 30 Mbit/s and up, by the file's size for its length: an
+ * episode (up to an hour) or a movie (up to about three).
+ */
+function heavy(p: Parsed, episode: boolean): boolean {
+    if (p.sizeBytes == null) return false;
+    const limit = (episode ? 5 : 20) * GB * ((p.resolution ?? 0) >= 2160 ? 2.5 : 1);
+    return p.sizeBytes > limit;
+}
+
+/**
  * Orders candidates best-first. Priorities, in order:
  * cached debrid > uncached debrid > torrent · language (the other way round
- * for anime) · not Dolby-Vision-only ·
- * highest resolution within the cap · release quality · seeders · smaller size ·
- * the addon order you set.
+ * for anime) · not Dolby-Vision-only · a torrent with plenty of seeders ·
+ * not too big to stream smoothly · highest resolution within the cap ·
+ * release quality · seeders · smaller size · the addon order you set.
+ *
+ * Starting quickly and playing without stopping comes before the last bit of
+ * quality: a 1080p WEB-DL that starts in seconds beats a 1080p remux that
+ * needs a minute and buffers, and a 720p torrent with 500 seeders beats a
+ * 1080p one with 3.
  */
 export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidate[] {
     // Anime: sources that don't name a language are Japanese, so your language
@@ -407,6 +434,7 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
     const anyMatch = usable.some((c) => c.fit === 'match');
     // HDR on a screen that isn't showing it: left out too, unless every source is HDR.
     const anySdr = usable.some((c) => !c.parsed.hdr);
+    const episodic = prefs.episode != null;
     return usable
         .filter((c) => !(anyMatch && c.fit === 'wrong'))
         .filter((c) => !(prefs.hideHdr && anySdr && c.parsed.hdr))
@@ -426,6 +454,8 @@ export function rankStreams(candidates: Candidate[], prefs: EasyPrefs): Candidat
                 Number(pa.dolbyVisionOnly) - Number(pb.dolbyVisionOnly) ||
                 // The TV's player can't play DTS or TrueHD.
                 (prefs.tv ? Number(pa.tvUnfriendlyAudio) - Number(pb.tvUnfriendlyAudio) : 0) ||
+                torrentHealth(pa) - torrentHealth(pb) ||
+                Number(heavy(pa, episodic)) - Number(heavy(pb, episodic)) ||
                 (pb.resolution ?? 0) - (pa.resolution ?? 0) ||
                 pb.tier - pa.tier ||
                 (pb.seeders ?? 0) - (pa.seeders ?? 0) ||
