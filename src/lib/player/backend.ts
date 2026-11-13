@@ -143,4 +143,6 @@ export interface PlayerBackend {
     /** Players that draw subtitles themselves (mpv); the TV's are drawn by the page. */
     setSubtitleStyle?(style: import('./subtitleStyle').SubStyle, keepStyled?: boolean): Promise<void>;
     setAudioPassthrough?(on: boolean): Promise<void>;
+    /** Pinch to zoom: 0 the whole picture, up to 1 twice its size (cropped). mpv's `video-zoom`. */
+    setZoom?(zoom: number): Promise<void>;
 }

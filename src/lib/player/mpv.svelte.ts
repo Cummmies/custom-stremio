@@ -280,6 +280,11 @@ class Mpv implements PlayerBackend {
         return this.command('seek', String(Math.max(0, seconds)), 'absolute');
     }
 
+    /** mpv's own zoom (log2); on iOS the plugin scales its video view to match. */
+    setZoom(zoom: number) {
+        return this.set('video-zoom', zoom.toFixed(3));
+    }
+
     seekBy(delta: number) {
         return this.seek(this.time + delta);
     }

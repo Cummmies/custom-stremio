@@ -3,6 +3,9 @@
     // countdown or the end of the last one) with nobody touching anything. Kept
     // outside the page because moving to the next episode can reload it.
     const stillWatching = { autoEpisodes: 0 };
+    // Pinch to zoom, kept from episode to episode (and video to video) until
+    // the app closes, as YouTube keeps "zoom to fill".
+    const zoomState = { zoom: 0 };
 </script>
 
 <script lang="ts">
@@ -321,6 +324,8 @@
         }
         try {
             await player.start(settings ?? {});
+            // mpv (and on iOS its video view) starts unzoomed: as you last pinched it.
+            if (zoomState.zoom) void player.setZoom?.(zoomState.zoom);
             const start = await resumeFrom();
             // player.load clears the old file's state in the same tick, so `fileFor`
             // never pairs this video with the previous file's length or position.
@@ -1798,8 +1803,56 @@
     const skipAmount = (s: number) => (s >= 60 ? fmtTime(s) : `${Math.round(s)}s`);
     let lastPointerType = '';
 
+    // Pinch to zoom (touch): spread two fingers to zoom in, up to twice the
+    // size, cropping the edges, to fill the screen with a picture that has
+    // black bars; pinch in to see all of it again. A pinch's touches are never
+    // taps (no controls toggling, no double-tap skips).
+    const MAX_ZOOM = 1; // log2: 2×
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinch: { dist: number; from: number } | null = null;
+    let pinched = false;
+    let zoomFrame = 0;
+    const spread = () => {
+        const [a, b] = [...touches.values()];
+        return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    function setZoom(z: number) {
+        zoomState.zoom = Math.min(MAX_ZOOM, Math.max(0, z));
+        cancelAnimationFrame(zoomFrame);
+        zoomFrame = requestAnimationFrame(() => void player.setZoom?.(zoomState.zoom));
+    }
+    function pinchDown(e: PointerEvent) {
+        if (e.pointerType !== 'touch' || pip || !player.setZoom) return;
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (touches.size === 2) {
+            pinch = { dist: Math.max(1, spread()), from: zoomState.zoom };
+            pinched = true;
+            clearTimeout(tapTimer);
+            lastTap = null;
+        }
+    }
+    function onsurfacemove(e: PointerEvent) {
+        if (!touches.has(e.pointerId)) return;
+        touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pinch && touches.size >= 2) setZoom(pinch.from + Math.log2(spread() / pinch.dist));
+    }
+    /** A touch ended: true when it was part of a pinch (so not a tap). */
+    function pinchUp(e: PointerEvent) {
+        touches.delete(e.pointerId);
+        if (!pinched) return false;
+        if (touches.size < 2) pinch = null;
+        if (!touches.size) {
+            pinched = false;
+            // Nearly all of it: all of it.
+            if (zoomState.zoom < 0.06) setZoom(0);
+            note(zoomState.zoom ? `Zoom ${Math.round(2 ** zoomState.zoom * 100)}%` : 'Original size', 1200);
+        }
+        return true;
+    }
+
     function onsurfaceup(e: PointerEvent) {
         lastPointerType = e.pointerType;
+        if (pinchUp(e)) return;
         if (e.pointerType !== 'touch' || pip) return;
         const w = window.innerWidth;
         const side = e.clientX < w / 3 ? -1 : e.clientX > (w * 2) / 3 ? 1 : 0;
@@ -1850,6 +1903,7 @@
         toggleFullscreen();
     }
     function onsurfacedown(e: PointerEvent) {
+        pinchDown(e);
         // In picture-in-picture the whole video is a drag handle.
         if (pip && e.button === 0) invoke('start_dragging');
     }
@@ -1871,7 +1925,9 @@
         onclick={onsurfaceclick}
         ondblclick={onsurfacedblclick}
         onpointerdown={onsurfacedown}
+        onpointermove={onsurfacemove}
         onpointerup={onsurfaceup}
+        onpointercancel={(e) => pinchUp(e)}
     ></button>
 
     {#if player.subtitleText}
@@ -2208,6 +2264,8 @@
         position: absolute;
         inset: 0;
         cursor: default;
+        /* Two fingers pinch the picture (above), not the page. */
+        touch-action: none;
     }
     .top,
     .bottom,

@@ -25,6 +25,10 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <!-- The player hides the clock and battery while a video plays (MpvPlugin.swift,
+         PlayerChrome): the app's own screen decides, not one setting for the app. -->
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
     <key>UIRequiresFullScreen</key>
     <false/>
 </dict>

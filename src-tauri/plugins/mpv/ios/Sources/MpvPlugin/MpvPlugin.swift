@@ -27,6 +27,7 @@
 import AVFoundation
 import AVKit
 import CoreMedia
+import CoreMotion
 import Foundation
 import MediaPlayer
 import Mpv
@@ -212,9 +213,22 @@ class MpvPlugin: Plugin {
         let args = try invoke.parseArgs(SetArgs.self)
         queue.async { [self] in
             guard let mpv else { return invoke.reject("The player isn't running.") }
+            // Pinch to zoom: the picture here is AVFoundation's layer, not mpv's
+            // renderer, so its zoom (log2, as mpv's own) scales the view itself.
+            if args.name == "video-zoom", let zoom = Double(args.value) {
+                DispatchQueue.main.async { self.setVideoZoom(zoom) }
+            }
             let code = mpv_set_property_string(mpv, args.name, args.value)
             code >= 0 ? invoke.resolve() : invoke.reject(errorString(code))
         }
+    }
+
+    /// Main thread. 0 = the whole picture; up to 1 = twice its size, cropped.
+    private var videoZoom = 0.0
+    private func setVideoZoom(_ zoom: Double) {
+        videoZoom = min(1, max(0, zoom))
+        let scale = pow(2, videoZoom)
+        videoView?.transform = CGAffineTransform(scaleX: scale, y: scale)
     }
 
     @objc public func get(_ invoke: Invoke) throws {
@@ -244,8 +258,56 @@ class MpvPlugin: Plugin {
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: OrientationLock.mask!)) { error in
                 NSLog("mpv: orientation change refused: \(error)")
             }
+            // Watching: no clock or battery over the picture, and the home bar
+            // fades until you touch the screen. Back to normal for browsing.
+            PlayerChrome.install(on: vc)
+            PlayerChrome.watching = args.landscape
+            vc.setNeedsStatusBarAppearanceUpdate()
+            vc.setNeedsUpdateOfHomeIndicatorAutoHidden()
+            if args.landscape { followLandscapeSide() } else { stopFollowingSide() }
             invoke.resolve()
         }
+    }
+
+    // Turning the phone over (landscape one way, then the other) turns the
+    // picture with it, as YouTube does, even with Rotation Lock on (which
+    // otherwise keeps it the way it first went): from the motion sensor, which
+    // needs no permission. Only between the two landscapes; lying flat or
+    // held upright changes nothing.
+    private let motion = CMMotionManager()
+    private var landscapeSide: UIInterfaceOrientationMask?
+
+    /// Main thread.
+    private func followLandscapeSide() {
+        guard motion.isAccelerometerAvailable, !motion.isAccelerometerActive else { return }
+        landscapeSide = nil
+        motion.accelerometerUpdateInterval = 0.25
+        motion.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
+            guard let self, let g = data?.acceleration else { return }
+            // Gravity along the phone's long side (x): toward its left edge
+            // when the top is turned left, toward its right edge the other
+            // way. Clearly one or the other, and not lying flat.
+            guard abs(g.x) > 0.65, abs(g.z) < 0.75 else { return }
+            // The screen's top follows the phone's top: turned left (gravity
+            // toward its left edge), the interface is landscapeRight.
+            let side: UIInterfaceOrientationMask = g.x < 0 ? .landscapeRight : .landscapeLeft
+            guard side != self.landscapeSide,
+                  let vc = self.webView?.window?.rootViewController,
+                  let scene = self.webView?.window?.windowScene
+            else { return }
+            self.landscapeSide = side
+            OrientationLock.mask = side
+            vc.setNeedsUpdateOfSupportedInterfaceOrientations()
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: side)) { error in
+                NSLog("mpv: orientation change refused: \(error)")
+            }
+        }
+    }
+
+    /// Main thread.
+    private func stopFollowingSide() {
+        if motion.isAccelerometerActive { motion.stopAccelerometerUpdates() }
+        landscapeSide = nil
     }
 
     /// The player's PiP button: into PiP now, or back out. Rejects with why
@@ -506,6 +568,8 @@ class MpvPlugin: Plugin {
         if let videoView { return videoView }
         let view = VideoView(frame: webView?.superview?.bounds ?? UIScreen.main.bounds)
         view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        let scale = pow(2, videoZoom)
+        view.transform = CGAffineTransform(scaleX: scale, y: scale)
         if let webView, let parent = webView.superview {
             parent.insertSubview(view, belowSubview: webView)
         }
@@ -774,6 +838,41 @@ enum OrientationLock {
             mask?.rawValue ?? original(obj, sel)
         }
         class_replaceMethod(cls, sel, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
+    }
+}
+
+/// The status bar and the home indicator follow the root view controller's
+/// answers; like `OrientationLock`, those are replaced (once) to hide them
+/// while a video plays, and give the original answer otherwise.
+enum PlayerChrome {
+    static var watching = false
+    private static var installed = false
+
+    static func install(on vc: UIViewController) {
+        guard !installed else { return }
+        installed = true
+        let cls: AnyClass = type(of: vc)
+        typealias Getter = @convention(c) (AnyObject, Selector) -> Bool
+        for sel in [#selector(getter: UIViewController.prefersStatusBarHidden),
+                    #selector(getter: UIViewController.prefersHomeIndicatorAutoHidden)] {
+            guard let method = class_getInstanceMethod(cls, sel) else { continue }
+            let original = unsafeBitCast(method_getImplementation(method), to: Getter.self)
+            let replacement: @convention(block) (AnyObject) -> Bool = { obj in
+                watching || original(obj, sel)
+            }
+            class_replaceMethod(cls, sel, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
+        }
+        // The answers must come from this controller, not a child's.
+        for sel in [#selector(getter: UIViewController.childForStatusBarHidden),
+                    #selector(getter: UIViewController.childForHomeIndicatorAutoHidden)] {
+            guard let method = class_getInstanceMethod(cls, sel) else { continue }
+            typealias ChildGetter = @convention(c) (AnyObject, Selector) -> UIViewController?
+            let original = unsafeBitCast(method_getImplementation(method), to: ChildGetter.self)
+            let replacement: @convention(block) (AnyObject) -> UIViewController? = { obj in
+                watching ? nil : original(obj, sel)
+            }
+            class_replaceMethod(cls, sel, imp_implementationWithBlock(replacement), method_getTypeEncoding(method))
+        }
     }
 }
 
