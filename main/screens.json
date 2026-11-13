@@ -1,0 +1,160 @@
+{
+    "devices": [
+        {
+            "id": "tv",
+            "label": "TV",
+            "width": 1920,
+            "height": 1080,
+            "query": "device=tv&size=medium"
+        },
+        {
+            "id": "tv-small",
+            "label": "TV · Small",
+            "width": 1920,
+            "height": 1080,
+            "query": "device=tv&size=small"
+        },
+        {
+            "id": "tv-large",
+            "label": "TV · Large",
+            "width": 1920,
+            "height": 1080,
+            "query": "device=tv&size=large"
+        },
+        {
+            "id": "phone",
+            "label": "iPhone",
+            "width": 393,
+            "height": 852,
+            "query": "device=phone",
+            "mobile": true
+        },
+        {
+            "id": "tablet",
+            "label": "iPad",
+            "width": 1024,
+            "height": 1366,
+            "query": "device=tablet",
+            "mobile": true
+        },
+        {
+            "id": "desktop",
+            "label": "PC",
+            "width": 1440,
+            "height": 900,
+            "query": "device=desktop"
+        }
+    ],
+    "screens": [
+        {
+            "id": "home",
+            "label": "Home",
+            "hash": "#/",
+            "query": "watching=1"
+        },
+        {
+            "id": "home-slow",
+            "label": "Home (slow network)",
+            "hash": "#/",
+            "query": "watching=1&delay=4000",
+            "tvOnly": true,
+            "early": true
+        },
+        {
+            "id": "profiles",
+            "label": "Who's Watching",
+            "hash": "#/",
+            "query": "profiles=1"
+        },
+        {
+            "id": "movies",
+            "label": "Movies",
+            "hash": "#/movies"
+        },
+        {
+            "id": "series",
+            "label": "Series",
+            "hash": "#/series"
+        },
+        {
+            "id": "search",
+            "label": "Search",
+            "hash": "#/search"
+        },
+        {
+            "id": "search-results",
+            "label": "Search results",
+            "hash": "#/search?q=the"
+        },
+        {
+            "id": "movie",
+            "label": "Movie details",
+            "hash": "#/title/movie/tt9000002"
+        },
+        {
+            "id": "show",
+            "label": "Show details",
+            "hash": "#/title/series/tt9100001"
+        },
+        {
+            "id": "library",
+            "label": "Library",
+            "hash": "#/library",
+            "query": "watching=1"
+        },
+        {
+            "id": "customize",
+            "label": "Customize Home",
+            "hash": "#/customize"
+        },
+        {
+            "id": "addons",
+            "label": "Addons",
+            "hash": "#/addons"
+        },
+        {
+            "id": "settings",
+            "label": "Settings",
+            "hash": "#/settings"
+        },
+        {
+            "id": "player",
+            "label": "Player",
+            "hash": "#/title/movie/tt9000002?play=1",
+            "query": "at=600",
+            "steps": [
+                "wait:2500",
+                "Enter",
+                "wait:3500"
+            ],
+            "tvOnly": true,
+            "nav": false
+        },
+        {
+            "id": "player-intro",
+            "label": "Player · Skip Intro",
+            "hash": "#/title/series/tt9100001?play=1",
+            "query": "at=12",
+            "steps": [
+                "wait:2500",
+                "Enter",
+                "wait:3500"
+            ],
+            "tvOnly": true,
+            "nav": false
+        },
+        {
+            "id": "player-next",
+            "label": "Player · Up Next",
+            "hash": "#/title/series/tt9100001?play=1",
+            "query": "at=5396",
+            "steps": [
+                "wait:2500",
+                "Enter",
+                "wait:7000"
+            ],
+            "tvOnly": true,
+            "nav": false
+        }
+    ]
+}

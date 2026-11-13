@@ -1,0 +1,1 @@
+import{Q as e}from"./BlOysFRd.js";async function t(){await e(`plugin:process|restart`)}export{t as relaunch};
