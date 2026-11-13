@@ -1534,7 +1534,7 @@
         requestAnimationFrame(() => {
             const el = document.activeElement;
             // The video itself is a button too (a click pauses). A menu keeps its focus.
-            if (el instanceof HTMLElement && el.closest('.player') && el.matches('button, .seek') && !el.closest('[data-menu]')) el.blur();
+            if (el instanceof HTMLElement && el.closest('.player') && el.matches('button, .seek, input[type=range]') && !el.closest('[data-menu]')) el.blur();
         });
     }
 
@@ -1646,9 +1646,14 @@
             case 'seek-backward-short':
                 return skipBy(-seekStep / 3);
             case 'volume-up':
-                return void player.setVolume(player.volume + 5);
-            case 'volume-down':
-                return void player.setVolume(player.volume - 5);
+            case 'volume-down': {
+                // Says where it got to (the volume slider only shows on hover).
+                // Turning it up while muted unmutes, as YouTube does.
+                const v = Math.min(130, Math.max(0, player.volume + (action === 'volume-up' ? 5 : -5)));
+                if (player.muted && action === 'volume-up') void player.setMuted(false);
+                void player.setVolume(v);
+                return note(v === 0 || (player.muted && action === 'volume-down') ? 'Muted' : `Volume ${v}%`, 1200);
+            }
             case 'toggle-mute':
                 return void player.setMuted(!player.muted);
             case 'speed-up':

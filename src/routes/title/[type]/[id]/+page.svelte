@@ -120,9 +120,18 @@
         const last = lastVideo;
         if (last && !last.watched) return last;
         const seen = new Set(shownVideos.filter((v) => v.watched).map((v) => v.id));
-        const at = last ? regularVideos.findIndex((v) => v.id === last.id) : -1;
-        const next = regularVideos.slice(at + 1).find((v) => !seen.has(v.id)) ?? regularVideos.find((v) => !seen.has(v.id));
-        return next ?? last ?? regularVideos[0] ?? meta.videos[0] ?? null;
+        // After the furthest of the episode you were on (Stremio) and where the
+        // tracker has you: started at season 3, Play goes on from there, not
+        // back to an unwatched S1 · E1.
+        const at = Math.max(
+            last ? regularVideos.findIndex((v) => v.id === last.id) : -1,
+            trackerAt ? regularVideos.findIndex((v) => v.id === trackerAt.id) : -1
+        );
+        // Nowhere yet: the first you haven't watched. Somewhere: the next one on,
+        // else (caught up) that episode, never back to the start.
+        const next =
+            at < 0 ? regularVideos.find((v) => !seen.has(v.id)) : regularVideos.slice(at + 1).find((v) => !seen.has(v.id));
+        return next ?? (at >= 0 ? regularVideos[at] : null) ?? last ?? regularVideos[0] ?? meta.videos[0] ?? null;
     });
     /** Caught up (every released episode watched): the last one, where the page opens. */
     const lastWatched = $derived.by((): Video | null => {
@@ -606,17 +615,36 @@
             .sort((a, b) => a.season! - b.season! || (a.episode ?? 0) - (b.episode ?? 0))
     );
     /**
+     * Where the tracker has you in this show: its progress is a count of
+     * episodes from the very first, so 30 is S3 · E8 of a show with 11-episode
+     * seasons. Not for an anime whose seasons are separate tracker titles
+     * (they can't be lined up).
+     */
+    const trackerAt = $derived.by((): Video | null => {
+        if (!main || !isSeries || (lbt.titles?.length ?? 0) > 1) return null;
+        const n = main.status === 'completed' ? regularVideos.length : (main.progress ?? 0);
+        return n > 0 ? (regularVideos[Math.min(n, regularVideos.length) - 1] ?? null) : null;
+    });
+    /**
      * What the tracker knows you've watched of this show, by Stremio's IDs:
-     * the episodes its progress covers and any you logged. Stremio may not
-     * know (watched elsewhere, a backup brought back), and its ticks, Play
-     * and the spoiler blur shouldn't say otherwise. Not for an anime whose
-     * seasons are separate tracker titles (they can't be lined up).
+     * the episodes you logged, and those of the season you're on up to where
+     * it has you. Stremio may not know (watched elsewhere, a backup brought
+     * back), and its ticks and the spoiler blur shouldn't say otherwise.
+     *
+     * Not the seasons before it: the count can't say you watched them (start
+     * a show at season 3, and S3 · E8 is still the 30th episode), and ticking
+     * all of them marked whole seasons you'd never seen. A show you finished
+     * (Completed) is all watched.
      */
     const trackerSeen = $derived.by((): Set<string> => {
         const out = new Set(Object.keys(episodeLogs));
-        if (main && isSeries && (lbt.titles?.length ?? 0) <= 1) {
-            const n = main.status === 'completed' ? regularVideos.length : (main.progress ?? 0);
-            for (const v of regularVideos.slice(0, n)) out.add(v.id);
+        const at = trackerAt;
+        if (at) {
+            const completed = main?.status === 'completed';
+            for (const v of regularVideos) {
+                if (completed || (v.season === at.season && (v.episode ?? 0) <= (at.episode ?? 0))) out.add(v.id);
+                if (v.id === at.id) break;
+            }
         }
         for (const id of unmarked) out.delete(id);
         return out;
