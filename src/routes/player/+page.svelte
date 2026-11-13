@@ -138,6 +138,8 @@
     const subheading = $derived(
         model?.seriesInfo ? `S${model.seriesInfo.season} · E${model.seriesInfo.episode}${episodeTitle ? ` · ${episodeTitle}` : ''}` : null
     );
+    /** iPhone: the app hid the clock and battery (builds from Nov 2026 on; older ones keep them). */
+    let statusBarHidden = $state(false);
     const loadingVideo = $derived(!player.loaded || (player.buffering && !player.paused));
 
     // A torrent loading: what it's waiting on (peers found, download speed),
@@ -178,7 +180,11 @@
         // TV: the remote's OK toggles play on the video surface.
         if (isTV) surface?.focus();
         // iPhone: landscape while watching, back to portrait after.
-        const landscape = () => isIOS && invoke('plugin:mpv|orientation', { landscape: true }).catch(() => {});
+        const landscape = () =>
+            isIOS &&
+            invoke<{ statusBarHidden?: boolean } | null>('plugin:mpv|orientation', { landscape: true })
+                .then((r) => (statusBarHidden = !!r?.statusBarHidden))
+                .catch(() => {});
         landscape();
         // Back from the app switcher: iOS may have reset the orientation and
         // sizes, so ask for landscape again and bring the controls back up.
@@ -1803,11 +1809,13 @@
     const skipAmount = (s: number) => (s >= 60 ? fmtTime(s) : `${Math.round(s)}s`);
     let lastPointerType = '';
 
-    // Pinch to zoom (touch): spread two fingers to zoom in, up to twice the
-    // size, cropping the edges, to fill the screen with a picture that has
-    // black bars; pinch in to see all of it again. A pinch's touches are never
-    // taps (no controls toggling, no double-tap skips).
-    const MAX_ZOOM = 1; // log2: 2×
+    // Pinch to zoom (touch), in steps as YouTube does: spreading two fingers
+    // goes 1.1×, 1.2×, 1.3×… up to 2× (cropping the edges), with a stop at
+    // "Fill", where the picture just fills the screen; pinching in goes back
+    // down to the whole picture. The size shows as it changes. A pinch's
+    // touches are never taps (no controls toggling, no double-tap skips).
+    const MAX_SCALE = 2;
+    const STEP = 0.1;
     const touches = new Map<number, { x: number; y: number }>();
     let pinch: { dist: number; from: number } | null = null;
     let pinched = false;
@@ -1816,8 +1824,30 @@
         const [a, b] = [...touches.values()];
         return Math.hypot(a.x - b.x, a.y - b.y);
     };
-    function setZoom(z: number) {
-        zoomState.zoom = Math.min(MAX_ZOOM, Math.max(0, z));
+    /** How much bigger the picture must be to fill the screen (null when it already does, near enough). */
+    function fillScale(): number | null {
+        const w = player.width;
+        const h = player.height;
+        if (!w || !h || !window.innerHeight) return null;
+        const video = w / h;
+        const screen = window.innerWidth / window.innerHeight;
+        const f = video > screen ? video / screen : screen / video;
+        return f > 1.03 && f <= MAX_SCALE ? f : null;
+    }
+    /** The pinch's raw size, settled on a step (or Fill, when it's close). */
+    function stepScale(raw: number): number {
+        const clamped = Math.min(MAX_SCALE, Math.max(1, raw));
+        const fill = fillScale();
+        if (fill && Math.abs(clamped - fill) < STEP / 2) return fill;
+        return Math.round(clamped / STEP) * STEP;
+    }
+    const zoomLabel = (scale: number) =>
+        scale <= 1.001 ? 'Original size' : scale === fillScale() ? 'Fill' : `${scale.toFixed(1)}×`;
+    function setScale(scale: number) {
+        const zoom = Math.log2(scale);
+        if (Math.abs(zoom - zoomState.zoom) < 0.0005) return;
+        zoomState.zoom = zoom;
+        note(zoomLabel(scale), 1200);
         cancelAnimationFrame(zoomFrame);
         zoomFrame = requestAnimationFrame(() => void player.setZoom?.(zoomState.zoom));
     }
@@ -1825,7 +1855,7 @@
         if (e.pointerType !== 'touch' || pip || !player.setZoom) return;
         touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (touches.size === 2) {
-            pinch = { dist: Math.max(1, spread()), from: zoomState.zoom };
+            pinch = { dist: Math.max(1, spread()), from: 2 ** zoomState.zoom };
             pinched = true;
             clearTimeout(tapTimer);
             lastTap = null;
@@ -1834,19 +1864,14 @@
     function onsurfacemove(e: PointerEvent) {
         if (!touches.has(e.pointerId)) return;
         touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pinch && touches.size >= 2) setZoom(pinch.from + Math.log2(spread() / pinch.dist));
+        if (pinch && touches.size >= 2) setScale(stepScale(pinch.from * (spread() / pinch.dist)));
     }
     /** A touch ended: true when it was part of a pinch (so not a tap). */
     function pinchUp(e: PointerEvent) {
         touches.delete(e.pointerId);
         if (!pinched) return false;
         if (touches.size < 2) pinch = null;
-        if (!touches.size) {
-            pinched = false;
-            // Nearly all of it: all of it.
-            if (zoomState.zoom < 0.06) setZoom(0);
-            note(zoomState.zoom ? `Zoom ${Math.round(2 ** zoomState.zoom * 100)}%` : 'Original size', 1200);
-        }
+        if (!touches.size) pinched = false;
         return true;
     }
 
@@ -1916,7 +1941,7 @@
     onpointermove={(e) => e.pointerType !== 'touch' && poke()} onpointerdown={(e) => !(e.target as Element | null)?.closest?.('.still') && markActive()}
     {onpointerup} />
 
-<div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI} bind:clientHeight={playerHeight}>
+<div class="player" class:hidden={!controlsVisible} class:pip class:touch={touchUI} class:no-status-bar={statusBarHidden} bind:clientHeight={playerHeight}>
     <!-- Transparent surface over the video that takes clicks. -->
     <button
         class="surface"
@@ -2865,6 +2890,14 @@
     }
     .touch .top {
         padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left));
+    }
+    /* iPhone, sideways with the clock hidden: nothing at the top edge (the
+       camera is at the side), but iOS can go on reporting the upright phone's
+       top inset after turning, which left the title and HDR badge low. */
+    @media (orientation: landscape) {
+        .touch.no-status-bar .top {
+            padding-top: 10px;
+        }
     }
     .touch .bottom {
         padding: 48px max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));

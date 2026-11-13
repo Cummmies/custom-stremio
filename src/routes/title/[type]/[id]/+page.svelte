@@ -1595,14 +1595,20 @@
             align-items: center;
             gap: 4px;
         }
+        /* Play on its own full-width row, the round buttons centred under it:
+           side by side, five of them squeezed Play to a sliver. */
         .actions {
             width: 100%;
             margin-top: 18px;
+            flex-wrap: wrap;
+            justify-content: center;
+            row-gap: 14px;
+            column-gap: 14px;
         }
         .play {
-            flex: 1;
+            flex: 1 0 100%;
             justify-content: center;
-            height: 48px;
+            height: 50px;
             min-width: 0;
             padding: 0 16px;
             white-space: nowrap;

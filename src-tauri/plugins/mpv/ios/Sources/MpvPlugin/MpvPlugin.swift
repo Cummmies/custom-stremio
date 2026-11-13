@@ -91,6 +91,12 @@ private struct GetResult: Encodable {
     let value: String?
 }
 
+private struct OrientationResult: Encodable {
+    /// The clock and battery are hidden (this build hides them while
+    /// watching), so the player's top bar can go right up to the top.
+    let statusBarHidden: Bool
+}
+
 /// PiP's state for the page (its PiP button, and why PiP didn't start).
 private struct PipEvent: Encodable {
     /// unsupported, ready, active, idle, failed, possible, impossible
@@ -265,7 +271,7 @@ class MpvPlugin: Plugin {
             vc.setNeedsStatusBarAppearanceUpdate()
             vc.setNeedsUpdateOfHomeIndicatorAutoHidden()
             if args.landscape { followLandscapeSide() } else { stopFollowingSide() }
-            invoke.resolve()
+            invoke.resolve(OrientationResult(statusBarHidden: args.landscape))
         }
     }
 
